@@ -1,0 +1,26 @@
+manifestVersion: 1
+name: "@mgreten/unifi"
+version: "2026.05.18.1"
+description: >
+  Manage a Ubiquiti UniFi Dream Machine (UDM / UDM Pro / UDM SE) via the
+  legacy Network firewall API: firewall groups, firewall rules, clients,
+  and networks. Complements @stack72/ubiquity (which focuses on traffic
+  collection) by enabling configuration-as-data workflows: sync existing
+  groups/rules into the swamp data model, reconcile group membership,
+  create or delete firewall rules, and toggle rule state.
+
+repository: https://github.com/meagerfindings/swamp-unifi
+
+models:
+  - client.ts
+  - firewall_group.ts
+  - firewall_rule.ts
+  - network.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+# Universal: the extension uses `curl` (always available on macOS/Linux)
+# and has no platform-specific code paths.
+platforms: []

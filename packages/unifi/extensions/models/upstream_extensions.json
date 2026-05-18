@@ -1,0 +1,16 @@
+{
+  "@stack72/ubiquity": {
+    "version": "2026.03.10.1",
+    "pulledAt": "2026-05-18T00:07:13.542Z",
+    "files": [
+      ".swamp/pulled-extensions/@stack72/ubiquity/models/unifi_traffic.ts",
+      ".swamp/bundles/1d052c69/unifi_traffic.js",
+      ".swamp/pulled-extensions/@stack72/ubiquity/files/README.md",
+      ".swamp/pulled-extensions/@stack72/ubiquity/files/LICENSE.txt",
+      ".swamp/pulled-extensions/@stack72/ubiquity/manifest.yaml"
+    ],
+    "checksum": "97dba6c71dced81ab6f3568f925889bfc2a3f34b91d76b62433512ac307169e9",
+    "filesChecksum": "95e2871299c5b0f03810672fdcf0991681e33bd1869bd586ff31e579152ff77d",
+    "serverUrl": "https://swamp-club.com"
+  }
+}
