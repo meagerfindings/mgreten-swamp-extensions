@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/linear-activity"
+version: "2026.05.19.1"
+description: >
+  Gather a Linear user's daily activity — issues completed, moved to review,
+  created, comments authored, and in-flight assignments. Read-only, scoped
+  to configurable team keys. Designed as a data source for EOD reports and
+  standup summaries.
+
+repository: https://github.com/meagerfindings/swamp-linear-activity
+
+models:
+  - linear_activity.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []
