@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/ntfy-notify"
+version: "2026.05.19.1"
+description: >
+  Send push notifications via ntfy.sh (self-hosted or public). A single
+  focused model with one method: send a notification with title, message,
+  priority, and optional emoji tags. Works with the free ntfy.sh service
+  or any self-hosted ntfy instance.
+
+repository: https://github.com/meagerfindings/swamp-ntfy-notify
+
+models:
+  - ntfy_notify.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []
