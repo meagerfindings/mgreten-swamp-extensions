@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@mgreten/slack-blocks"
+version: "2026.05.20.1"
+description: >
+  Post Block Kit messages to Slack from swamp models and workflows, with
+  optional file attachments uploaded via the modern external-upload flow.
+  Three methods: send (text + blocks + optional thread reply), sendWithFiles
+  (uploads local files first, then posts a message referencing them), and
+  verifyAuth (auth.test smoke check after token setup).
+
+repository: https://github.com/meagerfindings/swamp-slack-blocks
+
+models:
+  - slack_blocks.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []
