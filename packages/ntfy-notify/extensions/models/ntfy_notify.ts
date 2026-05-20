@@ -40,7 +40,7 @@ type MethodContext = {
 /** Swamp model for sending push notifications via ntfy.sh. */
 export const model = {
   type: "@mgreten/ntfy-notify",
-  version: "2026.05.19.1",
+  version: "2026.05.20.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     notification: {
@@ -84,13 +84,13 @@ export const model = {
           url: ntfyUrl,
         });
 
-        const body = JSON.stringify({
-          topic,
-          title: args.title,
-          message: args.message,
-          priority,
-          ...(args.tags && args.tags.length > 0 ? { tags: args.tags } : {}),
-        });
+        const headers: Record<string, string> = {
+          "Title": args.title,
+          "Priority": String(priority),
+        };
+        if (args.tags && args.tags.length > 0) {
+          headers["Tags"] = args.tags.join(",");
+        }
 
         let httpStatus = 0;
         let success = false;
@@ -98,8 +98,8 @@ export const model = {
         try {
           const response = await fetch(ntfyUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
+            headers,
+            body: args.message,
           });
           httpStatus = response.status;
           success = response.ok;
