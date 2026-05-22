@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@mgreten/linear"
+version: "2026.05.22.1"
+description: >
+  Linear project management integration for swamp — issue CRUD, viewer
+  auto-assignment, label management by name, and team/project/state listing
+  via the official @linear/sdk.
+
+repository: https://github.com/meagerfindings/swamp-linear
+
+models:
+  - linear.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []
