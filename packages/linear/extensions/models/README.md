@@ -156,6 +156,14 @@ The client layer normalizes the SDK's promise-based relation loading (where
 `issue.state`, `issue.team`, etc. are separate promises) into flat data objects
 before writing them as swamp resources.
 
+## Acknowledgments
+
+The client abstraction pattern (typed `LinearSDKLike` interface, `buildLinearClient`
+factory, promise-based relation resolution) is derived from
+[`@hivemq/linear`](https://swamp.club/extensions/@hivemq/linear) by HiveMQ.
+This extension extends their foundation with viewer resolution, issue updates,
+label management, and filtered listing.
+
 ## License
 
 MIT — see LICENSE.txt for details.

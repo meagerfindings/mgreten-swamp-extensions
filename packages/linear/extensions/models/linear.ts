@@ -5,6 +5,8 @@
  * listing via the official `@linear/sdk`. All data is written as swamp resources
  * for downstream CEL access and workflow chaining.
  *
+ * Client abstraction pattern derived from `@hivemq/linear` by HiveMQ.
+ *
  * @module
  */
 import { z } from "npm:zod@4";
@@ -115,7 +117,7 @@ function getClient(
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.05.22.1",
+  version: "2026.05.22.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     issue: {
