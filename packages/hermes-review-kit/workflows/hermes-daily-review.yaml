@@ -1,5 +1,5 @@
 id: 4e7c1d6f-9b0a-4f1a-b4bd-b24f2cb39fd1
-name: hermes-daily-review
+name: "@mgreten/hermes-daily-review"
 description: Nightly Hermes review pipeline that collects session activity and publishes a summary report.
 version: 1
 trigger:
