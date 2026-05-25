@@ -1,0 +1,51 @@
+id: 4e7c1d6f-9b0a-4f1a-b4bd-b24f2cb39fd1
+name: hermes-daily-review
+description: Nightly Hermes review pipeline that collects session activity and publishes a summary report.
+version: 1
+trigger:
+  schedule: "0 5 * * *"
+tags:
+  product: hermes
+  domain: review
+  cadence: nightly
+inputs:
+  type: object
+  properties:
+    repoDir:
+      type: string
+      default: /opt/data/swamp-hub
+      description: Repository directory to scan for recent changes
+    sessionDir:
+      type: string
+      default: /opt/data/.hermes/sessions
+      description: Hermes session directory to scan
+    timezone:
+      type: string
+      default: America/Denver
+      description: Timezone used to interpret the nightly review window
+    lookbackHours:
+      type: integer
+      default: 24
+      description: How far back to scan for activity
+  required: []
+reports:
+  require:
+    - "@mgreten/hermes-review-report"
+jobs:
+  - name: collect
+    description: Collect recent Hermes sessions and repo changes
+    steps:
+      - name: collect
+        task:
+          type: model_method
+          modelType: "@mgreten/hermes-review-collector"
+          modelName: hermes-review-collector
+          methodName: collect
+          inputs:
+            repoDir: ${{ inputs.repoDir }}
+            sessionDir: ${{ inputs.sessionDir }}
+            timezone: ${{ inputs.timezone }}
+            lookbackHours: ${{ inputs.lookbackHours }}
+        dependsOn: []
+        weight: 0
+        allowFailure: false
