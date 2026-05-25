@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/cron-builder"
-version: "2026.05.25.1"
+version: "2026.05.25.2"
 description: "Swamp model for building, validating, and managing Hermes cron job specifications. Encodes verified syntax rules, provides build/validate methods for creating repeatable scheduled workflows."
 
 repository: https://github.com/meagerfindings/cron-builder
