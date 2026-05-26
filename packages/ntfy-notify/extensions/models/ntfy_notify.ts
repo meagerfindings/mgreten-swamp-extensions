@@ -40,7 +40,7 @@ type MethodContext = {
 /** Swamp model for sending push notifications via ntfy.sh. */
 export const model = {
   type: "@mgreten/ntfy-notify",
-  version: "2026.05.20.2",
+  version: "2026.05.26.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     notification: {
@@ -65,6 +65,13 @@ export const model = {
         tags: z.array(z.string()).optional().describe(
           "Optional emoji/tag strings",
         ),
+        actions: z.array(z.object({
+          action: z.string().describe("Action type (e.g. 'view')"),
+          label: z.string().describe("Button label"),
+          url: z.string().describe("URL to open"),
+        })).optional().describe(
+          "Clickable action buttons",
+        ),
       }),
       execute: async (
         args: {
@@ -73,6 +80,7 @@ export const model = {
           message: string;
           priority?: number;
           tags?: string[];
+          actions?: Array<{ action: string; label: string; url: string }>;
         },
         context: MethodContext,
       ) => {
@@ -90,6 +98,11 @@ export const model = {
         };
         if (args.tags && args.tags.length > 0) {
           headers["Tags"] = args.tags.join(",");
+        }
+        if (args.actions && args.actions.length > 0) {
+          headers["Actions"] = args.actions
+            .map((a) => `${a.action}, ${a.label}, ${a.url}`)
+            .join("; ");
         }
 
         let httpStatus = 0;
