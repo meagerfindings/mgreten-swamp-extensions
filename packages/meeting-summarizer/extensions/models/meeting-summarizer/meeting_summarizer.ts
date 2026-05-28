@@ -241,7 +241,7 @@ const NoteFileResourceSchema = z.object({
  */
 export const model = {
   type: "@mgreten/meeting-summarizer",
-  version: "2026.05.28.1",
+  version: "2026.05.28.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     summary: {
