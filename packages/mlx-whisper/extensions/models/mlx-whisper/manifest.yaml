@@ -1,0 +1,24 @@
+manifestVersion: 1
+name: "@mgreten/mlx-whisper"
+version: "2026.05.28.1"
+description: >-
+  Transcribe audio files using mlx_whisper on Apple Silicon. Runs the
+  mlx_whisper CLI, captures the JSON output, and stores the full transcript
+  (segments + language) as a swamp resource for downstream pipeline steps.
+  Requires mlx_whisper installed (pip install mlx-whisper).
+repository: "https://github.com/mgreten/offline-meeting-transcriber"
+paths:
+  base: manifest
+models:
+  - mlx_whisper.ts
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+labels:
+  - mlx
+  - whisper
+  - transcription
+  - audio
+  - apple-silicon
+platforms:
+  - darwin-aarch64
