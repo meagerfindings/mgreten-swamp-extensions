@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/pyannote-diarizer"
-version: "2026.05.28.2"
+version: "2026.05.28.3"
 description: >-
   Apply pyannote/speaker-diarization-3.1 to a Whisper transcript JSON and tag
   each segment with a speaker label. Requires Python + pyannote.audio and a
