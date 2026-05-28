@@ -1,0 +1,26 @@
+manifestVersion: 1
+name: "@mgreten/pyannote-diarizer"
+version: "2026.05.28.1"
+description: >-
+  Apply pyannote/speaker-diarization-3.1 to a Whisper transcript JSON and tag
+  each segment with a speaker label. Requires Python + pyannote.audio and a
+  Hugging Face token (gated model). Falls back gracefully — a failed diarization
+  never blocks the pipeline; the original transcript is returned unchanged.
+repository: "https://github.com/mgreten/offline-meeting-transcriber"
+paths:
+  base: manifest
+models:
+  - pyannote_diarizer.ts
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+labels:
+  - diarization
+  - speaker
+  - pyannote
+  - transcription
+  - meeting
+platforms:
+  - darwin-aarch64
+  - linux-x86_64
+  - linux-aarch64
