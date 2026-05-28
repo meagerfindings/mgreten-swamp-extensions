@@ -1,0 +1,29 @@
+manifestVersion: 1
+name: "@mgreten/meeting-summarizer"
+version: "2026.05.28.1"
+description: >-
+  Chunk a Whisper transcript and summarize it into a Granola-style meeting note
+  via a local Ollama LLM. Handles long recordings with greedy segment-boundary
+  chunking and an LLM merge pass. Pure TypeScript — no Python, no subprocess.
+  Also provides combine_notes (merge handwritten + analysis) and write_note
+  (write markdown to disk) for full pipeline workflows.
+repository: "https://github.com/mgreten/offline-meeting-transcriber"
+paths:
+  base: manifest
+models:
+  - meeting_summarizer.ts
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+labels:
+  - ollama
+  - llm
+  - meeting
+  - transcription
+  - obsidian
+  - productivity
+platforms:
+  - darwin-aarch64
+  - darwin-x86_64
+  - linux-x86_64
+  - linux-aarch64
