@@ -47,6 +47,13 @@ const ImportSummarySchema = z.object({
   destinationPath: z.string(),
   mode: z.enum(["copy", "move", "hardlink", "symlink"]),
   dryRun: z.boolean(),
+  operation: z.string(),
+  uploadedFiles: z.number().optional(),
+  uploadResponses: z.array(z.object({
+    source: z.string(),
+    status: z.number(),
+    location: z.string().optional(),
+  })).optional(),
   scannedFiles: z.number(),
   plannedFiles: z.number(),
   importedFiles: z.number(),
@@ -89,6 +96,8 @@ type ImportArgs = {
   stripSourceRoot?: boolean;
   triggerScan?: boolean;
   scanEndpoint?: string;
+  uploadUrl?: string;
+  uploadFieldName?: string;
 };
 
 type FilePlan = {
@@ -210,10 +219,60 @@ async function triggerScan(
   return response.ok || response.status === 202 || response.status === 204;
 }
 
+async function uploadFile(
+  sourcePath: string,
+  uploadUrl: string,
+  fieldName: string,
+  token: string | undefined,
+): Promise<{ source: string; status: number; location?: string }> {
+  const form = new FormData();
+  const file = await Deno.open(sourcePath, { read: true });
+  try {
+    const stat = await file.stat();
+    const bytes = await Deno.readFile(sourcePath);
+    form.append(
+      fieldName,
+      new Blob([bytes], { type: "application/octet-stream" }),
+      basename(sourcePath),
+    );
+    form.append("filename", basename(sourcePath));
+    form.append("size", String(stat.size));
+
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (token) {
+      headers.Authorization = token.startsWith("Bearer ")
+        ? token
+        : `Bearer ${token}`;
+    }
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(
+        `Upload failed with HTTP ${response.status}: ${body.slice(0, 500)}`,
+      );
+    }
+    return {
+      source: sourcePath,
+      status: response.status,
+      location: response.headers.get("location") ?? undefined,
+    };
+  } finally {
+    try {
+      file.close();
+    } catch {
+      // ignored
+    }
+  }
+}
+
 /** Swamp model for importing files into a Manyfold-accessible library path. */
 export const model = {
   type: "@mgreten/manyfold-importer",
-  version: "2026.05.30.1",
+  version: "2026.05.30.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     importSummary: {
@@ -224,6 +283,84 @@ export const model = {
     },
   },
   methods: {
+    uploadFile: {
+      description:
+        "Upload one local file to a Manyfold-compatible HTTP file upload endpoint",
+      arguments: z.object({
+        sourcePath: z.string().describe("Local file to upload."),
+        uploadUrl: z.string().url().describe(
+          "Full HTTP upload URL. For Manyfold this may be a TUS or API endpoint depending on version.",
+        ),
+        uploadFieldName: z.string().default("file").describe(
+          "Multipart form field name for the file.",
+        ),
+        dryRun: z.boolean().default(true).describe(
+          "Plan the upload without sending the file.",
+        ),
+      }),
+      execute: async (
+        args: ImportArgs,
+        context: MethodContext,
+      ): Promise<{ dataHandles: Record<string, unknown>[] }> => {
+        const startedAt = new Date().toISOString();
+        const info = await Deno.stat(args.sourcePath);
+        if (!info.isFile) throw new Error("sourcePath must be a file");
+        if (!args.uploadUrl) throw new Error("uploadUrl is required");
+
+        const failures: Array<{ path: string; error: string }> = [];
+        const uploadResponses: Array<
+          { source: string; status: number; location?: string }
+        > = [];
+        let uploadedFiles = 0;
+        let failedFiles = 0;
+
+        if (!(args.dryRun ?? true)) {
+          try {
+            uploadResponses.push(
+              await uploadFile(
+                args.sourcePath,
+                args.uploadUrl,
+                args.uploadFieldName ?? "file",
+                context.globalArgs.apiToken,
+              ),
+            );
+            uploadedFiles = 1;
+          } catch (err) {
+            failedFiles = 1;
+            failures.push({
+              path: args.sourcePath,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        const summary = {
+          sourcePath: args.sourcePath,
+          destinationPath: args.uploadUrl,
+          mode: "copy" as const,
+          dryRun: args.dryRun ?? true,
+          operation: "uploadFile",
+          uploadedFiles,
+          uploadResponses,
+          scannedFiles: 1,
+          plannedFiles: 1,
+          importedFiles: uploadedFiles,
+          skippedFiles: args.dryRun ?? true ? 1 : 0,
+          failedFiles,
+          totalBytes: info.size,
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          scanTriggered: false,
+          failures,
+        };
+        const handle = await context.writeResource(
+          "importSummary",
+          `upload-${Date.now()}`,
+          summary,
+        );
+        return { dataHandles: [handle] };
+      },
+    },
     importDirectory: {
       description:
         "Copy, move, hardlink, or symlink supported model files into a Manyfold library directory",
@@ -320,6 +457,7 @@ export const model = {
           destinationPath,
           mode,
           dryRun,
+          operation: "importDirectory",
           scannedFiles: plans.length,
           plannedFiles: plans.length,
           importedFiles,

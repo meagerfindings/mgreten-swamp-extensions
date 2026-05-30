@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/manyfold-importer"
-version: "2026.05.30.1"
+version: "2026.05.30.2"
 description: >
   Import local 3D model files into a Manyfold-accessible library directory with reusable copy, move, hardlink, symlink, and dry-run planning modes.
 

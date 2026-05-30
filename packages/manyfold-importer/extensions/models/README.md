@@ -56,6 +56,22 @@ swamp model method run manyfold-importer importDirectory \
 | `manyfoldBaseUrl` | string | unset | Base URL for optional scan API calls. |
 | `apiToken` | string | unset | Optional bearer token or vault expression for API calls. |
 
+## Method: `uploadFile`
+
+Upload a single local file to an HTTP endpoint using multipart form data. Keep this as the primitive for API-first workflows, then call it repeatedly from a workflow or a future watcher when your Manyfold endpoint/auth flow is known.
+
+```sh
+swamp model method run manyfold-importer uploadFile \
+  --input '{"sourcePath":"/incoming/benchy.stl","uploadUrl":"https://manyfold.example.test/upload","dryRun":true}'
+```
+
+| Argument | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sourcePath` | string | yes | Local file to upload. |
+| `uploadUrl` | string | yes | Full HTTP upload URL. |
+| `uploadFieldName` | string | no | Multipart file field name; default `file`. |
+| `dryRun` | boolean | no | Defaults to `true`; plans without sending the file. |
+
 ## Method: `importDirectory`
 
 | Argument | Type | Required | Description |
