@@ -17,4 +17,5 @@ additionalFiles:
   - LICENSE.txt
 
 platforms:
-  - darwin
+  - darwin-x86_64
+  - darwin-aarch64
