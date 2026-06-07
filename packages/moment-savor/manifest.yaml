@@ -1,0 +1,29 @@
+manifestVersion: 1
+name: '@mgreten/moment-savor'
+version: 2026.06.06.2
+description: >-
+  Interact with the Moment Savor family memory app via its V1 REST API.
+  Syncs memories, API tokens, and family membership to swamp resources for
+  CEL queries. Supports full CRUD for memories, API token lifecycle
+  (create/revoke/rotate), family member management, and sending invitations.
+  Authenticate with a Bearer token from https://momentsavor.app/api_tokens.
+repository: 'https://github.com/meagerfindings/swamp-moment-savor'
+paths:
+  base: manifest
+models:
+  - moment_savor_api.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+platforms: []
+labels:
+  - memories
+  - family
+  - api
+  - moment-savor
+dependencies: []
