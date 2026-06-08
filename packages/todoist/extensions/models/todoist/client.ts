@@ -1,14 +1,14 @@
 /**
- * Todoist REST API v2 client abstraction.
+ * Todoist API v1 client abstraction.
  *
- * Normalizes the REST API's snake_case responses into typed, camelCase
+ * Normalizes the API's snake_case responses into typed, camelCase
  * interfaces for use by swamp method implementations. No external npm
  * dependencies — uses the runtime's built-in `fetch`.
  *
  * @module
  */
 
-const BASE_URL = "https://api.todoist.com/rest/v2";
+const BASE_URL = "https://api.todoist.com/api/v1";
 
 /** Flat representation of a Todoist task with normalized field names. */
 export interface TaskData {
@@ -82,16 +82,15 @@ interface RawTask {
   content: string;
   description: string;
   project_id: string;
-  section_id: string;
-  parent_id: string;
+  section_id: string | null;
+  parent_id: string | null;
   labels: string[];
   priority: number;
   due: RawDue | null;
-  is_completed: boolean;
-  url: string;
-  created_at: string;
-  assignee_id: string | null;
-  order: number;
+  checked: boolean;
+  added_at: string;
+  responsible_uid: string | null;
+  child_order: number;
 }
 
 interface RawProject {
@@ -99,11 +98,15 @@ interface RawProject {
   name: string;
   color: string;
   parent_id: string | null;
-  order: number;
+  child_order: number;
   is_shared: boolean;
   is_favorite: boolean;
-  is_inbox_project: boolean;
-  url: string;
+  inbox_project?: boolean;
+}
+
+interface RawListResponse<T> {
+  results: T[];
+  next_cursor: string | null;
 }
 
 function normalizeTask(raw: RawTask): TaskData {
@@ -119,11 +122,11 @@ function normalizeTask(raw: RawTask): TaskData {
     dueDate: raw.due?.date ?? "",
     dueDatetime: raw.due?.datetime ?? "",
     dueString: raw.due?.string ?? "",
-    isCompleted: raw.is_completed,
-    url: raw.url,
-    createdAt: raw.created_at,
-    assigneeId: raw.assignee_id ?? "",
-    order: raw.order,
+    isCompleted: raw.checked,
+    url: `https://app.todoist.com/app/task/${raw.id}`,
+    createdAt: raw.added_at,
+    assigneeId: raw.responsible_uid ?? "",
+    order: raw.child_order,
   };
 }
 
@@ -133,12 +136,36 @@ function normalizeProject(raw: RawProject): ProjectData {
     name: raw.name,
     color: raw.color,
     parentId: raw.parent_id ?? "",
-    order: raw.order,
+    order: raw.child_order,
     isShared: raw.is_shared,
     isFavorite: raw.is_favorite,
-    isInboxProject: raw.is_inbox_project,
-    url: raw.url,
+    isInboxProject: raw.inbox_project ?? false,
+    url: `https://app.todoist.com/app/projects/${raw.id}`,
   };
+}
+
+/** Fetch all pages of a cursor-paginated list endpoint. */
+async function fetchAllPages<T>(
+  apiToken: string,
+  path: string,
+  params: Record<string, string> = {},
+): Promise<T[]> {
+  const all: T[] = [];
+  let cursor: string | null = null;
+  do {
+    const pageParams = { ...params, limit: "200" };
+    if (cursor) pageParams.cursor = cursor;
+    const page = await request<RawListResponse<T>>(
+      apiToken,
+      "GET",
+      path,
+      undefined,
+      pageParams,
+    );
+    all.push(...page.results);
+    cursor = page.next_cursor;
+  } while (cursor);
+  return all;
 }
 
 async function request<T>(
@@ -196,13 +223,7 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
     async getTasks(filter?: string): Promise<TaskData[]> {
       const params: Record<string, string> = {};
       if (filter) params.filter = filter;
-      const raw = await request<RawTask[]>(
-        apiToken,
-        "GET",
-        "/tasks",
-        undefined,
-        params,
-      );
+      const raw = await fetchAllPages<RawTask>(apiToken, "/tasks", params);
       return raw.map(normalizeTask);
     },
 
@@ -221,8 +242,10 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
       if (input.priority !== undefined) body.priority = input.priority;
       if (input.dueString !== undefined) body.due_string = input.dueString;
       if (input.dueLang !== undefined) body.due_lang = input.dueLang;
-      if (input.assigneeId !== undefined) body.assignee_id = input.assigneeId;
-      if (input.order !== undefined) body.order = input.order;
+      if (input.assigneeId !== undefined) {
+        body.responsible_uid = input.assigneeId;
+      }
+      if (input.order !== undefined) body.child_order = input.order;
       const raw = await request<RawTask>(apiToken, "POST", "/tasks", body);
       return normalizeTask(raw);
     },
@@ -235,7 +258,9 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
       if (input.priority !== undefined) body.priority = input.priority;
       if (input.dueString !== undefined) body.due_string = input.dueString;
       if (input.dueLang !== undefined) body.due_lang = input.dueLang;
-      if (input.assigneeId !== undefined) body.assignee_id = input.assigneeId;
+      if (input.assigneeId !== undefined) {
+        body.responsible_uid = input.assigneeId;
+      }
       const raw = await request<RawTask>(
         apiToken,
         "POST",
@@ -258,16 +283,12 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
     },
 
     async getProjects(): Promise<ProjectData[]> {
-      const raw = await request<RawProject[]>(apiToken, "GET", "/projects");
+      const raw = await fetchAllPages<RawProject>(apiToken, "/projects");
       return raw.map(normalizeProject);
     },
 
     async getProject(id: string): Promise<ProjectData> {
-      const raw = await request<RawProject>(
-        apiToken,
-        "GET",
-        `/projects/${id}`,
-      );
+      const raw = await request<RawProject>(apiToken, "GET", `/projects/${id}`);
       return normalizeProject(raw);
     },
   };

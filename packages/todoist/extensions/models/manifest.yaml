@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/todoist"
-version: "2026.06.08.1"
+version: "2026.06.08.2"
 description: >
   Todoist task management integration for swamp — task and project CRUD,
   filter-based sync, and natural language due dates via the Todoist REST API v2.
