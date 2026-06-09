@@ -1,0 +1,23 @@
+manifestVersion: 1
+name: "@mgreten/obsidian-vault-fs"
+version: "2026.06.09.1"
+description: >
+  Headless filesystem-first Obsidian vault model for Swamp automation.
+  Reads, writes, appends, searches, lists, stats, and edits scalar frontmatter
+  against a mounted vault without relying on the desktop Obsidian CLI.
+
+repository: https://github.com/meagerfindings/swamp-obsidian-vault-fs
+
+paths:
+  base: manifest
+
+models:
+  - model.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.md
+
+platforms:
+  - linux-x86_64
+  - darwin-aarch64
