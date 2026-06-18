@@ -102,6 +102,14 @@ const ColumnAddSchema = z.object({
   timestamp: z.string(),
 });
 
+/** Schema for dropTable output. */
+const TableDropSchema = z.object({
+  tableId: z.string(),
+  dropped: z.boolean(),
+  dryRun: z.boolean(),
+  timestamp: z.string(),
+});
+
 // ---------------------------------------------------------------------------
 // Grist API client
 // ---------------------------------------------------------------------------
@@ -150,6 +158,7 @@ function makeClient(baseUrl: string, docId: string, apiToken: string): {
   ): Promise<void>;
   createTable(tableId: string, columns: ColumnSpec[]): Promise<void>;
   addColumns(tableId: string, columns: ColumnSpec[]): Promise<void>;
+  dropTable(tableId: string): Promise<void>;
 } {
   const base = normalizeGristUrl(baseUrl);
   const docBase = `${base}/api/docs/${docId}`;
@@ -249,6 +258,9 @@ function makeClient(baseUrl: string, docId: string, apiToken: string): {
         })),
       });
     },
+    async dropTable(tableId: string): Promise<void> {
+      await req("POST", "/apply", [["RemoveTable", tableId]]);
+    },
   };
 }
 
@@ -316,7 +328,7 @@ const AddColumnsArgs = z.object({
 /** Generic Grist REST API model for reading and writing document data. */
 export const model = {
   type: "@mgreten/grist",
-  version: "2026.06.18.1",
+  version: "2026.06.18.3",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -365,6 +377,12 @@ export const model = {
     columnAdd: {
       description: "Result of an addColumns operation",
       schema: ColumnAddSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    tableDrop: {
+      description: "Result of a dropTable operation",
+      schema: TableDropSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -685,6 +703,48 @@ export const model = {
           {
             tableId: args.tableId,
             columnsAdded: args.columns.map((c) => c.id),
+            dryRun: args.dryRun,
+            timestamp: new Date().toISOString(),
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    /** Delete a table from the Grist document. Irreversible — use dryRun=true to preview. */
+    dropTable: {
+      description:
+        "Permanently delete a Grist table. Use dryRun=true to preview without deleting.",
+      arguments: z.object({
+        tableId: z.string().describe("Table ID to delete"),
+        dryRun: z.boolean().default(false),
+      }),
+      execute: async (
+        args: { tableId: string; dryRun: boolean },
+        context: {
+          globalArgs: GlobalArgs;
+          writeResource: (
+            spec: string,
+            name: string,
+            data: Record<string, unknown>,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props?: Record<string, unknown>) => void;
+          };
+        },
+      ): Promise<{ dataHandles: Array<{ name: string }> }> => {
+        const { gristBaseUrl, gristDocId, gristApiToken } = context.globalArgs;
+        const client = makeClient(gristBaseUrl, gristDocId, gristApiToken);
+        if (!args.dryRun) {
+          await client.dropTable(args.tableId);
+          context.logger.info("Dropped table {table}", { table: args.tableId });
+        }
+        const handle = await context.writeResource(
+          "tableDrop",
+          `table-drop-${args.tableId}`,
+          {
+            tableId: args.tableId,
+            dropped: !args.dryRun,
             dryRun: args.dryRun,
             timestamp: new Date().toISOString(),
           },
