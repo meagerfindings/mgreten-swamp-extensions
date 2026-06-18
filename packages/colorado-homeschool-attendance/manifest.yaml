@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: "@mgreten/colorado-homeschool-attendance"
+version: "2026.06.18.1"
+description: "Colorado homeschool attendance and learning session tracker backed by Grist. Tracks students, school years, subjects, capture events, and generates compliance summaries with test-entry isolation."
+repository: "https://github.com/meagerfindings/swamp-colorado-homeschool-attendance"
+paths:
+  base: manifest
+models:
+  - colorado_homeschool_attendance.ts
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+platforms:
+  - darwin-aarch64
+  - linux-x86_64
+  - linux-aarch64
+labels:
+  - homeschool
+  - attendance
+  - grist
+  - colorado
+  - education
