@@ -80,7 +80,7 @@ function getClient(
  */
 export const model = {
   type: "@mgreten/todoist",
-  version: "2026.06.08.2",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     task: {
