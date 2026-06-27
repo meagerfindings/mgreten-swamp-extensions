@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/swamp-club-score"
-version: "2026.06.27.2"
+version: "2026.06.27.3"
 description: |
   Fetch and normalize a Swamp Club profile snapshot for a user such as
   `mgreten`, including the current score, leaderboard placement, streak and
