@@ -1,0 +1,9 @@
+jurisdiction: colorado
+officeType: judge
+subject: "Judge Jane Doe"
+audience: informed-voter
+reportTone: neutral
+issueLenses:
+  - sentencing patterns
+  - public safety
+  - judicial discipline

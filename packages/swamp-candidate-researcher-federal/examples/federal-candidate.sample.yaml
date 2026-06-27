@@ -1,0 +1,9 @@
+jurisdiction: federal
+officeType: candidate
+subject: "U.S. Senate"
+audience: informed-voter
+reportTone: neutral
+issueLenses:
+  - abortion
+  - second amendment
+  - free speech
