@@ -540,7 +540,7 @@ const ListTestEntriesArgs = z.object({
 /** Colorado homeschool attendance tracker extension model. */
 export const model = {
   type: "@mgreten/colorado-homeschool-attendance",
-  version: "2026.06.18.1",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
