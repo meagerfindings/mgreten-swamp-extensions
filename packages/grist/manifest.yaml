@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/grist"
-version: "2026.06.18.3"
+version: "2026.06.27.1"
 description: "Generic Grist REST API model — list tables, manage columns, read and write records. Use as a foundation for Grist-backed Swamp extensions."
 repository: "https://github.com/meagerfindings/swamp-grist"
 paths:

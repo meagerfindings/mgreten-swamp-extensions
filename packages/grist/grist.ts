@@ -328,7 +328,7 @@ const AddColumnsArgs = z.object({
 /** Generic Grist REST API model for reading and writing document data. */
 export const model = {
   type: "@mgreten/grist",
-  version: "2026.06.18.3",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
