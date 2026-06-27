@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/swamp-candidate-researcher-colorado-judge"
-version: "2026.06.27.1"
+version: "2026.06.27.2"
 description: "Colorado judge research extension for retention, discipline, and sentencing-pattern analysis."
 repository: https://github.com/meagerfindings/swamp-candidate-researcher
 paths:
