@@ -12,7 +12,6 @@ import { z } from "npm:zod@4";
 import {
   buildResearchBrief,
   buildResearchPlan,
-  buildSourcePacket,
   JurisdictionSchema,
   OfficeTypeSchema,
   ResearchBriefSchema,
@@ -26,6 +25,8 @@ import {
   type SourcePacket,
   type SourceSpec,
 } from "./candidate-research-shared.ts";
+import { collectSourcePackets } from "./candidate-research-collector.ts";
+import { buildSourcePack } from "./candidate-research-source-packs.ts";
 
 /** Shared input for plan generation. */
 const PlanInputSchema = z.object({
@@ -126,6 +127,12 @@ export const model = {
       lifetime: "infinite",
       garbageCollection: 25,
     },
+    sourcePack: {
+      description: "Normalized source pack for a subject and jurisdiction.",
+      schema: z.array(SourceSpecSchema),
+      lifetime: "infinite",
+      garbageCollection: 25,
+    },
     brief: {
       description: "Synthesized voter brief built from curated source packets.",
       schema: ResearchBriefSchema,
@@ -153,45 +160,37 @@ export const model = {
         return { dataHandles: [handle], plan };
       }),
     },
+    sourcePack: {
+      description: "Build a neutral, jurisdiction-aware source pack for a subject.",
+      arguments: z.object({
+        subject: z.string().min(1),
+        jurisdiction: JurisdictionSchema,
+        officeType: OfficeTypeSchema,
+        issueLenses: z.array(z.string()).default([]),
+      }),
+      execute: (async (args: { subject: string; jurisdiction: z.infer<typeof JurisdictionSchema>; officeType: z.infer<typeof OfficeTypeSchema>; issueLenses: string[] }, context: any) => {
+        const sourceSpecs = buildSourcePack({
+          subject: args.subject,
+          jurisdiction: args.jurisdiction,
+          officeType: args.officeType,
+          issueLenses: args.issueLenses,
+        });
+        const handle = await context.writeResource("sourcePack", slugify(`${args.subject}-sources`), sourceSpecs);
+        return { dataHandles: [handle], sourceSpecs };
+      }),
+    },
     collect: {
       description: "Fetch and normalize a set of source pages into source packets.",
       arguments: CollectInputSchema,
       execute: (async (args: z.infer<typeof CollectInputSchema>, context: any) => {
-        const packets: SourcePacket[] = [];
-        const dataHandles: string[] = [];
-        for (const source of args.sources) {
-          if (!source.enabled) continue;
-          if (!source.url) {
-            packets.push({
-              subject: args.subject,
-              sourceName: source.name,
-              kind: source.kind,
-              jurisdiction: source.jurisdiction,
-              fetchedAt: new Date().toISOString(),
-              accessStatus: "not-fetched",
-              excerpt: source.queryHint ?? source.notes ?? "Source requires a query or manual follow-up.",
-              notes: source.notes,
-            });
-            continue;
-          }
-          const fetchedAt = new Date().toISOString();
-          const result = await fetchPage(source.url, args.fetchTimeoutMs);
-          const packet = buildSourcePacket({
-            subject: args.subject,
-            sourceName: source.name,
-            kind: source.kind,
-            url: source.url,
-            jurisdiction: source.jurisdiction,
-            fetchedAt,
-            body: result.body,
-            notes: source.notes,
-            accessStatus: result.accessStatus,
-          });
-          const handle = await context.writeResource("packet", slugify(`${args.subject}-${source.name}`), packet);
-          packets.push(packet);
-          dataHandles.push(handle);
-        }
-        return { dataHandles, packets };
+        const result = await collectSourcePackets({
+          subject: args.subject,
+          jurisdiction: args.jurisdiction,
+          sources: args.sources,
+          fetchTimeoutMs: args.fetchTimeoutMs,
+          writeResource: context.writeResource?.bind(context),
+        });
+        return result;
       }),
     },
     synthesize: {
@@ -226,4 +225,4 @@ export type PlanResult = z.infer<typeof PlanResultSchema>;
 export type CollectResult = z.infer<typeof CollectResultSchema>;
 export type SynthesizeResult = z.infer<typeof SynthesizeResultSchema>;
 
-export { buildResearchBrief, buildResearchPlan, buildSourcePacket };
+export { buildResearchBrief, buildResearchPlan };

@@ -6,6 +6,11 @@
  */
 
 import { z } from "npm:zod@4";
+import {
+  buildColoradoCandidateSourceSpecs,
+  buildFederalCandidateSourceSpecs,
+  buildColoradoJudgeSourceSpecs,
+} from "./candidate-research-source-packs.ts";
 
 export const SourceKindSchema = z.enum([
   "official",
@@ -127,6 +132,7 @@ export function buildResearchPlan(input: {
   issueLenses?: Array<string | IssueLens>;
   sourcePriority?: SourceKind[];
   sourceSpecs?: SourceSpec[];
+  researchQuestions?: string[];
   redFlagSignals?: string[];
 }): ResearchPlan {
   const issueLenses = (input.issueLenses ?? []).map((lens) =>
@@ -154,6 +160,7 @@ export function buildResearchPlan(input: {
     sourceSpecs: input.sourceSpecs ?? [],
     researchQuestions,
     redFlagSignals: input.redFlagSignals ?? [],
+
   };
 }
 
@@ -225,10 +232,10 @@ export function renderMarkdownReport(brief: ResearchBrief, packets: SourcePacket
     `- Sources reviewed: ${brief.sourceCount}`,
     brief.verdict ? `- Bottom line: ${brief.verdict}` : undefined,
     `## Summary\n\n${brief.summary}`,
-    brief.strongestSupport.length ? `## Strongest support\n\n${brief.strongestSupport.map((item) => `- ${item}`).join("\n")}` : undefined,
-    brief.strongestConcerns.length ? `## Strongest concerns\n\n${brief.strongestConcerns.map((item) => `- ${item}`).join("\n")}` : undefined,
-    brief.openQuestions.length ? `## Open questions\n\n${brief.openQuestions.map((item) => `- ${item}`).join("\n")}` : undefined,
-    `## Source packets\n\n${packets.map((packet) => [
+    brief.strongestSupport.length ? `## Strongest support\n\n${brief.strongestSupport.map((item: string) => `- ${item}`).join("\n")}` : undefined,
+    brief.strongestConcerns.length ? `## Strongest concerns\n\n${brief.strongestConcerns.map((item: string) => `- ${item}`).join("\n")}` : undefined,
+    brief.openQuestions.length ? `## Open questions\n\n${brief.openQuestions.map((item: string) => `- ${item}`).join("\n")}` : undefined,
+    `## Source packets\n\n${packets.map((packet: SourcePacket) => [
       `### ${packet.sourceName}`,
       `- Kind: ${packet.kind}`,
       packet.url ? `- URL: ${packet.url}` : undefined,
@@ -278,36 +285,7 @@ export function buildColoradoCandidatePlan(subject: string, issueLenses: Array<s
     jurisdiction: "colorado",
     officeType: "candidate",
     sourcePriority: ["official", "neutral", "news", "advocacy"],
-    sourceSpecs: [
-      {
-        name: "Colorado Secretary of State elections hub",
-        kind: "official",
-        url: "https://www.sos.state.co.us/pubs/elections/main.html",
-        jurisdiction: "colorado",
-        notes: "Official Colorado elections landing page",
-      },
-      {
-        name: "Colorado SOS campaign finance / TRACER",
-        kind: "official",
-        url: "https://tracer.sos.colorado.gov/PublicSite/homepage.aspx",
-        jurisdiction: "colorado",
-        notes: "Campaign finance and disclosures",
-      },
-      {
-        name: "Colorado election results and data",
-        kind: "official",
-        url: "https://www.coloradosos.gov/pubs/elections/resultsData.html",
-        jurisdiction: "colorado",
-        notes: "Historical results and election data",
-      },
-      {
-        name: "Colorado Historical Election Data",
-        kind: "official",
-        url: "https://historicalelectiondata.coloradosos.gov/eng/",
-        jurisdiction: "colorado",
-        notes: "Historical election database",
-      },
-    ].concat(buildIssueSourceSpecs(issueLenses)),
+    sourceSpecs: buildColoradoCandidateSourceSpecs(subject, issueLenses),
     researchQuestions: [
       "What office is the candidate actually seeking, and what is the filing/ballot status?",
       "What do official filings say about money, committees, and ballot eligibility?",
@@ -329,29 +307,7 @@ export function buildFederalCandidatePlan(subject: string, issueLenses: Array<st
     jurisdiction: "federal",
     officeType: "candidate",
     sourcePriority: ["official", "neutral", "news", "advocacy"],
-    sourceSpecs: [
-      {
-        name: "FEC campaign finance data",
-        kind: "official",
-        url: "https://www.fec.gov/data/",
-        jurisdiction: "federal",
-        notes: "Federal campaign finance data hub",
-      },
-      {
-        name: "FEC bulk data",
-        kind: "official",
-        url: "https://www.fec.gov/data/browse-data/?tab=bulk-data",
-        jurisdiction: "federal",
-        notes: "Bulk downloads and data tables",
-      },
-      {
-        name: "OpenFEC API docs",
-        kind: "official",
-        url: "https://api.open.fec.gov/developers/",
-        jurisdiction: "federal",
-        notes: "API documentation",
-      },
-    ].concat(buildIssueSourceSpecs(issueLenses)),
+    sourceSpecs: buildFederalCandidateSourceSpecs(subject, issueLenses),
     researchQuestions: [
       "What is the candidate's federal office, committee structure, and filing footprint?",
       "What do official federal records and candidate statements show?",
@@ -372,36 +328,7 @@ export function buildColoradoJudgePlan(subject: string, issueLenses: Array<strin
     jurisdiction: "colorado",
     officeType: "judge",
     sourcePriority: ["official", "neutral", "news", "advocacy"],
-    sourceSpecs: [
-      {
-        name: "Colorado judicial branch homepage",
-        kind: "official",
-        url: "https://www.coloradojudicial.gov/",
-        jurisdiction: "colorado",
-        notes: "Official judicial branch and judge biographies",
-      },
-      {
-        name: "Colorado judicial branch search",
-        kind: "official",
-        url: "https://www.coloradojudicial.gov/search",
-        jurisdiction: "colorado",
-        notes: "Search official opinions, notices, and branch materials",
-      },
-      {
-        name: "Colorado Commission on Judicial Discipline",
-        kind: "official",
-        url: "https://ccjd.colorado.gov/",
-        jurisdiction: "colorado",
-        notes: "Discipline and misconduct materials",
-      },
-      {
-        name: "Colorado judicial performance overview",
-        kind: "official",
-        url: "https://judicialperformance.colorado.gov/",
-        jurisdiction: "colorado",
-        notes: "Judicial performance evaluations and retention recommendations",
-      },
-    ].concat(buildIssueSourceSpecs(issueLenses)),
+    sourceSpecs: buildColoradoJudgeSourceSpecs(subject, issueLenses),
     researchQuestions: [
       "What is the judge's court, appointment history, and term/retention status?",
       "What do performance commissions or retention materials say?",
