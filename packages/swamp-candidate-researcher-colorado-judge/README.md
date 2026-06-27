@@ -1,45 +1,80 @@
 # swamp-candidate-researcher
 
-Configurable Swamp models for building election and judicial research packets without baking in a single political worldview.
-The repo is split into a shared core plus Colorado and federal variants, with a separate Colorado judge-focused model for retention,
-discipline, and sentencing-pattern research. The public defaults stay neutral; viewpoint-specific preferences belong in private
-configs or downstream prompts, not in the repo itself.
+A public Swamp monorepo for neutral candidate and judicial research.
+
+This repo now acts as a **workspace** for multiple publishable extensions:
+- Colorado candidate research
+- federal candidate research
+- Colorado judge / retention research
+
+The shared neutral logic lives once in the root `models/` tree, while publishable package entrypoints live under `extensions/*/`.
+That keeps the repo reusable without hard-coding one political worldview or one audience profile.
+
+## Repo layout
+
+See [`docs/repo-shape.md`](docs/repo-shape.md) for the full structure.
 
 ## What this repo provides
 
-- a shared research core for plans, source packets, and report synthesis
+- shared schemas and helpers for source normalization and report synthesis
 - Colorado-specific candidate research helpers
 - federal candidate research helpers
 - Colorado judicial research helpers
-- a synthesizer model that turns curated findings into a unified briefing
+- separate publishable extension manifests under `extensions/`
 
 ## Example usage
 
+### Colorado candidate
+
 ```yaml
-# sample input shape for a Colorado race
 jurisdiction: colorado
 officeType: candidate
 subject: "County Commissioner, District 2"
+audience: informed-voter
+reportTone: neutral
 issueLenses:
   - abortion
   - homeschooling
   - second amendment
   - free speech
-sources:
-  - name: official campaign site
-    url: https://example.org/candidate
-    kind: candidate
-  - name: local reporting
-    url: https://example.org/article
-    kind: news
 ```
 
-```ts
-import { model } from "./models/shared/candidate-research-core.ts";
+### Federal candidate
 
-// The collector can turn a candidate + source list into structured packets.
-// The synthesizer can then combine those packets into a readable brief.
+```yaml
+jurisdiction: federal
+officeType: candidate
+subject: "U.S. Senate"
+audience: informed-voter
+reportTone: neutral
+issueLenses:
+  - abortion
+  - second amendment
+  - free speech
 ```
+
+### Colorado judge
+
+```yaml
+jurisdiction: colorado
+officeType: judge
+subject: "Judge Jane Doe"
+audience: informed-voter
+reportTone: neutral
+issueLenses:
+  - sentencing patterns
+  - public safety
+  - judicial discipline
+```
+
+## Publishable extension packages
+
+- `extensions/colorado-candidate/manifest.yaml`
+- `extensions/federal-candidate/manifest.yaml`
+- `extensions/colorado-judge/manifest.yaml`
+
+Each package re-exports the canonical root model, so the repo can publish multiple
+extensions without duplicating the implementation logic.
 
 ## Design notes
 
@@ -53,9 +88,13 @@ The public repo should remain a neutral toolset that can support different audie
 
 ## Installation
 
+To inspect the workspace:
+
 ```sh
-swamp extension pull @meagerfindings/swamp-candidate-researcher
+swamp extension fmt extensions/colorado-candidate/manifest.yaml --repo-dir . --check
 ```
+
+To publish a package, point `swamp extension push` at one of the submanifests.
 
 ## License
 
