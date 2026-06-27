@@ -340,7 +340,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@mgreten/storage-health",
-  version: "2026.06.23.1",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     mountStatus: {

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/storage-health"
-version: "2026.06.23.1"
+version: "2026.06.27.1"
 description: >
   Monitor disk usage and backup snapshot inventory on any SSH-accessible host
   or the local machine. Produces typed, versioned artifacts for each mount
