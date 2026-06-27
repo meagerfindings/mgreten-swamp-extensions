@@ -40,7 +40,7 @@ const TranscriptResourceSchema = z.object({
 /** MLX Whisper transcription model — see module doc for full details. */
 export const model = {
   type: "@mgreten/mlx-whisper",
-  version: "2026.05.28.2",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     transcript: {
