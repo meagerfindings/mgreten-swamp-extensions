@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/ntfy-notify"
-version: "2026.05.26.1"
+version: "2026.06.27.1"
 description: >
   Send push notifications via ntfy.sh (self-hosted or public). A single
   focused model with one method: send a notification with title, message,
