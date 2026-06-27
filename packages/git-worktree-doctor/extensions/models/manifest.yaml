@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/git-worktree-doctor"
-version: "2026.05.19.1"
+version: "2026.06.27.1"
 description: >
   Diagnose and prune git worktrees. Parses `git worktree list --porcelain`,
   validates paths exist on disk, detects stale/locked/prunable entries,
