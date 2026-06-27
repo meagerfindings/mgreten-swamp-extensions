@@ -293,7 +293,7 @@ type ModelContext = {
  */
 export const model = {
   type: "@mgreten/linear-activity",
-  version: "2026.05.20.1",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
