@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/unifi"
-version: "2026.05.18.1"
+version: "2026.06.27.1"
 description: >
   Manage a Ubiquiti UniFi Dream Machine (UDM / UDM Pro / UDM SE) via the
   legacy Network firewall API: firewall groups, firewall rules, clients,

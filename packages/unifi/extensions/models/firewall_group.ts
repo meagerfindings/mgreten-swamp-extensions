@@ -37,7 +37,7 @@ type FirewallGroup = z.infer<typeof FirewallGroupSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/firewall-group",
-  version: "2026.05.18.1",
+  version: "2026.06.27.1",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     group: {
