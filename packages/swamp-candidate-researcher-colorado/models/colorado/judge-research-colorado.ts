@@ -58,7 +58,7 @@ async function fetchPage(url: string, timeoutMs: number): Promise<{ body: string
 
 /** Colorado judge research model. */
 export const model = {
-  type: "@meagerfindings/judge-research-colorado",
+  type: "@mgreten/judge-research-colorado",
   version: "2026.06.27.1",
   globalArguments: z.object({}),
   resources: {
