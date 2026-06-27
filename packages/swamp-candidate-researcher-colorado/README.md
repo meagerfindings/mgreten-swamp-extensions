@@ -23,6 +23,36 @@ See [`docs/repo-shape.md`](docs/repo-shape.md) for the full structure.
 - Colorado judicial research helpers
 - publishable extension manifests under `extensions/`
 
+## Model surface
+
+This repo’s published extensions are built from a single shared model family.
+The CLI dry-run output only shows package metadata, so this section documents
+the actual model surface in the style of a Swamp model page.
+
+### `@mgreten/candidate-research-core`
+
+- **Global arguments:** `{}`
+- **Methods:** `plan`, `sourcePack`, `collect`, `synthesize`
+- **Resources:** `plan`, `packet`, `sourcePack`, `brief`
+
+### `@mgreten/candidate-research-colorado`
+
+- **Global arguments:** `{}`
+- **Methods:** `plan`, `collect`, `synthesize`
+- **Resources:** `plan`, `packet`, `brief`
+
+### `@mgreten/candidate-research-federal`
+
+- **Global arguments:** `{}`
+- **Methods:** `plan`, `collect`, `synthesize`
+- **Resources:** `plan`, `packet`, `brief`
+
+### `@mgreten/candidate-research-colorado-judge`
+
+- **Global arguments:** `{}`
+- **Methods:** `plan`, `collect`, `synthesize`
+- **Resources:** `plan`, `packet`, `brief`
+
 ## Example usage
 
 ### Colorado candidate
