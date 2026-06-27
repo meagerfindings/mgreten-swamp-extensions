@@ -26,5 +26,5 @@ That means the repo should behave like a workspace:
 
 ## Current status
 
-The root-level manifest and model files are still present as the original published prototype.
-The new `extensions/*` manifests are the preferred publish targets for the split-package design.
+The root-level `models/` tree is canonical shared implementation only.
+The `extensions/*` manifests are the publish targets for the split-package design.

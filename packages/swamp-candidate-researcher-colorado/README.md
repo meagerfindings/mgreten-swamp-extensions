@@ -7,7 +7,8 @@ This repo now acts as a **workspace** for multiple publishable extensions:
 - federal candidate research
 - Colorado judge / retention research
 
-The shared neutral logic lives once in the root `models/` tree, while publishable package entrypoints live under `extensions/*/`.
+The shared neutral logic lives once in the root `models/` tree as canonical implementation only.
+Publishable package entrypoints live under `extensions/*/` and are the only publish targets.
 That keeps the repo reusable without hard-coding one political worldview or one audience profile.
 
 ## Repo layout
@@ -20,7 +21,7 @@ See [`docs/repo-shape.md`](docs/repo-shape.md) for the full structure.
 - Colorado-specific candidate research helpers
 - federal candidate research helpers
 - Colorado judicial research helpers
-- separate publishable extension manifests under `extensions/`
+- publishable extension manifests under `extensions/`
 
 ## Example usage
 
@@ -74,7 +75,8 @@ issueLenses:
 - `extensions/colorado-judge/manifest.yaml`
 
 Each package re-exports the canonical root model, so the repo can publish multiple
-extensions without duplicating the implementation logic.
+extensions without duplicating the implementation logic. The root of this repo is
+shared implementation only and is not a publish target.
 
 ## Design notes
 

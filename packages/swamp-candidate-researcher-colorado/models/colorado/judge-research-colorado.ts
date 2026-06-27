@@ -9,7 +9,8 @@
  */
 
 import { z } from "npm:zod@4";
-import { buildColoradoJudgePlan, buildResearchBrief, buildSourcePacket, ResearchBriefSchema, ResearchPlanSchema, SourcePacketSchema, SourceSpecSchema, slugify } from "../shared/candidate-research-shared.ts";
+import { buildColoradoJudgePlan, buildResearchBrief, ResearchBriefSchema, ResearchPlanSchema, SourcePacketSchema, SourceSpecSchema, slugify } from "../shared/candidate-research-shared.ts";
+import { collectSourcePackets } from "../shared/candidate-research-collector.ts";
 
 /** Plan input for Colorado judge research. */
 const PlanInputSchema = z.object({
@@ -94,28 +95,13 @@ export const model = {
       description: "Collect Colorado judicial source pages into normalized source packets.",
       arguments: CollectInputSchema,
       execute: (async (args: z.infer<typeof CollectInputSchema>, context: any) => {
-        const packets: z.infer<typeof SourcePacketSchema>[] = [];
-        const dataHandles: string[] = [];
-        for (const source of args.sources) {
-          if (!source.enabled || !source.url) continue;
-          const fetchedAt = new Date().toISOString();
-          const result = await fetchPage(source.url, args.fetchTimeoutMs);
-          const packet = buildSourcePacket({
-            subject: args.subject,
-            sourceName: source.name,
-            kind: source.kind,
-            url: source.url,
-            jurisdiction: "colorado",
-            fetchedAt,
-            body: result.body,
-            notes: source.notes,
-            accessStatus: result.accessStatus,
-          });
-          const handle = await context.writeResource("packet", slugify(`${args.subject}-${source.name}`), packet);
-          packets.push(packet);
-          dataHandles.push(handle);
-        }
-        return { dataHandles, packets };
+        return collectSourcePackets({
+          subject: args.subject,
+          jurisdiction: "colorado",
+          sources: args.sources,
+          fetchTimeoutMs: args.fetchTimeoutMs,
+          writeResource: context.writeResource ? context.writeResource.bind(context) : undefined,
+        });
       }),
     },
     synthesize: {
