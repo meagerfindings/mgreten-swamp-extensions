@@ -11,6 +11,7 @@ import {
   buildFederalCandidateSourceSpecs,
   buildColoradoJudgeSourceSpecs,
 } from "./candidate-research-source-packs.ts";
+import { adaptSourcePacket } from "./candidate-research-source-adapters.ts";
 
 export const SourceKindSchema = z.enum([
   "official",
@@ -176,7 +177,14 @@ export function buildSourcePacket(input: {
   publishedAt?: string;
   accessStatus?: SourcePacket["accessStatus"];
 }): SourcePacket {
-  const title = extractTitle(input.body);
+  const enrichment = adaptSourcePacket({
+    url: input.url,
+    sourceName: input.sourceName,
+    body: input.body,
+  });
+  const title = enrichment.title ?? extractTitle(input.body);
+  const excerpt = enrichment.excerpt ?? makeExcerpt(input.body);
+  const notes = enrichment.notes ? (input.notes ? `${input.notes}; ${enrichment.notes}` : enrichment.notes) : input.notes;
   return {
     subject: input.subject,
     sourceName: input.sourceName,
@@ -184,11 +192,11 @@ export function buildSourcePacket(input: {
     url: input.url,
     jurisdiction: input.jurisdiction,
     title,
-    publishedAt: input.publishedAt,
+    publishedAt: input.publishedAt ?? enrichment.publishedAt,
     fetchedAt: input.fetchedAt,
     accessStatus: input.accessStatus ?? "fetched",
-    excerpt: makeExcerpt(input.body),
-    notes: input.notes,
+    excerpt,
+    notes,
   };
 }
 
