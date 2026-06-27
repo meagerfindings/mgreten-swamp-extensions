@@ -1,0 +1,27 @@
+manifestVersion: 1
+name: "@mgreten/swamp-club-score"
+version: "2026.06.27.1"
+description: |
+  Fetch and normalize a Swamp Club profile snapshot for a user such as
+  `mgreten`, including the current score, leaderboard placement, streak and
+  activity metadata, and the highest-value visible score buckets from the
+  public profile page.
+
+  The model is intentionally read-only: it does not mutate the profile or
+  require lab issue workflows. It is designed to be polled and then surfaced
+  as a Home Assistant sensor or other dashboard entity.
+
+repository: "https://github.com/meagerfindings/swamp-club-score"
+paths:
+  base: manifest
+skills: []
+models:
+  - extensions/models/swamp_club_score.ts
+additionalFiles:
+  - LICENSE.txt
+  - README.md
+platforms: []
+labels:
+  - swamp-club
+  - profile
+  - score
