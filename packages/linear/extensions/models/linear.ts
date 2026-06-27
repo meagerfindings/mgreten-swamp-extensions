@@ -117,7 +117,7 @@ function getClient(
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.05.22.2",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     issue: {
