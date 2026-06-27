@@ -22,7 +22,7 @@ import { z } from "npm:zod@4";
 // Minimal Python diarization helper — written to a tmpfile at runtime.
 // Token is injected via $HF_TOKEN environment variable (not a CLI arg).
 const DIARIZE_PY = `
-import sys, json, os
+import sys, json, os, subprocess, tempfile
 from pathlib import Path
 
 def load_token():
@@ -41,14 +41,41 @@ transcript_path, audio_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
 
 token = load_token()
 
-from pyannote.audio import Pipeline
-pipe = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=token)
-result = pipe(audio_path)
-annotation = getattr(result, "speaker_diarization", result)
-turns = [
-    (float(t.start), float(t.end), str(label))
-    for t, _, label in annotation.itertracks(yield_label=True)
-]
+# Convert to 16 kHz mono WAV before diarization. AAC/m4a containers include
+# encoder-delay priming samples that cause the decoded chunk to be slightly
+# shorter than the container duration implies, triggering a ValueError in
+# pyannote's sample-count assertion. WAV avoids this entirely.
+wav_tmp = None
+diarize_path = audio_path
+if not audio_path.lower().endswith('.wav'):
+    fd, wav_tmp = tempfile.mkstemp(suffix='_diarize.wav')
+    os.close(fd)
+    subprocess.run(
+        ['ffmpeg', '-y', '-i', audio_path, '-ar', '16000', '-ac', '1', '-sample_fmt', 's16', wav_tmp],
+        check=True, capture_output=True,
+    )
+    diarize_path = wav_tmp
+
+import torch as _torch
+_requested = os.environ.get("PYANNOTE_DEVICE", "auto")
+if _requested == "auto":
+    _device = _torch.device("mps") if _torch.backends.mps.is_available() else _torch.device("cpu")
+else:
+    _device = _torch.device(_requested)
+
+try:
+    from pyannote.audio import Pipeline
+    pipe = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=token)
+    pipe.to(_device)
+    result = pipe(diarize_path)
+    annotation = getattr(result, "speaker_diarization", result)
+    turns = [
+        (float(t.start), float(t.end), str(label))
+        for t, _, label in annotation.itertracks(yield_label=True)
+    ]
+finally:
+    if wav_tmp and os.path.exists(wav_tmp):
+        os.unlink(wav_tmp)
 
 data = json.loads(Path(transcript_path).read_text())
 for seg in data.get("segments") or []:
@@ -79,6 +106,12 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("python3")
     .describe("Python interpreter to use"),
+  device: z
+    .string()
+    .default("auto")
+    .describe(
+      "PyTorch device for pyannote inference: 'auto' (prefers MPS on Apple Silicon, falls back to CPU), 'mps', 'cpu', or 'cuda'. Passed as $PYANNOTE_DEVICE to the subprocess.",
+    ),
 });
 
 const DiarizedResourceSchema = z.object({
@@ -97,7 +130,7 @@ const DiarizedResourceSchema = z.object({
 /** Pyannote speaker diarization model — see module doc for full details. */
 export const model = {
   type: "@mgreten/pyannote-diarizer",
-  version: "2026.05.28.2",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     diarizedTranscript: {
@@ -128,7 +161,7 @@ export const model = {
         // deno-lint-ignore no-explicit-any
         context: any,
       ) => {
-        const { hfToken, pythonBin } = context.globalArgs;
+        const { hfToken, pythonBin, device } = context.globalArgs;
         const stem = args.audioPath.split("/").pop()!.replace(/\.[^.]+$/, "");
         const name = args.instanceName ?? stem;
 
@@ -149,9 +182,10 @@ export const model = {
             outPath,
           ];
 
-          // Token injected via env var — never via CLI arg (would appear in ps output)
+          // Secrets and device injected via env vars — never via CLI args (would appear in ps output)
           const subEnv: Record<string, string> = {};
           if (hfToken) subEnv["HF_TOKEN"] = hfToken;
+          subEnv["PYANNOTE_DEVICE"] = device;
 
           const cmd = new Deno.Command(pythonBin, {
             args: cmdArgs,
