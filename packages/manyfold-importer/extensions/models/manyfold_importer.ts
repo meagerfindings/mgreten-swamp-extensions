@@ -272,7 +272,7 @@ async function uploadFile(
 /** Swamp model for importing files into a Manyfold-accessible library path. */
 export const model = {
   type: "@mgreten/manyfold-importer",
-  version: "2026.05.30.2",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     importSummary: {
