@@ -35,7 +35,7 @@ const SynthesizeInputSchema = z.object({
  * Synthesis model definition.
  */
 export const model = {
-  type: "@meagerfindings/candidate-research-synthesizer",
+  type: "@mgreten/candidate-research-synthesizer",
   version: "2026.06.27.1",
   globalArguments: z.object({}),
   resources: {

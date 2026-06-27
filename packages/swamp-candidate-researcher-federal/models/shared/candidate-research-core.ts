@@ -111,7 +111,7 @@ async function fetchPage(url: string, timeoutMs: number): Promise<{ status: numb
  * Shared candidate research core model definition.
  */
 export const model = {
-  type: "@meagerfindings/candidate-research-core",
+  type: "@mgreten/candidate-research-core",
   version: "2026.06.27.1",
   globalArguments: z.object({}),
   resources: {

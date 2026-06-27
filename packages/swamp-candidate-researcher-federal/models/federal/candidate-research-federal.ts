@@ -54,7 +54,7 @@ async function fetchPage(url: string, timeoutMs: number): Promise<{ body: string
 
 /** Federal candidate research model. */
 export const model = {
-  type: "@meagerfindings/candidate-research-federal",
+  type: "@mgreten/candidate-research-federal",
   version: "2026.06.27.1",
   globalArguments: z.object({}),
   resources: {

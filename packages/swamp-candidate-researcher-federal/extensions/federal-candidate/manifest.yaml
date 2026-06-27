@@ -1,5 +1,5 @@
 manifestVersion: 1
-name: "@meagerfindings/swamp-candidate-researcher-federal"
+name: "@mgreten/swamp-candidate-researcher-federal"
 version: "2026.06.27.1"
 description: "Federal candidate research extension for neutral voter briefing."
 repository: https://github.com/meagerfindings/swamp-candidate-researcher
