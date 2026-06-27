@@ -267,7 +267,7 @@ export function buildIssueSourceSpecs(issueLenses: Array<string | IssueLens>): S
   }
   if (names.has("homeschooling")) {
     sources.push(
-      { name: "CHEC Colorado Homeschool Freedom", kind: "advocacy", url: "https://chec.org/colorado-homeschool-freedom/", jurisdiction: "colorado", notes: "Conservative homeschool/personal-rights lens" },
+      { name: "CHEC Colorado Homeschool Freedom", kind: "advocacy", url: "https://chec.org/colorado-homeschool-freedom/", jurisdiction: "colorado", notes: "Homeschool advocacy lens" },
       { name: "HSLDA", kind: "advocacy", url: "https://hslda.org/", notes: "Homeschool defense and legal support" },
       { name: "CRHE", kind: "advocacy", url: "https://responsiblehomeschooling.org/", notes: "Critical homeschool research lens" },
     );
