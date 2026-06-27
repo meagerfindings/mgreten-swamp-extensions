@@ -85,7 +85,7 @@ The key design goal is separation of concerns:
 - Colorado and federal models encode jurisdiction-specific source priorities
 - the judge model keeps retention and discipline concerns separate from ordinary candidate research
 
-If you want a conservative-friendly or progressive-friendly presentation mode, keep that in the private prompt/config layer that calls these models.
+If you want a viewpoint-specific presentation mode, keep that in the private prompt/config layer that calls these models.
 The public repo should remain a neutral toolset that can support different audiences.
 
 ## Installation
