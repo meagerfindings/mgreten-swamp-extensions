@@ -149,7 +149,7 @@ async function runCommand(
 /** Swamp model for speaking text aloud on macOS via the `say` synthesizer. */
 export const model = {
   type: "@mgreten/macos-say-tts",
-  version: "2026.06.03.1",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     utterance: {
