@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/hermes-review-kit"
-version: "2026.05.25.2"
+version: "2026.06.27.1"
 description: "Hermes review automation kit with a local-first collector model, workflow-scope report, and nightly workflow for reviews and publishability screening."
 
 repository: https://github.com/meagerfindings/hermes-review-kit
@@ -15,7 +15,7 @@ reports:
   - review_report.ts
 
 workflows:
-  - hermes-daily-review.yaml
+  - workflows/hermes-daily-review.yaml
 
 additionalFiles:
   - README.md
