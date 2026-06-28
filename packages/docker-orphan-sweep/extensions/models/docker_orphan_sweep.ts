@@ -31,7 +31,7 @@ const OrphanEntrySchema = z.object({
   exists: z.boolean().describe(
     "Whether the expected worktree directory exists.",
   ),
-}).passthrough();
+});
 
 const OrphanScanSchema = z.object({
   scannedAt: z.string().describe("ISO-8601 timestamp of the scan."),
@@ -45,7 +45,7 @@ const OrphanScanSchema = z.object({
   orphans: z.array(OrphanEntrySchema).describe(
     "Details for each orphaned container.",
   ),
-}).passthrough();
+});
 
 const SweepDetailSchema = z.object({
   containerName: z.string().describe("Docker container name."),
@@ -54,7 +54,7 @@ const SweepDetailSchema = z.object({
   removeError: z.string().optional().describe(
     "Error message if removal failed.",
   ),
-}).passthrough();
+});
 
 const SweepResultSchema = z.object({
   sweptAt: z.string().describe("ISO-8601 timestamp of the sweep."),
@@ -65,7 +65,7 @@ const SweepResultSchema = z.object({
   removedCount: z.number().describe("Containers successfully removed."),
   errorCount: z.number().describe("Containers that failed removal."),
   details: z.array(SweepDetailSchema).describe("Per-container sweep details."),
-}).passthrough();
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -221,7 +221,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@mgreten/docker-orphan-sweep" as const,
-  version: "2026.06.27.1" as const,
+  version: "2026.06.27.2" as const,
   globalArguments: GlobalArgsSchema,
 
   resources: {
