@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/slack-blocks"
-version: "2026.06.27.1"
+version: "2026.06.27.2"
 description: >
   Post Block Kit messages to Slack from swamp models and workflows, with
   optional file attachments uploaded via the modern external-upload flow.

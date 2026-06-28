@@ -31,7 +31,7 @@ const GlobalArgsSchema: z.ZodObject<{
     ),
 });
 
-/** Schema for a single Block Kit block (passthrough; Slack validates shape). */
+/** Schema for a single Block Kit block — accepts any shape; Slack validates block structure. */
 const BlockSchema: z.ZodRecord<z.ZodString, z.ZodUnknown> = z.record(
   z.string(),
   z.unknown(),
@@ -50,7 +50,7 @@ const SlackMessageSchema = z.object({
   success: z.boolean(),
   slackError: z.string().nullable(),
   sentAt: z.string(),
-}).passthrough();
+});
 
 /** Schema for a Slack `auth.test` response surfaced by `verifyAuth`. */
 const AuthTestSchema = z.object({
@@ -62,7 +62,7 @@ const AuthTestSchema = z.object({
   botId: z.string().nullable(),
   checkedAt: z.string(),
   slackError: z.string().nullable(),
-}).passthrough();
+});
 
 type MethodContext = {
   globalArgs: z.infer<typeof GlobalArgsSchema>;
@@ -225,7 +225,7 @@ async function uploadFile(
  */
 export const model = {
   type: "@mgreten/slack-blocks",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     slackMessage: {
