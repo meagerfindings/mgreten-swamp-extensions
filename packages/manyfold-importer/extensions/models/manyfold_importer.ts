@@ -30,7 +30,7 @@ const GlobalArgsSchema = z.object({
   manyfoldBaseUrl: z.string().url().optional().describe(
     "Base URL for Manyfold, used only when calling the API scan endpoint.",
   ),
-  apiToken: z.string().optional().describe(
+  apiToken: z.string().meta({ sensitive: true }).optional().describe(
     "Bearer token or vault expression for Manyfold API calls. Not needed for filesystem imports.",
   ),
   defaultLibraryPath: z.string().optional().describe(
@@ -67,7 +67,7 @@ const ImportSummarySchema = z.object({
     path: z.string(),
     error: z.string(),
   })),
-}).passthrough();
+});
 
 type MethodContext = {
   globalArgs: z.infer<typeof GlobalArgsSchema>;
@@ -272,7 +272,7 @@ async function uploadFile(
 /** Swamp model for importing files into a Manyfold-accessible library path. */
 export const model = {
   type: "@mgreten/manyfold-importer",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     importSummary: {
