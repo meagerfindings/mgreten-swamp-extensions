@@ -21,7 +21,11 @@ const FirewallGroupSchema = z.object({
   group_type: z.enum(GROUP_TYPES),
   group_members: z.array(z.string()),
   site_id: z.string().optional(),
-}).passthrough();
+});
+
+const FirewallGroupResponseSchema = z.object({
+  data: z.array(FirewallGroupSchema).optional(),
+});
 
 type FirewallGroup = z.infer<typeof FirewallGroupSchema>;
 
@@ -37,7 +41,7 @@ type FirewallGroup = z.infer<typeof FirewallGroupSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/firewall-group",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     group: {
@@ -92,6 +96,25 @@ export const model = {
     "set-members": {
       description:
         "Replace the members of a firewall group with the provided list. Identify the group by id or by name.",
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify UniFi controller connectivity and authentication",
+          execute: async (
+            // deno-lint-ignore no-explicit-any
+            _args: any,
+            context: { globalArgs: z.infer<typeof UnifiGlobalArgsSchema> },
+          ) => {
+            const client = await login(context.globalArgs);
+            try {
+              await client.request("/api/self", "GET");
+            } finally {
+              await client.cleanup();
+            }
+          },
+        },
+      ],
       arguments: z.object({
         id: z.string().optional().describe("Group _id (preferred)"),
         name: z.string().optional().describe(
@@ -168,7 +191,7 @@ export const model = {
             }
           }
 
-          const updated = await client.request<{ data?: FirewallGroup[] }>(
+          const rawUpdated = await client.request<unknown>(
             networkPath(client.site, `/rest/firewallgroup/${target._id}`),
             "PUT",
             {
@@ -178,6 +201,8 @@ export const model = {
               site_id: target.site_id,
             },
           );
+
+          const updated = FirewallGroupResponseSchema.parse(rawUpdated);
 
           const saved = updated.data?.[0] ?? {
             ...target,

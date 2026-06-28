@@ -16,7 +16,7 @@ const ClientSchema = z.object({
   is_wired: z.boolean().optional(),
   last_seen: z.number().optional(),
   first_seen: z.number().optional(),
-}).passthrough();
+});
 
 type Client = z.infer<typeof ClientSchema>;
 
@@ -31,7 +31,7 @@ type Client = z.infer<typeof ClientSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/client",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     client: {

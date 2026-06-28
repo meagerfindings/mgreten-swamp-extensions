@@ -14,7 +14,7 @@ const NetworkSchema = z.object({
   enabled: z.boolean().optional(),
   is_nat: z.boolean().optional(),
   site_id: z.string().optional(),
-}).passthrough();
+});
 
 type Network = z.infer<typeof NetworkSchema>;
 
@@ -27,7 +27,7 @@ type Network = z.infer<typeof NetworkSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/network",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     network: {

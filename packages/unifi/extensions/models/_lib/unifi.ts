@@ -181,12 +181,15 @@ export function networkPath(site: string, suffix: string): string {
 }
 
 /**
- * Wrapper for UniFi list responses, which always look like { meta: {...}, data: [...] }.
+ * Zod schema for UniFi list responses, which always look like { meta: {...}, data: [...] }.
  */
-export interface UnifiListResponse<T> {
-  meta?: { rc?: string; msg?: string };
-  data?: T[];
-}
+const UnifiListResponseSchema = z.object({
+  meta: z.object({
+    rc: z.string().optional(),
+    msg: z.string().optional(),
+  }).optional(),
+  data: z.array(z.unknown()).optional(),
+});
 
 /**
  * Generic helper: GET a list endpoint and return the data array.
@@ -195,12 +198,13 @@ export async function list<T = Record<string, unknown>>(
   client: UnifiClient,
   endpoint: string,
 ): Promise<T[]> {
-  const resp = await client.request<UnifiListResponse<T>>(
+  const raw = await client.request<unknown>(
     networkPath(client.site, endpoint),
     "GET",
   );
+  const resp = UnifiListResponseSchema.parse(raw);
   if (resp.meta?.rc && resp.meta.rc !== "ok") {
     throw new Error(`UniFi API returned rc=${resp.meta.rc}: ${resp.meta.msg}`);
   }
-  return resp.data ?? [];
+  return (resp.data ?? []) as T[];
 }

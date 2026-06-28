@@ -31,7 +31,11 @@ const FirewallRuleSchema = z.object({
   state_invalid: z.boolean().optional(),
   state_related: z.boolean().optional(),
   site_id: z.string().optional(),
-}).passthrough();
+});
+
+const FirewallRuleResponseSchema = z.object({
+  data: z.array(FirewallRuleSchema).optional(),
+});
 
 type FirewallRule = z.infer<typeof FirewallRuleSchema>;
 
@@ -49,7 +53,7 @@ type FirewallRule = z.infer<typeof FirewallRuleSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/firewall-rule",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     rule: {
@@ -105,6 +109,25 @@ export const model = {
     create: {
       description:
         "Create a new firewall rule. rule_index is auto-assigned (next free index in the ruleset) when omitted.",
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify UniFi controller connectivity and authentication",
+          execute: async (
+            // deno-lint-ignore no-explicit-any
+            _args: any,
+            context: { globalArgs: z.infer<typeof UnifiGlobalArgsSchema> },
+          ) => {
+            const client = await login(context.globalArgs);
+            try {
+              await client.request("/api/self", "GET");
+            } finally {
+              await client.cleanup();
+            }
+          },
+        },
+      ],
       arguments: z.object({
         name: z.string(),
         ruleset: z.enum([
@@ -174,11 +197,12 @@ export const model = {
               action: args.action,
             },
           );
-          const resp = await client.request<{ data?: FirewallRule[] }>(
+          const rawResp = await client.request<unknown>(
             networkPath(client.site, "/rest/firewallrule"),
             "POST",
             body,
           );
+          const resp = FirewallRuleResponseSchema.parse(rawResp);
           const created = resp.data?.[0];
           if (!created) {
             throw new Error("UniFi returned no rule data on create");
@@ -199,6 +223,25 @@ export const model = {
       description:
         "Delete a firewall rule by id on the UDM. Local data for the rule is not removed " +
         "automatically — use `swamp data delete udm-rules <id>` to purge stale local versions.",
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify UniFi controller connectivity and authentication",
+          execute: async (
+            // deno-lint-ignore no-explicit-any
+            _args: any,
+            context: { globalArgs: z.infer<typeof UnifiGlobalArgsSchema> },
+          ) => {
+            const client = await login(context.globalArgs);
+            try {
+              await client.request("/api/self", "GET");
+            } finally {
+              await client.cleanup();
+            }
+          },
+        },
+      ],
       arguments: z.object({
         id: z.string(),
       }),
@@ -225,6 +268,25 @@ export const model = {
 
     "toggle-enabled": {
       description: "Enable or disable a rule by id.",
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify UniFi controller connectivity and authentication",
+          execute: async (
+            // deno-lint-ignore no-explicit-any
+            _args: any,
+            context: { globalArgs: z.infer<typeof UnifiGlobalArgsSchema> },
+          ) => {
+            const client = await login(context.globalArgs);
+            try {
+              await client.request("/api/self", "GET");
+            } finally {
+              await client.cleanup();
+            }
+          },
+        },
+      ],
       arguments: z.object({
         id: z.string(),
         enabled: z.boolean(),
@@ -252,11 +314,12 @@ export const model = {
             "Setting rule {name} enabled={enabled}",
             { name: target.name, enabled: args.enabled },
           );
-          const resp = await client.request<{ data?: FirewallRule[] }>(
+          const rawResp = await client.request<unknown>(
             networkPath(client.site, `/rest/firewallrule/${target._id}`),
             "PUT",
             { ...target, enabled: args.enabled },
           );
+          const resp = FirewallRuleResponseSchema.parse(rawResp);
           const saved = resp.data?.[0] ?? { ...target, enabled: args.enabled };
           const handle = await context.writeResource(
             "rule",
