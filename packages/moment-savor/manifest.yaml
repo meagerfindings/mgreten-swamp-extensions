@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: '@mgreten/moment-savor'
-version: 2026.06.27.1
+version: 2026.06.27.2
 description: >-
   Interact with the Moment Savor family memory app via its V1 REST API.
   Syncs memories, API tokens, and family membership to swamp resources for

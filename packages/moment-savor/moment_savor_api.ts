@@ -25,6 +25,7 @@ import { z } from "npm:zod@4";
 const GlobalArgsSchema = z.object({
   apiToken: z
     .string()
+    .meta({ sensitive: true })
     .describe("Bearer token obtained from https://momentsavor.app/api_tokens"),
   baseUrl: z
     .string()
@@ -99,7 +100,7 @@ const FamilyMembersSnapshotSchema = z.object({
  */
 const IssuedTokenSchema = z.object({
   token: ApiTokenSchema,
-  raw_token: z.string(),
+  raw_token: z.string().meta({ sensitive: true }),
   issued_at: z.string(),
 });
 
@@ -244,7 +245,7 @@ async function fetchAllMemories(
  */
 export const model = {
   type: "@mgreten/moment-savor",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     "memories": {
@@ -364,6 +365,33 @@ export const model = {
         pinned: z.boolean().optional().describe("Whether to pin this memory"),
         tags: z.array(z.string()).optional().describe("Tags for the memory"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/memories?per_page=1",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (
         args: Record<string, unknown>,
         context: ExecuteContext,
@@ -396,6 +424,33 @@ export const model = {
         pinned: z.boolean().optional(),
         tags: z.array(z.string()).optional(),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/memories?per_page=1",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (
         args: Record<string, unknown>,
         context: ExecuteContext,
@@ -424,6 +479,33 @@ export const model = {
       arguments: z.object({
         id: z.string().uuid().describe("Memory UUID to delete"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/memories?per_page=1",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (args: { id: string }, context: ExecuteContext) => {
         const { apiToken, baseUrl } = context.globalArgs;
         const { status, json } = await apiDelete(
@@ -446,6 +528,33 @@ export const model = {
           .enum(["read", "read_write"])
           .describe("Token scope: read-only or read+write"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/tokens",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (
         args: { name: string; scope: string },
         context: ExecuteContext,
@@ -474,6 +583,33 @@ export const model = {
       arguments: z.object({
         id: z.string().uuid().describe("API token UUID to revoke"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/tokens",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (args: { id: string }, context: ExecuteContext) => {
         const { apiToken, baseUrl } = context.globalArgs;
         const { status, json } = await apiDelete(
@@ -493,6 +629,33 @@ export const model = {
       arguments: z.object({
         id: z.string().uuid().describe("API token UUID to rotate"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/tokens",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (args: { id: string }, context: ExecuteContext) => {
         const { apiToken, baseUrl } = context.globalArgs;
         const { status, json } = await apiPost(
@@ -522,6 +685,33 @@ export const model = {
           .string()
           .describe("New role: member, admin, or owner"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/family/members",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (
         args: { id: string; role: string },
         context: ExecuteContext,
@@ -545,6 +735,33 @@ export const model = {
       arguments: z.object({
         id: z.string().uuid().describe("Family membership UUID to remove"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/family/members",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (args: { id: string }, context: ExecuteContext) => {
         const { apiToken, baseUrl } = context.globalArgs;
         const { status, json } = await apiDelete(
@@ -568,6 +785,33 @@ export const model = {
           .default("member")
           .describe("Role to assign: member, admin, or owner"),
       }),
+      checks: [
+        {
+          label: "live",
+          description:
+            "Verify API token is valid and Moment Savor is reachable",
+          execute: async (_args: unknown, context: ExecuteContext) => {
+            const { apiToken, baseUrl } = context.globalArgs;
+            const { status, json } = await apiGet(
+              baseUrl,
+              apiToken,
+              "/api/v1/family/members",
+            );
+            if (status === 401) {
+              throw new Error(
+                "Invalid API token — check your Moment Savor credentials",
+              );
+            }
+            if (status !== 200) {
+              throw new Error(
+                `Moment Savor API unreachable (HTTP ${status}): ${
+                  JSON.stringify(json)
+                }`,
+              );
+            }
+          },
+        },
+      ],
       execute: async (
         args: { email: string; role: string },
         context: ExecuteContext,
