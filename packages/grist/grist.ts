@@ -110,6 +110,15 @@ const TableDropSchema = z.object({
   timestamp: z.string(),
 });
 
+/** Schema for deleteRecords output. */
+const DeleteResultSchema = z.object({
+  tableId: z.string(),
+  deletedIds: z.array(z.number()),
+  count: z.number(),
+  dryRun: z.boolean(),
+  timestamp: z.string(),
+});
+
 // ---------------------------------------------------------------------------
 // Grist API client
 // ---------------------------------------------------------------------------
@@ -159,6 +168,7 @@ function makeClient(baseUrl: string, docId: string, apiToken: string): {
   createTable(tableId: string, columns: ColumnSpec[]): Promise<void>;
   addColumns(tableId: string, columns: ColumnSpec[]): Promise<void>;
   dropTable(tableId: string): Promise<void>;
+  deleteRecords(tableId: string, ids: number[]): Promise<void>;
 } {
   const base = normalizeGristUrl(baseUrl);
   const docBase = `${base}/api/docs/${docId}`;
@@ -261,6 +271,9 @@ function makeClient(baseUrl: string, docId: string, apiToken: string): {
     async dropTable(tableId: string): Promise<void> {
       await req("POST", "/apply", [["RemoveTable", tableId]]);
     },
+    async deleteRecords(tableId: string, ids: number[]): Promise<void> {
+      await req("POST", `/tables/${tableId}/data/delete`, ids);
+    },
   };
 }
 
@@ -321,6 +334,23 @@ const AddColumnsArgs = z.object({
   dryRun: z.boolean().default(false),
 });
 
+/**
+ * Arguments for deleteRecords — specify the table and the row IDs to remove.
+ * Use dryRun=true to preview which IDs would be deleted without committing.
+ */
+const DeleteRecordsArgs = z.object({
+  tableId: z.string().min(1).describe(
+    "Grist table ID containing the records to delete",
+  ),
+  recordIds: z
+    .array(z.number().int().positive())
+    .min(1)
+    .describe("Array of integer row IDs to permanently delete"),
+  dryRun: z.boolean().default(false).describe(
+    "When true, validates input without deleting",
+  ),
+});
+
 // ---------------------------------------------------------------------------
 // Model export
 // ---------------------------------------------------------------------------
@@ -328,7 +358,7 @@ const AddColumnsArgs = z.object({
 /** Generic Grist REST API model for reading and writing document data. */
 export const model = {
   type: "@mgreten/grist",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -385,6 +415,12 @@ export const model = {
       schema: TableDropSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    deleteResult: {
+      description: "Result of a deleteRecords operation",
+      schema: DeleteResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
   },
 
@@ -703,6 +739,57 @@ export const model = {
           {
             tableId: args.tableId,
             columnsAdded: args.columns.map((c) => c.id),
+            dryRun: args.dryRun,
+            timestamp: new Date().toISOString(),
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    /** Delete specific records from a Grist table by row ID. Irreversible — use dryRun=true to preview. */
+    deleteRecords: {
+      description:
+        "Permanently delete records from a Grist table by row ID. Use dryRun=true to preview without deleting.",
+      arguments: DeleteRecordsArgs,
+      execute: async (
+        args: z.infer<typeof DeleteRecordsArgs>,
+        context: {
+          globalArgs: GlobalArgs;
+          writeResource: (
+            spec: string,
+            name: string,
+            data: Record<string, unknown>,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props?: Record<string, unknown>) => void;
+          };
+        },
+      ): Promise<{ dataHandles: Array<{ name: string }> }> => {
+        context.logger.info(
+          "deleteRecords: {count} IDs from table {table} (dryRun={dryRun})",
+          {
+            count: args.recordIds.length,
+            table: args.tableId,
+            dryRun: args.dryRun,
+          },
+        );
+        const { gristBaseUrl, gristDocId, gristApiToken } = context.globalArgs;
+        const client = makeClient(gristBaseUrl, gristDocId, gristApiToken);
+        if (!args.dryRun) {
+          await client.deleteRecords(args.tableId, args.recordIds);
+          context.logger.info(
+            "Deleted {count} records from {table}",
+            { count: args.recordIds.length, table: args.tableId },
+          );
+        }
+        const handle = await context.writeResource(
+          "deleteResult",
+          `delete-result-${args.tableId}`,
+          {
+            tableId: args.tableId,
+            deletedIds: args.recordIds,
+            count: args.recordIds.length,
             dryRun: args.dryRun,
             timestamp: new Date().toISOString(),
           },
