@@ -54,6 +54,6 @@ A successful nightly run should produce a report that answers three questions:
 
 1. What happened today that matters tomorrow?
 2. Which actions or workflows were repeatable enough to turn into a Swamp model, report, or workflow?
-3. Which items need Mat's approval before anything is published publicly?
+3. Which items need the repo owner's approval before anything is published publicly?
 
 If the collector starts reaching outside the local repository and Hermes session store, that is a design smell. The intended shape is deterministic, local-first, and easy to audit.

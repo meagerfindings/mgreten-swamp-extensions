@@ -61,7 +61,7 @@ function sessionBlock(summary: ReviewSummary): string {
  *
  * The report consumes the collector's saved summary and renders a human-first
  * nightly review with reusable patterns, publishable ideas, and any approval
- * prompts that should be surfaced to Mat.
+ * prompts that should be surfaced to you.
  */
 export const report = {
   name: "@mgreten/hermes-review-report",
@@ -150,7 +150,7 @@ export const report = {
       "",
       bullets(summary.publishableIdeas),
       "",
-      "## What needs Mat's approval",
+      "## What needs your approval",
       "",
       bullets(summary.approvalNeeded),
       "",

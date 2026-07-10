@@ -9,9 +9,9 @@
 import { z } from "npm:zod@4";
 
 const GlobalArgsSchema = z.object({
-  repoDir: z.string().default("/opt/data/swamp-hub"),
+  repoDir: z.string().default("."),
   sessionDir: z.string().default("/opt/data/.hermes/sessions"),
-  timezone: z.string().default("America/Denver"),
+  timezone: z.string().default("UTC"),
   lookbackHours: z.number().int().positive().default(24),
   maxSessions: z.number().int().positive().default(10),
   maxFiles: z.number().int().positive().default(20),
@@ -197,7 +197,7 @@ function summarizeSession(
 /** Model for collecting Hermes review inputs from local files. */
 export const model = {
   type: "@mgreten/hermes-review-collector",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     summary: {
