@@ -197,7 +197,7 @@ function summarizeSession(
 /** Model for collecting Hermes review inputs from local files. */
 export const model = {
   type: "@mgreten/hermes-review-collector",
-  version: "2026.06.27.2",
+  version: "2026.07.10.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     summary: {
