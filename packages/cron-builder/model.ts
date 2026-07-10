@@ -166,7 +166,7 @@ function validateScheduleExpression(
  */
 export const model = {
   type: "@mgreten/cron-builder",
-  version: "2026.06.27.1",
+  version: "2026.07.10.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     cronSpec: {
