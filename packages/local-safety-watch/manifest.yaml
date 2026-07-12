@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@mgreten/local-safety-watch"
+version: "2026.07.12.1"
+description: >
+  Privacy-preserving local safety watcher that polls official weather, roadway,
+  and wildfire sources, reconciles material event changes, and emits redacted
+  output only when action is needed.
+repository: https://github.com/meagerfindings/swamp-local-safety-watch
+paths:
+  base: manifest
+additionalFiles:
+  - README.md
+  - LICENSE.md
+models:
+  - model.ts
+platforms:
+  - linux-x86_64
+  - darwin-aarch64
