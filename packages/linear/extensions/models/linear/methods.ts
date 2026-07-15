@@ -64,6 +64,27 @@ function issueResourceData(
   };
 }
 
+/** Build the flat `commentThread` resource shape for `writeResource`. */
+function commentThreadResourceData(
+  issueId: string,
+  identifier: string,
+  comments: Awaited<ReturnType<LinearClient["listComments"]>>,
+): Record<string, unknown> {
+  return {
+    issueId,
+    identifier,
+    comments: comments.map((c) => ({
+      id: c.id,
+      body: c.body,
+      authorName: c.authorName,
+      authorId: c.authorId,
+      isBot: c.isBot,
+      createdAt: c.createdAt,
+    })),
+    count: comments.length,
+  };
+}
+
 /** Resolve the authenticated user's ID, name, and email. */
 export async function getViewer(
   client: LinearClient,
@@ -428,4 +449,44 @@ export async function listStates(
   }
 
   return { dataHandles: handles };
+}
+
+/** Fetch all comments on an issue as a single thread resource. */
+export async function listComments(
+  client: LinearClient,
+  context: MethodContext,
+  args: { identifier: string },
+): Promise<MethodResult> {
+  context.logger.info(`Listing comments for issue ${args.identifier}`);
+
+  const issue = await client.getIssue(args.identifier);
+  const comments = await client.listComments(issue.id);
+
+  const handle = await context.writeResource(
+    "commentThread",
+    issue.id,
+    commentThreadResourceData(issue.id, issue.identifier, comments),
+  );
+  return { dataHandles: [handle] };
+}
+
+/** Post a markdown comment on an issue, then refresh the full thread. */
+export async function createComment(
+  client: LinearClient,
+  context: MethodContext,
+  args: { identifier: string; body: string },
+): Promise<MethodResult> {
+  context.logger.info(`Posting comment on issue ${args.identifier}`);
+
+  const issue = await client.getIssue(args.identifier);
+  const created = await client.createComment(issue.id, args.body);
+  context.logger.info(`Created comment ${created.id}`);
+
+  const comments = await client.listComments(issue.id);
+  const handle = await context.writeResource(
+    "commentThread",
+    issue.id,
+    commentThreadResourceData(issue.id, issue.identifier, comments),
+  );
+  return { dataHandles: [handle] };
 }

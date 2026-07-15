@@ -57,6 +57,16 @@ export interface LabelData {
   color: string;
 }
 
+/** Flat representation of a single comment on an issue. */
+export interface CommentData {
+  id: string;
+  body: string;
+  authorName: string;
+  authorId: string;
+  isBot: boolean;
+  createdAt: string;
+}
+
 /** Input for creating a Linear issue. */
 export interface CreateIssueInput {
   title: string;
@@ -89,6 +99,22 @@ export interface IssueFilter {
   labelName?: string;
 }
 
+/** A single page of a Linear SDK paginated connection. */
+interface SDKConnection<TNode> {
+  nodes: TNode[];
+  pageInfo: { hasNextPage: boolean; endCursor: string };
+  fetchNext(): Promise<SDKConnection<TNode>>;
+}
+
+/** Raw SDK comment node, prior to author resolution. */
+interface SDKCommentNode {
+  id: string;
+  body: string;
+  createdAt: Date | string;
+  user?: Promise<{ id: string; name: string } | undefined>;
+  botActor?: { id?: string; name?: string } | undefined;
+}
+
 interface SDKIssueNode {
   id: string;
   identifier: string;
@@ -103,6 +129,9 @@ interface SDKIssueNode {
   labels: () => Promise<
     { nodes: Array<{ id: string; name: string; color: string }> }
   >;
+  comments: (
+    variables?: { first?: number; after?: string },
+  ) => Promise<SDKConnection<SDKCommentNode>>;
 }
 
 /** Minimal subset of the `@linear/sdk` client used by this extension. */
@@ -147,6 +176,41 @@ export interface LinearSDKLike {
   }): Promise<{
     nodes: Array<{ id: string; name: string; color: string }>;
   }>;
+  createComment(input: { issueId: string; body: string }): Promise<{
+    success: boolean;
+    comment: Promise<SDKCommentNode | undefined>;
+  }>;
+}
+
+async function resolveComment(comment: SDKCommentNode): Promise<CommentData> {
+  const user = comment.user ? await comment.user : undefined;
+  const isBot = !user && !!comment.botActor;
+  const authorName = user?.name ?? comment.botActor?.name ?? "";
+  const authorId = user?.id ?? comment.botActor?.id ?? "";
+  const createdAt = comment.createdAt instanceof Date
+    ? comment.createdAt.toISOString()
+    : comment.createdAt;
+  return {
+    id: comment.id,
+    body: comment.body,
+    authorName,
+    authorId,
+    isBot,
+    createdAt,
+  };
+}
+
+/** Fetch every comment on an issue, oldest first, paginating to exhaustion. */
+async function fetchAllComments(
+  issue: SDKIssueNode,
+): Promise<CommentData[]> {
+  let conn = await issue.comments();
+  while (conn.pageInfo.hasNextPage) {
+    conn = await conn.fetchNext();
+  }
+  const comments = await Promise.all(conn.nodes.map(resolveComment));
+  comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return comments;
 }
 
 async function resolveIssue(issue: SDKIssueNode): Promise<IssueData> {
@@ -203,6 +267,10 @@ export interface LinearClient {
   listStates(teamId: string): Promise<WorkflowStateData[]>;
   /** List issue labels for a team. */
   listLabels(teamId: string): Promise<LabelData[]>;
+  /** Fetch every comment on an issue, oldest first. */
+  listComments(issueId: string): Promise<CommentData[]>;
+  /** Post a markdown comment on an issue. */
+  createComment(issueId: string, body: string): Promise<CommentData>;
 }
 
 /** Build a {@link LinearClient} from a raw SDK instance. */
@@ -319,6 +387,23 @@ export function buildLinearClient(sdk: LinearSDKLike): LinearClient {
         name: l.name,
         color: l.color,
       }));
+    },
+
+    async listComments(issueId: string): Promise<CommentData[]> {
+      const issue = await sdk.issue(issueId);
+      return fetchAllComments(issue);
+    },
+
+    async createComment(issueId: string, body: string): Promise<CommentData> {
+      const payload = await sdk.createComment({ issueId, body });
+      if (!payload.success) {
+        throw new Error("Linear commentCreate returned success=false");
+      }
+      const comment = await payload.comment;
+      if (!comment) {
+        throw new Error("Linear commentCreate returned no comment");
+      }
+      return resolveComment(comment);
     },
   };
 }

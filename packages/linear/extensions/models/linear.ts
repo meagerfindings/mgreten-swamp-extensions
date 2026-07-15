@@ -1,9 +1,9 @@
 /**
  * @mgreten/linear — Linear project management integration for swamp.
  *
- * Provides issue CRUD, viewer resolution, label management, and team/project/state
- * listing via the official `@linear/sdk`. All data is written as swamp resources
- * for downstream CEL access and workflow chaining.
+ * Provides issue CRUD, viewer resolution, label management, comment threads,
+ * and team/project/state listing via the official `@linear/sdk`. All data is
+ * written as swamp resources for downstream CEL access and workflow chaining.
  *
  * Client abstraction pattern derived from `@hivemq/linear` by HiveMQ.
  *
@@ -16,10 +16,12 @@ import type { LinearSDKLike } from "./linear/client.ts";
 import type { MethodContext, MethodResult } from "./linear/methods.ts";
 import {
   addLabels,
+  createComment,
   createIssue,
   createMyIssue,
   getIssue,
   getViewer,
+  listComments,
   listIssues,
   listLabels,
   listProjects,
@@ -99,6 +101,22 @@ const LabelSchema = z.object({
   syncedAt: z.string(),
 });
 
+const CommentSchema = z.object({
+  id: z.string(),
+  body: z.string(),
+  authorName: z.string(),
+  authorId: z.string(),
+  isBot: z.boolean(),
+  createdAt: z.string(),
+});
+
+const CommentThreadSchema = z.object({
+  issueId: z.string(),
+  identifier: z.string(),
+  comments: z.array(CommentSchema),
+  count: z.number(),
+});
+
 function getClient(
   context: MethodContext,
 ): ReturnType<typeof buildLinearClient> {
@@ -111,13 +129,13 @@ function getClient(
 /**
  * Linear project management model for swamp.
  *
- * Provides 11 methods for managing Linear issues, teams, projects, labels,
- * and workflow states. Supports auto-assignment via viewer resolution and
- * label attachment by name.
+ * Provides 13 methods for managing Linear issues, teams, projects, labels,
+ * comments, and workflow states. Supports auto-assignment via viewer
+ * resolution, label attachment by name, and full comment-thread sync.
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.06.27.1",
+  version: "2026.07.15.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     issue: {
@@ -155,6 +173,12 @@ export const model = {
       schema: LabelSchema,
       lifetime: "infinite" as const,
       garbageCollection: 100,
+    },
+    commentThread: {
+      description: "The full comment thread on a Linear issue",
+      schema: CommentThreadSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 200,
     },
   },
   methods: {
@@ -404,6 +428,37 @@ export const model = {
           getClient(context as MethodContext),
           context as MethodContext,
           args as { teamId?: string },
+        ),
+    },
+
+    listComments: {
+      description: "Fetch all comments on an issue as a single thread resource",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .describe("Issue identifier (e.g. ENG-123) or UUID"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listComments(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { identifier: string },
+        ),
+    },
+
+    createComment: {
+      description: "Post a markdown comment on an issue",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .describe("Issue identifier (e.g. ENG-123) or UUID"),
+        body: z.string().describe("Comment body (Markdown)"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        createComment(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { identifier: string; body: string },
         ),
     },
   },

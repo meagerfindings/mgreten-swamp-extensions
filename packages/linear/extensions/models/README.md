@@ -1,10 +1,10 @@
 # @mgreten/linear
 
 Linear project management integration for swamp. Provides issue CRUD, viewer
-auto-assignment, label management by name, and team/project/state listing — all
-backed by the official `@linear/sdk`. Every API response is written as a swamp
-resource, making it available for CEL expressions, data queries, and workflow
-chaining.
+auto-assignment, label management by name, comment threads, and
+team/project/state listing — all backed by the official `@linear/sdk`. Every
+API response is written as a swamp resource, making it available for CEL
+expressions, data queries, and workflow chaining.
 
 ## Installation
 
@@ -67,6 +67,14 @@ swamp model method run my-linear listLabels
 swamp model method run my-linear listTeams
 swamp model method run my-linear listProjects
 swamp model method run my-linear listStates
+
+# Fetch the full comment thread on an issue
+swamp model method run my-linear listComments --input identifier="ENG-123"
+
+# Post a comment
+swamp model method run my-linear createComment \
+  --input identifier="ENG-123" \
+  --input body="Deployed in v1.2.3"
 ```
 
 ## Global Arguments
@@ -135,6 +143,17 @@ project as a `project` resource.
 List workflow states for a team. Writes each state as a `workflowState`
 resource.
 
+### listComments
+
+Fetch all comments on an issue as a single thread resource, sorted
+oldest-first. Follows pagination to exhaustion. Writes one `commentThread`
+resource keyed by issue ID.
+
+### createComment
+
+Post a markdown `body` comment on an issue, then re-fetch and write the
+refreshed `commentThread` resource so consumers always read from one spec.
+
 ## Resources
 
 | Resource        | Description                     | Lifetime | GC  |
@@ -145,6 +164,7 @@ resource.
 | `workflowState` | Workflow state (Backlog, etc.)  | infinite | 50  |
 | `viewer`        | Authenticated Linear user       | infinite | 5   |
 | `label`         | Issue label                     | infinite | 100 |
+| `commentThread` | Full comment thread on an issue | infinite | 200 |
 
 ## How It Works
 
