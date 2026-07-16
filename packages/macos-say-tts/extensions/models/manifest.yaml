@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/macos-say-tts"
-version: "2026.06.27.1"
+version: "2026.07.16.1"
 description: >
   Speak text aloud on macOS using the built-in `say` voice synthesizer. One
   focused method: synthesize text to audio and play it through the speakers,
