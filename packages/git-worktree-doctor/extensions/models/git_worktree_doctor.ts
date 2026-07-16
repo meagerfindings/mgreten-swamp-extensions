@@ -195,7 +195,7 @@ function parseWorktreeBlock(
 /** The git-worktree-doctor swamp model definition. */
 export const model = {
   type: "@mgreten/git-worktree-doctor",
-  version: "2026.06.27.1",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     diagnosis: {
