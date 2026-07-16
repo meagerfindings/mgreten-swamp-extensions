@@ -245,7 +245,7 @@ async function fetchAllMemories(
  */
 export const model = {
   type: "@mgreten/moment-savor",
-  version: "2026.06.27.2",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     "memories": {
