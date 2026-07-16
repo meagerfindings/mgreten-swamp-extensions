@@ -307,7 +307,7 @@ function buildSearchMatcher(
 /** Filesystem-based Obsidian vault model for deterministic automation. */
 export const model = {
   type: "@mgreten/obsidian-vault-fs",
-  version: "2026.06.27.1",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     note: {
