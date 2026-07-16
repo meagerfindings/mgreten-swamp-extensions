@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import { createModelTestContext } from "jsr:@systeminit/swamp-testing";
 import {
   buildSayArgs,
@@ -7,6 +7,61 @@ import {
   model,
   resolveSetting,
 } from "./macos_say_tts.ts";
+
+// ─────────────────────────────────────────────────────────────────────
+// schemas — defaults, constraints, and resource shape
+// ─────────────────────────────────────────────────────────────────────
+
+Deno.test("global arguments: accepts an empty configuration", () => {
+  assertEquals(model.globalArguments.parse({}), {});
+});
+
+Deno.test("global arguments: accepts a voice and positive integer rate", () => {
+  assertEquals(model.globalArguments.parse({ voice: "Samantha", rate: 220 }), {
+    voice: "Samantha",
+    rate: 220,
+  });
+});
+
+Deno.test("global arguments: rejects zero, negative, and fractional rates", () => {
+  for (const rate of [0, -1, 175.5]) {
+    assertThrows(() => model.globalArguments.parse({ rate }));
+  }
+});
+
+Deno.test("speak arguments: defaults play to true", () => {
+  assertEquals(model.methods.speak.arguments.parse({ text: "hello" }), {
+    text: "hello",
+    play: true,
+  });
+});
+
+Deno.test("speak arguments: rejects empty text and invalid rates", () => {
+  assertThrows(() => model.methods.speak.arguments.parse({ text: "" }));
+  assertThrows(() =>
+    model.methods.speak.arguments.parse({ text: "hello", rate: 0 })
+  );
+  assertThrows(() =>
+    model.methods.speak.arguments.parse({ text: "hello", rate: 1.5 })
+  );
+});
+
+Deno.test("utterance schema: accepts a complete record and rejects malformed UUIDs", () => {
+  const utterance = {
+    id: "123e4567-e89b-42d3-a456-426614174000",
+    text: "hello",
+    voice: null,
+    rate: null,
+    audioPath: "/tmp/audio.aiff",
+    played: false,
+    durationMs: 12,
+    spokenAt: "2026-07-16T00:00:00.000Z",
+  };
+  assertEquals(model.resources.utterance.schema.parse(utterance), utterance);
+  assertThrows(() =>
+    model.resources.utterance.schema.parse({ ...utterance, id: "not-a-uuid" })
+  );
+});
 
 // ─────────────────────────────────────────────────────────────────────
 // resolveSetting — per-call override > instance default > null
@@ -50,6 +105,21 @@ Deno.test("buildSayArgs: includes -v and -r when provided", () => {
 Deno.test("buildSayArgs: text is always the final argument", () => {
   const argv = buildSayArgs("the body", "Samantha", null, "/tmp/x.aiff");
   assertEquals(argv[argv.length - 1], "the body");
+});
+
+Deno.test("buildSayArgs: preserves spaces and option-like text as one argument", () => {
+  assertEquals(
+    buildSayArgs("--voice Alex; hello world", "Alex Lee", 1, "/tmp/a b.aiff"),
+    [
+      "-v",
+      "Alex Lee",
+      "-r",
+      "1",
+      "-o",
+      "/tmp/a b.aiff",
+      "--voice Alex; hello world",
+    ],
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────
