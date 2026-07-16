@@ -225,7 +225,7 @@ async function uploadFile(
  */
 export const model = {
   type: "@mgreten/slack-blocks",
-  version: "2026.06.27.2",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     slackMessage: {
