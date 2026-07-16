@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/linear"
-version: "2026.07.15.1"
+version: "2026.07.16.1"
 description: >
   Linear project management integration for swamp — issue CRUD, viewer
   auto-assignment, label management by name, comment threads, and
