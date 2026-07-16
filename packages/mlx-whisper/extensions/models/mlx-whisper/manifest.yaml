@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/mlx-whisper"
-version: "2026.06.27.1"
+version: "2026.07.16.1"
 description: >-
   Transcribe audio files using mlx_whisper on Apple Silicon. Runs the
   mlx_whisper CLI, captures the JSON output, and stores the full transcript
