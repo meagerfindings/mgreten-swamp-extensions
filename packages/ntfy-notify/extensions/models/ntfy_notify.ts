@@ -40,7 +40,7 @@ type MethodContext = {
 /** Swamp model for sending push notifications via ntfy.sh. */
 export const model = {
   type: "@mgreten/ntfy-notify",
-  version: "2026.06.27.2",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     notification: {
