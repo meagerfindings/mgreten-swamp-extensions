@@ -27,7 +27,7 @@ type Network = z.infer<typeof NetworkSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/network",
-  version: "2026.06.27.2",
+  version: "2026.07.16.1",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     network: {

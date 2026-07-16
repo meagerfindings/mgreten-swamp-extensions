@@ -31,7 +31,7 @@ type Client = z.infer<typeof ClientSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/client",
-  version: "2026.06.27.2",
+  version: "2026.07.16.1",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     client: {

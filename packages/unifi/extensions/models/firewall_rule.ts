@@ -53,7 +53,7 @@ type FirewallRule = z.infer<typeof FirewallRuleSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/firewall-rule",
-  version: "2026.06.27.2",
+  version: "2026.07.16.1",
   globalArguments: UnifiGlobalArgsSchema,
   resources: {
     rule: {
