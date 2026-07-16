@@ -312,7 +312,7 @@ async function fetchJson(url: string): Promise<unknown> {
  */
 export const model = {
   type: "@mgreten/swamp-club-score",
-  version: "2026.07.10.1",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     snapshot: {
