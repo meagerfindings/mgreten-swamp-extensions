@@ -221,7 +221,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@mgreten/docker-orphan-sweep" as const,
-  version: "2026.06.27.2" as const,
+  version: "2026.07.16.1" as const,
   globalArguments: GlobalArgsSchema,
 
   resources: {
