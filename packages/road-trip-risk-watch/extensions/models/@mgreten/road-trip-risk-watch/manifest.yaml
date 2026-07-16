@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/road-trip-risk-watch"
-version: "2026.07.10.5"
+version: "2026.07.16.1"
 description: >
   Native route-risk watcher that polls official NWS forecast and alert data for
   checkpointed trips, computes a stable fingerprint, and emits digest output

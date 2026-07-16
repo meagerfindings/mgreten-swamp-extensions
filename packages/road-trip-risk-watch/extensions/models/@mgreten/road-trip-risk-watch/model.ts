@@ -524,7 +524,7 @@ async function analyzeCheckpoint(
 /** Swamp model for road-trip and route-risk watches. */
 export const model = {
   type: "@mgreten/road-trip-risk-watch",
-  version: "2026.07.10.5",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     summary: {
