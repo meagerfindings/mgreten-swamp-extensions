@@ -13,7 +13,7 @@
 import { z } from "npm:zod@4";
 
 /** Schema for global arguments shared across all methods on this model. */
-const GlobalArgsSchema: z.ZodObject<{
+export const GlobalArgsSchema: z.ZodObject<{
   botToken: z.ZodString;
   defaultChannel: z.ZodOptional<z.ZodString>;
 }> = z.object({
@@ -98,7 +98,7 @@ type UploadedFile = {
  * @returns The channel to use for the API call.
  * @throws When neither is set.
  */
-function resolveChannel(
+export function resolveChannel(
   explicit: string | undefined,
   fallback: string | undefined,
 ): string {
