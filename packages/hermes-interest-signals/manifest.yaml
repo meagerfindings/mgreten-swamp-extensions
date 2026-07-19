@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@mgreten/hermes-interest-signals"
+version: "2026.07.19.1"
+description: "Aggregates caller-supplied, user-authorized context observations into transparent interest signals for downstream curation."
+repository: https://github.com/meagerfindings/hermes-interest--signals
+
+paths:
+  base: manifest
+
+models:
+  - extensions/models/hermes_interest_signals.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.md
+
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
