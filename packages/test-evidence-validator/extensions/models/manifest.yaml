@@ -1,0 +1,27 @@
+manifestVersion: 1
+name: "@mgreten/test-evidence-validator"
+version: "2026.07.20.1"
+description: >
+  Validates a caller-supplied parsed test result for internal consistency and a
+  recognized multi-language test-runner command, then commit-pins the evidence
+  to an immutable Git commit and branch, returning a single pass/fail verdict.
+
+repository: https://github.com/meagerfindings/swamp-test-evidence-validator
+
+models:
+  - test_evidence_validator.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+labels:
+  - testing
+  - git
+  - validation
+  - ci
+  - evidence
+
+platforms: []
+
+dependencies: []
