@@ -1,0 +1,28 @@
+manifestVersion: 1
+name: "@mgreten/agent-provider-catalog"
+version: "2026.07.20.1"
+description: >
+  A pure, deterministic provider/model catalog with tiered fallback and
+  dispatch resolution for agent-dispatch pipelines: a caller-supplied,
+  versioned table maps abstract roles to ordered CLI-agent provider/model
+  tiers, and only throttling signals advance a fallback tier.
+
+repository: https://github.com/meagerfindings/swamp-agent-provider-catalog
+
+models:
+  - agent_provider_catalog.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+labels:
+  - agents
+  - catalog
+  - fallback
+  - dispatch
+  - cli-agent
+
+platforms: []
+
+dependencies: []
