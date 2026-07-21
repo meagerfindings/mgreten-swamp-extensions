@@ -555,9 +555,17 @@ function resolveLimits(
   };
 }
 
-/** Resolve a validated `kind` to a safe label, defaulting when absent. */
+/**
+ * Resolve a `kind` to a safe label, defaulting when absent. Defense-in-depth:
+ * even though `ItemSchema.kind` already enforces `KIND_PATTERN` at the method
+ * boundary, this re-validates so `wrapItem` never trusts its input — a direct
+ * caller of `sanitizeItem` (or any future code path that skips schema parsing)
+ * cannot smuggle raw markup into the rendered `type:` label. Anything that
+ * fails the pattern falls back to the default rather than being rendered.
+ */
 function resolveKind(kind: string | undefined): string {
-  return kind && kind.trim().length > 0 ? kind : DEFAULT_KIND;
+  if (kind && KIND_PATTERN.test(kind)) return kind;
+  return DEFAULT_KIND;
 }
 
 /**
