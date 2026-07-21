@@ -303,6 +303,17 @@ const URL_PATTERN =
 const MAX_CLEAN_ITERATIONS = 8;
 
 /**
+ * Cap for the post-loop residual-strip backstop in {@link cleanText}. This loop
+ * runs only while a `<…>`-shaped substring still remains, so correctness never
+ * depends on {@link MAX_CLEAN_ITERATIONS}; this cap purely bounds a pathological
+ * input that could otherwise churn. Set well above any realistic encoding
+ * depth — a legitimately deeply-encoded document is not a real use case, and an
+ * attacker gains nothing since the fallthrough leaves only inert bracket
+ * characters (no matching-pair tag structure) for the final obfuscation strip.
+ */
+const MAX_RESIDUAL_STRIP_PASSES = 32;
+
+/**
  * Remove `<script>`/`<style>` element CONTENT tolerant of intra-tag-name junk
  * (`<scr ipt>`, `<scr\x00ipt>`, `<script/foo>`, etc.). `sanitize-html`'s
  * `nonTextTags` only matches an EXACT parsed tag name, so a split/typo'd
@@ -316,18 +327,39 @@ const MAX_CLEAN_ITERATIONS = 8;
  * no ambiguous backtracking — verified at the 100k-char schema ceiling.
  */
 export function stripScriptStyleContent(input: string): string {
-  // `s.?c.?r.?i.?p.?t` tolerates a single junk char between letters; anchored
-  // by `<` and bounded by `[^>]*>` for the open tag and a lazy body.
-  const scriptLike =
-    /<\s*s[^a-z0-9>]?c[^a-z0-9>]?r[^a-z0-9>]?i[^a-z0-9>]?p[^a-z0-9>]?t[^>]*>[\s\S]*?<\s*\/\s*s[^a-z0-9>]?c[^a-z0-9>]?r[^a-z0-9>]?i[^a-z0-9>]?p[^a-z0-9>]?t[^>]*>/gi;
-  const styleLike =
-    /<\s*s[^a-z0-9>]?t[^a-z0-9>]?y[^a-z0-9>]?l[^a-z0-9>]?e[^>]*>[\s\S]*?<\s*\/\s*s[^a-z0-9>]?t[^a-z0-9>]?y[^a-z0-9>]?l[^a-z0-9>]?e[^>]*>/gi;
+  // Fast path: if there's no `<` followed (eventually) by an `s`, no
+  // script/style-like tag can exist — skip the four regex passes entirely.
+  // This keeps the fixpoint loop cheap on inputs with no script/style content
+  // (the common case) and bounds the pathological repeated-`<script ` input.
+  if (!/<[^a-z0-9>]*s/i.test(input)) return input;
+  // Tolerate ANY run of intra-name junk between the tag-name letters
+  // (`<sc--ript>`, `<sc     ript>`, `<s\x00c\x00ript>`) — round-3 fix: this was
+  // a single optional char (`?`), which two-or-more junk chars defeated. Using
+  // `[^a-z0-9>]*` (greedy star over a NEGATED class with no adjacent
+  // overlapping quantifier) stays ReDoS-safe: there is exactly one way to match
+  // any given prefix, so no catastrophic backtracking (verified at the 100k
+  // ceiling). Anchored by `<`, bounded by `[^>]*>` for the open tag, lazy body.
+  const j = "[^a-z0-9>]*";
+  const scriptName = `s${j}c${j}r${j}i${j}p${j}t`;
+  const styleName = `s${j}t${j}y${j}l${j}e`;
+  const scriptLike = new RegExp(
+    `<\\s*${scriptName}[^>]*>[\\s\\S]*?<\\s*\\/\\s*${scriptName}[^>]*>`,
+    "gi",
+  );
+  const styleLike = new RegExp(
+    `<\\s*${styleName}[^>]*>[\\s\\S]*?<\\s*\\/\\s*${styleName}[^>]*>`,
+    "gi",
+  );
   // Also drop an UNTERMINATED script/style open tag and everything after it
   // (no close means the whole remainder is suspect element content).
-  const unterminatedScript =
-    /<\s*s[^a-z0-9>]?c[^a-z0-9>]?r[^a-z0-9>]?i[^a-z0-9>]?p[^a-z0-9>]?t[^>]*>[\s\S]*$/gi;
-  const unterminatedStyle =
-    /<\s*s[^a-z0-9>]?t[^a-z0-9>]?y[^a-z0-9>]?l[^a-z0-9>]?e[^>]*>[\s\S]*$/gi;
+  const unterminatedScript = new RegExp(
+    `<\\s*${scriptName}[^>]*>[\\s\\S]*$`,
+    "gi",
+  );
+  const unterminatedStyle = new RegExp(
+    `<\\s*${styleName}[^>]*>[\\s\\S]*$`,
+    "gi",
+  );
   return input
     .replace(scriptLike, "")
     .replace(styleLike, "")
@@ -461,7 +493,25 @@ export function stripObfuscationChars(
  * unhandled — a real gap in a module whose whole job is URL defense.
  */
 export function defangUrls(input: string): string {
-  return input.replace(URL_PATTERN, (match) => {
+  // Round-3 fix: an attacker can split a dangerous scheme name with internal
+  // whitespace (`java\tscript:`, `java script:`) to evade the scheme match
+  // below. We de-space ONLY when the de-spaced letters spell a known dangerous
+  // scheme immediately followed by `:` — matched with a bounded, anchored
+  // pattern (fixed letters, `\s*` only between them, terminated by `:`). This
+  // is deliberately conservative: `data`/`file` are NOT in this de-spacing set
+  // because their short, common letter sequences would false-positive on prose
+  // like "d a t a :"; they remain matched only in contiguous form by
+  // URL_PATTERN. `javascript`/`vbscript` are long/rare enough that a spaced
+  // spelling before a colon is unambiguously an evasion attempt, not prose.
+  let normalized = input;
+  for (const scheme of ["javascript", "vbscript"]) {
+    const spaced = scheme.split("").join("\\s*");
+    normalized = normalized.replace(
+      new RegExp(`${spaced}\\s*:`, "gi"),
+      `${scheme}:`,
+    );
+  }
+  return normalized.replace(URL_PATTERN, (match) => {
     const normalizedForParse = match.startsWith("//")
       ? `https:${match}`
       : match;
@@ -550,41 +600,75 @@ export function cleanText(
   opts: { stripHtml: boolean; defangUrls: boolean },
 ): { text: string; suspiciousCharCount: number } {
   let out = input;
+  let suspiciousCharCount = 0;
+
+  // ORDERING INVARIANT (round-3 fix): NFKC-normalize + strip obfuscation chars
+  // BEFORE any HTML parse, and re-run it on every loop iteration. Fullwidth
+  // angle brackets `＜`/`＞` (U+FF1C/U+FF1E) are inert text to htmlparser2, so a
+  // strip-first-normalize-later order let NFKC fold them into live `<`/`>`
+  // AFTER the last strip pass — resurrecting `<script>`/`<system>` tags with no
+  // HTML syntax at all. Normalizing first means the parser sees real brackets
+  // and strips them as tags. We fold the obfuscation strip INTO the fixpoint
+  // loop so a fold revealed by one pass is re-examined by the next.
+  const foldAndStripObf = (s: string): string => {
+    const { text, count } = stripObfuscationChars(s);
+    suspiciousCharCount += count;
+    return text;
+  };
+
+  out = foldAndStripObf(out);
+
   if (opts.stripHtml) {
-    // Iterate strip→decode to a fixpoint (bounded). Two adversarial cases make
-    // a single strip-then-decode pass insufficient:
-    //   (A) entity-resurrection: `&lt;system&gt;…&lt;/system&gt;` survives the
-    //       HTML pass inert (not a tag yet), then `decodeEntities` turns it
-    //       back into live `<system>…</system>` markup AFTER the only strip —
-    //       so we must strip AGAIN after decoding.
-    //   (B) tag-name splitting: `<scr ipt>PAYLOAD</scr ipt>` is spec-correctly
-    //       parsed as a `scr` tag with an `ipt` attribute, so sanitize-html's
-    //       nonTextTags (exact-name match) drops the tag but leaks PAYLOAD as
-    //       prose. stripScriptStyleContent() below removes script/style-like
-    //       CONTENT tolerant of intra-name junk before the tag strip runs.
-    // The loop converges because each pass strictly removes tag/entity
-    // structure and can only reveal a bounded amount of new structure; we cap
-    // iterations as a hard backstop against any pathological input.
-    // NOTE on ordering: sanitize-html re-escapes bare `&` in its text output
-    // (`Tom & Jerry` → `Tom &amp; Jerry`), so `stripHtml` must NEVER be the
-    // last transform or it re-encodes entities we just decoded. The loop ends
-    // on a decode, and we verify convergence by checking the post-decode text
-    // contains no residual tag shape before stopping.
+    // Iterate normalize→strip→decode to a fixpoint (bounded). Adversarial cases
+    // a single pass can't handle:
+    //   (A) entity-resurrection: `&lt;system&gt;` survives the HTML pass inert,
+    //       then decodeEntities turns it back into live markup — so we strip
+    //       AGAIN on the next iteration.
+    //   (B) tag-name splitting: `<sc--ript>PAYLOAD</sc--ript>` parses as a
+    //       non-`script` tag, so sanitize-html's exact-name nonTextTags leaks
+    //       PAYLOAD as prose — stripScriptStyleContent() removes it tolerant of
+    //       ANY run of intra-name junk (round-3 fix: was one char, now `*`).
+    //   (C) fullwidth/compatibility brackets — folded by foldAndStripObf at the
+    //       TOP of each iteration, before the parser runs.
+    // Convergence: each pass strictly removes structure; the cap is a backstop.
+    // NOTE: sanitize-html re-escapes bare `&`, so stripHtml must never be the
+    // last transform — every iteration ends on decode, and after the loop we
+    // do a FINAL guaranteed strip+decode so hitting the cap can never leave a
+    // freshly-revealed tag live (round-3 fix for the exact-n=cap resurrection).
     let prev = "";
     let iterations = 0;
     while (out !== prev && iterations < MAX_CLEAN_ITERATIONS) {
       prev = out;
+      out = foldAndStripObf(out);
       out = stripScriptStyleContent(out);
       out = stripHtml(out);
       out = decodeEntities(out);
       iterations++;
     }
+    // Correctness backstop (round-4 fix): the main loop can exit on the
+    // MAX_CLEAN_ITERATIONS cap with a tag freshly revealed by its last decode
+    // (e.g. an N-fold `&amp;`-encoded tag where N ≈ the cap). A single extra
+    // strip caught the n=cap case but not n=cap+1. Instead, keep stripping
+    // while ANY residual tag-shape remains, so correctness never depends on the
+    // iteration count — it only ever depends on there being no `<…>`-shaped
+    // structure left. This inner loop terminates because each pass removes at
+    // least one bracket pair; a hard cap guards against a pathological non-
+    // converging input (which then falls through to the final obf-strip, and a
+    // lone `<`/`>` with no matching bracket is inert prose, not a tag).
+    let guard = 0;
+    while (/<[^>]*>/.test(out) && guard < MAX_RESIDUAL_STRIP_PASSES) {
+      out = foldAndStripObf(out);
+      out = stripScriptStyleContent(out);
+      out = stripHtml(out);
+      out = decodeEntities(out);
+      guard++;
+    }
   }
-  const { text: deobfuscated, count } = stripObfuscationChars(out);
-  out = deobfuscated;
+
+  out = foldAndStripObf(out);
   if (opts.defangUrls) out = defangUrls(out);
   out = collapseWhitespace(out).trim();
-  return { text: out, suspiciousCharCount: count };
+  return { text: out, suspiciousCharCount };
 }
 
 /**
@@ -658,6 +742,17 @@ export function sanitizeItem(
   const kind = resolveKind(item.kind);
   const cleanedTitleResult = cleanText(item.title ?? "", limits);
   const cleanedBodyResult = cleanText(item.body, limits);
+  // Round-3 fix: give the TITLE the SAME truncate + delimiter-neutralize
+  // treatment as the body. Previously cleanedTitle got cleanText only — no
+  // truncate (so a title could reach the 100k schema ceiling regardless of
+  // maxItemChars) and no neutralizeDelimiterLookalikes (so with stripHtml:false
+  // a forged `</untrusted-nonce>` in the title survived raw into cleanedTitle,
+  // which a caller may interpolate into the same prompt as the body). The
+  // title has no independent WRAPPER of its own, but a caller-displayed field
+  // that can carry a forged delimiter is exactly the break-out surface the
+  // body-side fix closes — so we close it here too.
+  const truncatedTitle = truncate(cleanedTitleResult.text, limits.maxItemChars);
+  const neutralizedTitle = neutralizeDelimiterLookalikes(truncatedTitle);
   const truncatedBody = truncate(cleanedBodyResult.text, limits.maxItemChars);
   const neutralizedBody = neutralizeDelimiterLookalikes(truncatedBody);
   const neutralizedKind = neutralizeDelimiterLookalikes(kind);
@@ -668,7 +763,7 @@ export function sanitizeItem(
   return {
     id: item.id,
     kind: neutralizedKind,
-    cleanedTitle: cleanedTitleResult.text,
+    cleanedTitle: neutralizedTitle,
     wrappedText,
     suspiciousCharCount,
   };
@@ -748,7 +843,7 @@ function generateNonce(): string {
  */
 export const model = {
   type: "@mgreten/brief-sanitize",
-  version: "2026.07.20.3",
+  version: "2026.07.20.4",
   globalArguments: GlobalArgsSchema,
   resources: {
     sanitized: {
