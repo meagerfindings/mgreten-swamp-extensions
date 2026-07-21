@@ -59,7 +59,11 @@ swamp model method run my-calendar list_events \
 |---|---|---|---|
 | `calendarId` | string | instance's `calendarId` | Override the calendar for this call. |
 | `date` | string (ISO date) | today | Target day. Only the date portion is used. |
-| `timezone` | string | (unused) | Reserved for future timezone-aware window resolution. |
+| `timezone` | string | (unused) | **Not yet supported.** The day window is always resolved in the swamp process's local timezone. Passing a non-empty `timezone` throws rather than silently using the wrong zone — omit it to use the process's local zone. |
+
+A bare `date` of the form `YYYY-MM-DD` is validated as a real calendar day
+(e.g. `2026-02-30` or `2026-13-01` throw `invalid date`, rather than silently
+rolling over to a different, plausible-looking date).
 
 The result is written as an `events` resource with this shape:
 
@@ -72,6 +76,7 @@ The result is written as an `events` resource with this shape:
   "timeMin": "2026-07-20T06:00:00.000Z",
   "timeMax": "2026-07-21T05:59:59.999Z",
   "count": 2,
+  "truncated": false,
   "items": [
     {
       "id": "abc123",
@@ -91,6 +96,14 @@ The result is written as an `events` resource with this shape:
 }
 ```
 
+`events.list` returns results one page at a time, and `singleEvents=true`
+expands recurring series into individual instances — so a busy day can span
+more than one page. `list_events` follows `nextPageToken` and accumulates
+every page automatically. `truncated: true` means an internal max-pages guard
+(50 pages) was hit before pagination ran out — `count`/`items` may be
+incomplete in that case (a warning is also logged). In practice a single
+day's events should never come close to this limit.
+
 ## Global Arguments
 
 | Argument | Type | Default | Sensitive | Description |
@@ -108,17 +121,33 @@ The result is written as an `events` resource with this shape:
    `POST https://oauth2.googleapis.com/token` (`application/x-www-form-urlencoded`,
    `grant_type=refresh_token`).
 3. The target day's local `[00:00:00, 23:59:59]` window is resolved as
-   RFC3339 timestamps (defaulting to today).
+   RFC3339 timestamps (defaulting to today). A bare `YYYY-MM-DD` date is
+   validated as a real calendar day — an out-of-range component (e.g. month
+   13, day 45) throws `invalid date` instead of silently rolling over to a
+   different day.
 4. `GET https://www.googleapis.com/calendar/v3/calendars/<calendarId>/events`
    is called with `singleEvents=true` and `orderBy=startTime` — required
    together, since `orderBy=startTime` is only valid when recurring events are
    expanded via `singleEvents=true` — and `Authorization: Bearer <token>`.
+   `nextPageToken` is followed until Google stops returning one (or an
+   internal 50-page guard is hit, in which case the result is marked
+   `truncated: true`).
 5. The response is flattened into `{id, title, start, end, allDay}` rows:
    all-day events (`start.date`/`end.date`) get `allDay: true`; timed events
    (`start.dateTime`/`end.dateTime`) get `allDay: false`.
 
 Uses plain `fetch` (via an injectable `FetchLike` type), not the `googleapis`
 SDK, keeping the dependency surface minimal.
+
+### Error handling
+
+Network-level failures (DNS/TCP/TLS, or a response body read failing
+mid-stream) are caught and rethrown with stage context (`token refresh
+failed (network error): ...` vs `events.list failed (network error): ...`)
+rather than propagating as a bare `fetch failed` `TypeError`. Any response
+body text echoed into an error message has known in-scope secrets
+(`clientSecret`, `refreshToken`, the freshly-issued access token) redacted
+to `[redacted]` first.
 
 ## License
 

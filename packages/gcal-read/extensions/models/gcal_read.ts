@@ -184,24 +184,64 @@ export function buildTokenRequestBody(
 export const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 /**
+ * Redact known secret values from a string before it's embedded in an error
+ * message. Error paths echo raw response-body text for diagnosability, but
+ * that text must never leak a secret that happens to be in scope at the
+ * throw site (e.g. Google echoing the client secret back in a 400 body).
+ */
+function redactSecrets(text: string, secrets: (string | undefined)[]): string {
+  let redacted = text;
+  for (const secret of secrets) {
+    if (secret && secret.length > 0) {
+      redacted = redacted.split(secret).join("[redacted]");
+    }
+  }
+  return redacted;
+}
+
+/**
  * Exchange the configured refresh token for a short-lived access token.
  * Throws a clear, actionable error on a non-2xx response or malformed body.
+ * Network-level failures (DNS/TCP/TLS) are caught and rethrown with
+ * "token refresh" stage context rather than propagating as a bare fetch
+ * `TypeError`. Any echoed response body has the in-scope credentials
+ * (clientSecret, refreshToken, and the freshly-issued access_token once
+ * known) redacted before being embedded in an error message.
  */
 export async function refreshAccessToken(
   fetchImpl: FetchLike,
   g: Pick<GlobalArgs, "clientId" | "clientSecret" | "refreshToken">,
 ): Promise<string> {
   const creds = requireAuth(g);
-  const res = await fetchImpl(OAUTH_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: buildTokenRequestBody(creds),
-  });
-  const text = await res.text();
+  const secrets = [creds.clientSecret, creds.refreshToken];
+  let res: Awaited<ReturnType<FetchLike>>;
+  try {
+    res = await fetchImpl(OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: buildTokenRequestBody(creds),
+    });
+  } catch (err) {
+    throw new Error(
+      `@mgreten/gcal-read: token refresh failed (network error): ${
+        (err as Error).message ?? String(err)
+      }`,
+    );
+  }
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (err) {
+    throw new Error(
+      `@mgreten/gcal-read: token refresh failed reading response body: ${
+        (err as Error).message ?? String(err)
+      }`,
+    );
+  }
   if (!res.ok) {
     throw new Error(
       `@mgreten/gcal-read: token refresh failed with ${res.status}: ${
-        text.slice(0, 500)
+        redactSecrets(text.slice(0, 500), secrets)
       }`,
     );
   }
@@ -211,14 +251,14 @@ export async function refreshAccessToken(
   } catch {
     throw new Error(
       `@mgreten/gcal-read: token refresh returned non-JSON: ${
-        text.slice(0, 200)
+        redactSecrets(text.slice(0, 200), secrets)
       }`,
     );
   }
   if (!body.access_token) {
     throw new Error(
       `@mgreten/gcal-read: token refresh response missing access_token: ${
-        text.slice(0, 500)
+        redactSecrets(text.slice(0, 500), secrets)
       }`,
     );
   }
@@ -241,6 +281,16 @@ export type DayWindow = { timeMin: string; timeMax: string };
  * parser treats a date-only ISO string as UTC midnight, which shifts the
  * resolved date backward by a day in any negative-UTC-offset local timezone
  * (e.g. US Mountain) — the classic "off by one day" bug for date-only input.
+ *
+ * The date-only branch validates the parsed components round-trip: building
+ * `new Date(year, month, day)` from an out-of-range component (e.g. month 13
+ * or day 45) silently ROLLS OVER to a different, plausible-looking date
+ * instead of producing `Invalid Date` (unlike the datetime branch, where
+ * `new Date(string)` on garbage input yields `NaN` and is caught below). So
+ * after constructing the local Date, its year/month/day are read back and
+ * compared to the input components; a mismatch means a rollover happened and
+ * the input is rejected outright rather than silently answering for the
+ * wrong day.
  */
 export function resolveDayWindow(
   date: string | undefined,
@@ -255,6 +305,18 @@ export function resolveDayWindow(
     year = Number(dateOnlyMatch[1]);
     month = Number(dateOnlyMatch[2]) - 1;
     day = Number(dateOnlyMatch[3]);
+
+    const probe = new Date(year, month, day);
+    if (
+      Number.isNaN(probe.getTime()) ||
+      probe.getFullYear() !== year ||
+      probe.getMonth() !== month ||
+      probe.getDate() !== day
+    ) {
+      throw new Error(
+        `@mgreten/gcal-read: invalid date: ${date} (not a real calendar day)`,
+      );
+    }
   } else {
     const base = date ? new Date(date) : new Date(now);
     if (Number.isNaN(base.getTime())) {
@@ -315,11 +377,13 @@ export function parseEventsResponse(body: unknown): CalendarEvent[] {
  * individual instances and because `orderBy=startTime` is only valid when
  * `singleEvents=true` (the Calendar API rejects the combination otherwise).
  * `calendarId` is URL-encoded (it may contain `@`/`.`/etc., e.g. an email-
- * style calendar id).
+ * style calendar id). `pageToken`, when set, requests the next page of a
+ * paginated result (see `events.list`'s `nextPageToken`).
  */
 export function buildEventsListUrl(
   calendarId: string,
   window: DayWindow,
+  pageToken?: string,
 ): string {
   const encodedId = encodeURIComponent(calendarId);
   const params = new URLSearchParams();
@@ -327,22 +391,49 @@ export function buildEventsListUrl(
   params.set("timeMax", window.timeMax);
   params.set("singleEvents", "true");
   params.set("orderBy", "startTime");
+  if (pageToken) params.set("pageToken", pageToken);
   return `https://www.googleapis.com/calendar/v3/calendars/${encodedId}/events?${params.toString()}`;
 }
 
-/** Result of a Google Calendar events.list fetch: ok flag, status, parsed body (or error text). */
-async function fetchEventsList(
+/** A raw `events.list` response page: items plus an optional next-page token. */
+type GCalEventsPage = {
+  items?: GCalEventRow[];
+  nextPageToken?: string;
+};
+
+/** Fetch a single `events.list` page (one HTTP call). */
+async function fetchEventsPage(
   fetchImpl: FetchLike,
   accessToken: string,
   calendarId: string,
   window: DayWindow,
-): Promise<unknown> {
-  const url = buildEventsListUrl(calendarId, window);
-  const res = await fetchImpl(url, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  const text = await res.text();
+  pageToken: string | undefined,
+  secrets: (string | undefined)[],
+): Promise<GCalEventsPage> {
+  const url = buildEventsListUrl(calendarId, window, pageToken);
+  let res: Awaited<ReturnType<FetchLike>>;
+  try {
+    res = await fetchImpl(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (err) {
+    throw new Error(
+      `@mgreten/gcal-read: events.list failed (network error): ${
+        (err as Error).message ?? String(err)
+      }`,
+    );
+  }
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (err) {
+    throw new Error(
+      `@mgreten/gcal-read: events.list failed reading response body: ${
+        (err as Error).message ?? String(err)
+      }`,
+    );
+  }
   if (!res.ok) {
     const hint = res.status === 401
       ? " (401 — the refresh token may be expired or revoked; re-run the OAuth consent flow)"
@@ -351,19 +442,77 @@ async function fetchEventsList(
       : "";
     throw new Error(
       `@mgreten/gcal-read: GET events.list failed with ${res.status}${hint}: ${
-        text.slice(0, 500)
+        redactSecrets(text.slice(0, 500), secrets)
       }`,
     );
   }
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as GCalEventsPage;
   } catch {
     throw new Error(
       `@mgreten/gcal-read: events.list returned non-JSON: ${
-        text.slice(0, 200)
+        redactSecrets(text.slice(0, 200), secrets)
       }`,
     );
   }
+}
+
+/**
+ * Hard ceiling on how many `events.list` pages a single `list_events` call
+ * will follow. A single calendar day is bounded in practice (even a
+ * pathologically busy day with fully-expanded recurring instances won't
+ * realistically exceed this many pages of Google's default page size), so
+ * this exists purely as a runaway-loop guard, not a real-world limit. If hit,
+ * pagination stops and the result is marked `truncated: true` with a warning
+ * logged rather than looping forever or throwing.
+ */
+export const MAX_EVENTS_PAGES = 50;
+
+/**
+ * Fetch every page of `events.list` for a calendar/day window, following
+ * `nextPageToken` until exhausted (or until {@link MAX_EVENTS_PAGES} is hit).
+ * `events.list` returns at most one page of results per call — capped by
+ * Google's default page size — and `singleEvents=true` expands recurring
+ * series into individual instances, so a single busy day can legitimately
+ * span multiple pages. Returns the accumulated raw event rows plus whether
+ * the max-pages guard was hit (`truncated`).
+ */
+async function fetchAllEventsPages(
+  fetchImpl: FetchLike,
+  accessToken: string,
+  calendarId: string,
+  window: DayWindow,
+  secrets: (string | undefined)[],
+  logger?: { warning: (msg: string, props?: Record<string, unknown>) => void },
+): Promise<{ items: GCalEventRow[]; truncated: boolean }> {
+  const items: GCalEventRow[] = [];
+  let pageToken: string | undefined = undefined;
+  let pageCount = 0;
+  let truncated = false;
+
+  do {
+    const page = await fetchEventsPage(
+      fetchImpl,
+      accessToken,
+      calendarId,
+      window,
+      pageToken,
+      secrets,
+    );
+    items.push(...(page.items ?? []));
+    pageCount += 1;
+    pageToken = page.nextPageToken;
+    if (pageToken && pageCount >= MAX_EVENTS_PAGES) {
+      truncated = true;
+      logger?.warning(
+        "events.list pagination truncated: max-pages guard hit",
+        { calendarId, pageCount, maxPages: MAX_EVENTS_PAGES },
+      );
+      break;
+    }
+  } while (pageToken);
+
+  return { items, truncated };
 }
 
 /** Result schema for `list_events`. */
@@ -375,6 +524,10 @@ const ListEventsResultSchema = z.object({
   timeMin: z.string(),
   timeMax: z.string(),
   count: z.number().int(),
+  truncated: z.boolean().describe(
+    "true if the MAX_EVENTS_PAGES pagination guard was hit before " +
+      "events.list ran out of pages — count/items may be incomplete.",
+  ),
   items: z.array(z.object({
     id: z.string(),
     title: z.string(),
@@ -393,33 +546,61 @@ const ListEventsArgs = z.object({
     "Target day (ISO date or datetime string). Defaults to today.",
   ),
   timezone: z.string().optional().describe(
-    "Reserved for future timezone-aware window resolution. Currently " +
-      "unused: the day window is resolved in the swamp process's local " +
-      "timezone.",
+    "NOT YET SUPPORTED. The day window is always resolved in the swamp " +
+      "process's local timezone; passing a non-empty timezone throws " +
+      "rather than silently using the wrong zone.",
   ),
 });
 
 /**
+ * Reject a `timezone` arg outright. Actually honoring an arbitrary IANA zone
+ * for day-window math (correct offset resolution, DST transitions) is a
+ * meaningfully large addition; silently ignoring the arg — the prior
+ * behavior — let a caller believe they got events for their requested zone
+ * when the window was actually resolved in the swamp process's local
+ * timezone. Throwing a clear, actionable error is the safe default until
+ * timezone-aware resolution is implemented.
+ */
+function rejectUnsupportedTimezone(timezone: string | undefined): void {
+  if (timezone !== undefined && timezone.trim() !== "") {
+    throw new Error(
+      `@mgreten/gcal-read: timezone arg not yet supported (got "${timezone}"). ` +
+        `The day window is always resolved in the swamp process's local ` +
+        `timezone; omit the timezone arg to use that.`,
+    );
+  }
+}
+
+/**
  * List a single day's events for a calendar: refresh the access token,
- * resolve the day's RFC3339 window, fetch `events.list`, and flatten the
- * result into {@link CalendarEvent} rows.
+ * resolve the day's RFC3339 window, fetch every `events.list` page
+ * (following `nextPageToken` — a busy day with recurring series expanded via
+ * `singleEvents=true` can span more than one page), and flatten the
+ * accumulated rows into {@link CalendarEvent}s. Rejects a non-empty
+ * `timezone` arg (see {@link rejectUnsupportedTimezone}) rather than
+ * silently ignoring it.
  */
 export async function runListEvents(
   fetchImpl: FetchLike,
   g: GlobalArgs,
   args: z.infer<typeof ListEventsArgs>,
   now: number = Date.now(),
+  logger?: { warning: (msg: string, props?: Record<string, unknown>) => void },
 ): Promise<z.infer<typeof ListEventsResultSchema>> {
+  rejectUnsupportedTimezone(args.timezone);
   const accessToken = await refreshAccessToken(fetchImpl, g);
   const calendarId = args.calendarId ?? g.calendarId;
   const window = resolveDayWindow(args.date, now);
-  const body = await fetchEventsList(
+  const secrets = [g.clientSecret, g.refreshToken, accessToken];
+  const { items: rawItems, truncated } = await fetchAllEventsPages(
     fetchImpl,
     accessToken,
     calendarId,
     window,
+    secrets,
+    logger,
   );
-  const items = parseEventsResponse(body);
+  const items = parseEventsResponse({ items: rawItems });
   return {
     ok: true,
     ts: new Date(now).toISOString(),
@@ -428,6 +609,7 @@ export async function runListEvents(
     timeMin: window.timeMin,
     timeMax: window.timeMax,
     count: items.length,
+    truncated,
     items,
   };
 }
@@ -438,7 +620,7 @@ export async function runListEvents(
  */
 export const model = {
   type: "@mgreten/gcal-read",
-  version: "2026.07.20.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     events: {
@@ -452,17 +634,24 @@ export const model = {
   methods: {
     list_events: {
       description:
-        "List a single day's events (default: today) for a calendar. Refreshes an OAuth2 access token from the configured refresh token, then calls Google Calendar's events.list with singleEvents=true and orderBy=startTime. Read-only.",
+        "List a single day's events (default: today) for a calendar. Refreshes an OAuth2 access token from the configured refresh token, then calls Google Calendar's events.list with singleEvents=true and orderBy=startTime, following nextPageToken to accumulate every page. Read-only.",
       arguments: ListEventsArgs,
       execute: async (
         args: z.infer<typeof ListEventsArgs>,
         context: MethodContext,
       ) => {
-        const record = await runListEvents(realFetch, context.globalArgs, args);
+        const record = await runListEvents(
+          realFetch,
+          context.globalArgs,
+          args,
+          Date.now(),
+          context.logger,
+        );
         context.logger.info("list_events", {
           calendarId: record.calendarId,
           date: record.date,
           count: record.count,
+          truncated: record.truncated,
         });
         const handle = await context.writeResource(
           "events",
