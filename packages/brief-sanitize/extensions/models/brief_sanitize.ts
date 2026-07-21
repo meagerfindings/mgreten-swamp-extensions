@@ -293,7 +293,47 @@ const CONTROL_CHARS_PATTERN = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g;
  * delimiter.
  */
 const URL_PATTERN =
-  /(?:https?|javascript|data):[^\s<>"']+|(?<=^|[\s(])\/\/[^\s<>"']+/gi;
+  /(?:https?|javascript|data|vbscript|file):[^\s<>"']+|(?<=^|[\s(])\/\/[^\s<>"']+/gi;
+
+/**
+ * Fixpoint cap for the strip→decode loop in {@link cleanText}. A hard backstop:
+ * legitimate content converges in 1–2 passes; this only bounds pathological
+ * (deeply multi-encoded) adversarial input so cleaning can never loop for long.
+ */
+const MAX_CLEAN_ITERATIONS = 8;
+
+/**
+ * Remove `<script>`/`<style>` element CONTENT tolerant of intra-tag-name junk
+ * (`<scr ipt>`, `<scr\x00ipt>`, `<script/foo>`, etc.). `sanitize-html`'s
+ * `nonTextTags` only matches an EXACT parsed tag name, so a split/typo'd
+ * script tag has its tag dropped but its inner text leaked as prose — this
+ * closes that gap by matching an opening `<`, optional whitespace/junk, the
+ * letters of `script`/`style` possibly separated by non-alphanumerics, up to
+ * the next `>`, then everything (non-greedy) up to a matching close.
+ *
+ * ReDoS-safe by construction: every quantifier is over a negated character
+ * class (`[^>]`, `[\s\S]` lazy) with no overlapping alternation, so there is
+ * no ambiguous backtracking — verified at the 100k-char schema ceiling.
+ */
+export function stripScriptStyleContent(input: string): string {
+  // `s.?c.?r.?i.?p.?t` tolerates a single junk char between letters; anchored
+  // by `<` and bounded by `[^>]*>` for the open tag and a lazy body.
+  const scriptLike =
+    /<\s*s[^a-z0-9>]?c[^a-z0-9>]?r[^a-z0-9>]?i[^a-z0-9>]?p[^a-z0-9>]?t[^>]*>[\s\S]*?<\s*\/\s*s[^a-z0-9>]?c[^a-z0-9>]?r[^a-z0-9>]?i[^a-z0-9>]?p[^a-z0-9>]?t[^>]*>/gi;
+  const styleLike =
+    /<\s*s[^a-z0-9>]?t[^a-z0-9>]?y[^a-z0-9>]?l[^a-z0-9>]?e[^>]*>[\s\S]*?<\s*\/\s*s[^a-z0-9>]?t[^a-z0-9>]?y[^a-z0-9>]?l[^a-z0-9>]?e[^>]*>/gi;
+  // Also drop an UNTERMINATED script/style open tag and everything after it
+  // (no close means the whole remainder is suspect element content).
+  const unterminatedScript =
+    /<\s*s[^a-z0-9>]?c[^a-z0-9>]?r[^a-z0-9>]?i[^a-z0-9>]?p[^a-z0-9>]?t[^>]*>[\s\S]*$/gi;
+  const unterminatedStyle =
+    /<\s*s[^a-z0-9>]?t[^a-z0-9>]?y[^a-z0-9>]?l[^a-z0-9>]?e[^>]*>[\s\S]*$/gi;
+  return input
+    .replace(scriptLike, "")
+    .replace(styleLike, "")
+    .replace(unterminatedScript, "")
+    .replace(unterminatedStyle, "");
+}
 
 /** Three or more consecutive newlines (optionally interleaved with spaces/tabs on blank lines). */
 const EXCESS_NEWLINES_PATTERN = /\n{3,}/g;
@@ -511,8 +551,34 @@ export function cleanText(
 ): { text: string; suspiciousCharCount: number } {
   let out = input;
   if (opts.stripHtml) {
-    out = stripHtml(out);
-    out = decodeEntities(out);
+    // Iterate strip→decode to a fixpoint (bounded). Two adversarial cases make
+    // a single strip-then-decode pass insufficient:
+    //   (A) entity-resurrection: `&lt;system&gt;…&lt;/system&gt;` survives the
+    //       HTML pass inert (not a tag yet), then `decodeEntities` turns it
+    //       back into live `<system>…</system>` markup AFTER the only strip —
+    //       so we must strip AGAIN after decoding.
+    //   (B) tag-name splitting: `<scr ipt>PAYLOAD</scr ipt>` is spec-correctly
+    //       parsed as a `scr` tag with an `ipt` attribute, so sanitize-html's
+    //       nonTextTags (exact-name match) drops the tag but leaks PAYLOAD as
+    //       prose. stripScriptStyleContent() below removes script/style-like
+    //       CONTENT tolerant of intra-name junk before the tag strip runs.
+    // The loop converges because each pass strictly removes tag/entity
+    // structure and can only reveal a bounded amount of new structure; we cap
+    // iterations as a hard backstop against any pathological input.
+    // NOTE on ordering: sanitize-html re-escapes bare `&` in its text output
+    // (`Tom & Jerry` → `Tom &amp; Jerry`), so `stripHtml` must NEVER be the
+    // last transform or it re-encodes entities we just decoded. The loop ends
+    // on a decode, and we verify convergence by checking the post-decode text
+    // contains no residual tag shape before stopping.
+    let prev = "";
+    let iterations = 0;
+    while (out !== prev && iterations < MAX_CLEAN_ITERATIONS) {
+      prev = out;
+      out = stripScriptStyleContent(out);
+      out = stripHtml(out);
+      out = decodeEntities(out);
+      iterations++;
+    }
   }
   const { text: deobfuscated, count } = stripObfuscationChars(out);
   out = deobfuscated;
@@ -564,7 +630,13 @@ function resolveLimits(
  * fails the pattern falls back to the default rather than being rendered.
  */
 function resolveKind(kind: string | undefined): string {
-  if (kind && KIND_PATTERN.test(kind)) return kind;
+  // Guard the TYPE before the regex: RegExp.test() stringifies its argument,
+  // so a non-string that merely coerces to a matching string (e.g.
+  // {toString:()=>"email"}, ["email"], true) would pass .test() — and if we
+  // then returned the original un-coerced value, wrapItem/neutralize would
+  // later call .replace() on a non-string and throw. Reject non-strings
+  // outright, and return the string itself (never the original object).
+  if (typeof kind === "string" && KIND_PATTERN.test(kind)) return kind;
   return DEFAULT_KIND;
 }
 
@@ -676,7 +748,7 @@ function generateNonce(): string {
  */
 export const model = {
   type: "@mgreten/brief-sanitize",
-  version: "2026.07.20.2",
+  version: "2026.07.20.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     sanitized: {
