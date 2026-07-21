@@ -99,10 +99,15 @@ The result is written as an `events` resource with this shape:
 `events.list` returns results one page at a time, and `singleEvents=true`
 expands recurring series into individual instances — so a busy day can span
 more than one page. `list_events` follows `nextPageToken` and accumulates
-every page automatically. `truncated: true` means an internal max-pages guard
-(50 pages) was hit before pagination ran out — `count`/`items` may be
-incomplete in that case (a warning is also logged). In practice a single
-day's events should never come close to this limit.
+every page automatically, deduping events by `id` across pages as cheap
+insurance (Google shouldn't return the same event id twice, but the dedup
+costs nothing). `truncated: true` means pagination was cut short before
+`events.list` ran out of pages — either an internal max-pages guard (50
+pages) was hit, or Google returned a repeated/stuck `nextPageToken` (pagination
+breaks immediately rather than burning the remaining page budget re-fetching
+the same page) — `count`/`items` may be incomplete in that case (a warning is
+also logged either way). In practice a single day's events should never come
+close to the page limit.
 
 ## Global Arguments
 
@@ -148,6 +153,27 @@ rather than propagating as a bare `fetch failed` `TypeError`. Any response
 body text echoed into an error message has known in-scope secrets
 (`clientSecret`, `refreshToken`, the freshly-issued access token) redacted
 to `[redacted]` first.
+
+## Known limitations
+
+- **No per-page item cap.** `MAX_EVENTS_PAGES` bounds the number of
+  `events.list` *pages* followed (with a repeated-pageToken guard on top —
+  see above), but there's no cap on the total number of *items* accumulated
+  across those pages. In practice a single calendar day's event count is
+  bounded by what a human calendar can plausibly hold, so this hasn't been a
+  problem — but it means a sufficiently adversarial or buggy upstream
+  response could in principle accumulate an unbounded amount of memory before
+  the page-count guard kicks in. Not fixed here as an intentional scope call;
+  revisit only if this model is ever pointed at something other than a single
+  day's events for one calendar.
+- **Not designed for high-frequency polling.** This model fits a once-daily
+  (or few-times-daily) "what's on my calendar" read. It does not de-duplicate
+  or track state across separate `list_events` calls, so a poller invoking it
+  every few minutes will write a fresh `events` resource each time with no
+  idempotency against previous calls — fine for occasional/manual use or a
+  daily brief, but a high-frequency poller built on top of this model should
+  do its own dedup (e.g. by day, or by hashing the returned `items`) rather
+  than assuming this model does it.
 
 ## License
 

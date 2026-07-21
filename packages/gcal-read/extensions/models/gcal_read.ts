@@ -188,12 +188,31 @@ export const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
  * message. Error paths echo raw response-body text for diagnosability, but
  * that text must never leak a secret that happens to be in scope at the
  * throw site (e.g. Google echoing the client secret back in a 400 body).
+ *
+ * Redacts both the raw secret value and its `encodeURIComponent()` form (a
+ * secret containing characters like `+`, `/`, `=`, or `&` — plausible for an
+ * OAuth client secret or token — can appear URL-encoded in a response body,
+ * e.g. an echoed `application/x-www-form-urlencoded` request). Empty-string
+ * secrets (an unconfigured credential arriving as `""`) are skipped: a
+ * `"".split("").join(...)` would otherwise insert `[redacted]` between every
+ * character of `text`, corrupting rather than protecting it.
+ *
+ * IMPORTANT: callers must redact BEFORE truncating any response text (e.g.
+ * `text.slice(0, 500)`), not after. Truncating first can cut a secret in half
+ * at the slice boundary, so the un-truncated remainder no longer matches this
+ * function's substring search and leaks in the clear.
  */
-function redactSecrets(text: string, secrets: (string | undefined)[]): string {
+export function redactSecrets(
+  text: string,
+  secrets: (string | undefined)[],
+): string {
   let redacted = text;
   for (const secret of secrets) {
-    if (secret && secret.length > 0) {
-      redacted = redacted.split(secret).join("[redacted]");
+    if (!secret || secret.length === 0) continue;
+    redacted = redacted.split(secret).join("[redacted]");
+    const encoded = encodeURIComponent(secret);
+    if (encoded !== secret) {
+      redacted = redacted.split(encoded).join("[redacted]");
     }
   }
   return redacted;
@@ -241,7 +260,7 @@ export async function refreshAccessToken(
   if (!res.ok) {
     throw new Error(
       `@mgreten/gcal-read: token refresh failed with ${res.status}: ${
-        redactSecrets(text.slice(0, 500), secrets)
+        redactSecrets(text, secrets).slice(0, 500)
       }`,
     );
   }
@@ -251,14 +270,14 @@ export async function refreshAccessToken(
   } catch {
     throw new Error(
       `@mgreten/gcal-read: token refresh returned non-JSON: ${
-        redactSecrets(text.slice(0, 200), secrets)
+        redactSecrets(text, secrets).slice(0, 200)
       }`,
     );
   }
   if (!body.access_token) {
     throw new Error(
       `@mgreten/gcal-read: token refresh response missing access_token: ${
-        redactSecrets(text.slice(0, 500), secrets)
+        redactSecrets(text, secrets).slice(0, 500)
       }`,
     );
   }
@@ -442,7 +461,7 @@ async function fetchEventsPage(
       : "";
     throw new Error(
       `@mgreten/gcal-read: GET events.list failed with ${res.status}${hint}: ${
-        redactSecrets(text.slice(0, 500), secrets)
+        redactSecrets(text, secrets).slice(0, 500)
       }`,
     );
   }
@@ -451,7 +470,7 @@ async function fetchEventsPage(
   } catch {
     throw new Error(
       `@mgreten/gcal-read: events.list returned non-JSON: ${
-        redactSecrets(text.slice(0, 200), secrets)
+        redactSecrets(text, secrets).slice(0, 200)
       }`,
     );
   }
@@ -474,8 +493,16 @@ export const MAX_EVENTS_PAGES = 50;
  * `events.list` returns at most one page of results per call — capped by
  * Google's default page size — and `singleEvents=true` expands recurring
  * series into individual instances, so a single busy day can legitimately
- * span multiple pages. Returns the accumulated raw event rows plus whether
- * the max-pages guard was hit (`truncated`).
+ * span multiple pages. Returns the accumulated raw event rows (deduped by
+ * event `id`) plus whether pagination was cut short (`truncated`) — either
+ * because {@link MAX_EVENTS_PAGES} was hit, or because Google returned a
+ * `nextPageToken` that repeats a token already seen this call (a stuck/looping
+ * token would otherwise silently burn the entire page budget re-fetching the
+ * same page over and over instead of surfacing the problem).
+ *
+ * Event ids are deduped via a `Set` across pages as cheap insurance — Google
+ * shouldn't return the same event id on two different pages of one
+ * `events.list` call, but the cost of guarding against it is negligible.
  */
 async function fetchAllEventsPages(
   fetchImpl: FetchLike,
@@ -486,6 +513,8 @@ async function fetchAllEventsPages(
   logger?: { warning: (msg: string, props?: Record<string, unknown>) => void },
 ): Promise<{ items: GCalEventRow[]; truncated: boolean }> {
   const items: GCalEventRow[] = [];
+  const seenEventIds = new Set<string>();
+  const seenPageTokens = new Set<string>();
   let pageToken: string | undefined = undefined;
   let pageCount = 0;
   let truncated = false;
@@ -499,9 +528,23 @@ async function fetchAllEventsPages(
       pageToken,
       secrets,
     );
-    items.push(...(page.items ?? []));
+    for (const row of page.items ?? []) {
+      if (row.id !== undefined && seenEventIds.has(row.id)) continue;
+      if (row.id !== undefined) seenEventIds.add(row.id);
+      items.push(row);
+    }
     pageCount += 1;
+    if (pageToken !== undefined) seenPageTokens.add(pageToken);
     pageToken = page.nextPageToken;
+
+    if (pageToken && seenPageTokens.has(pageToken)) {
+      truncated = true;
+      logger?.warning(
+        "events.list pagination truncated: repeated pageToken (stuck pagination)",
+        { calendarId, pageCount, repeatedToken: pageToken },
+      );
+      break;
+    }
     if (pageToken && pageCount >= MAX_EVENTS_PAGES) {
       truncated = true;
       logger?.warning(
@@ -525,8 +568,9 @@ const ListEventsResultSchema = z.object({
   timeMax: z.string(),
   count: z.number().int(),
   truncated: z.boolean().describe(
-    "true if the MAX_EVENTS_PAGES pagination guard was hit before " +
-      "events.list ran out of pages — count/items may be incomplete.",
+    "true if pagination was cut short before events.list ran out of pages " +
+      "— either the MAX_EVENTS_PAGES guard was hit, or Google returned a " +
+      "repeated/stuck nextPageToken — count/items may be incomplete.",
   ),
   items: z.array(z.object({
     id: z.string(),
@@ -535,20 +579,33 @@ const ListEventsResultSchema = z.object({
     end: z.string(),
     allDay: z.boolean(),
   })),
-}).passthrough();
+});
+// Intentionally NOT .passthrough(): `runListEvents` constructs this object's
+// fields explicitly (see its return statement) and never attaches extra
+// properties, so the result shape is fully known. `.passthrough()` would
+// let a future accidental extra field slip through unvalidated instead of
+// failing loudly at the schema boundary.
 
 /** Argument schema for `list_events`. */
-const ListEventsArgs = z.object({
+export const ListEventsArgs = z.object({
   calendarId: z.string().optional().describe(
     "Override the instance's default calendarId for this call.",
   ),
   date: z.string().optional().describe(
     "Target day (ISO date or datetime string). Defaults to today.",
   ),
-  timezone: z.string().optional().describe(
-    "NOT YET SUPPORTED. The day window is always resolved in the swamp " +
-      "process's local timezone; passing a non-empty timezone throws " +
-      "rather than silently using the wrong zone.",
+  timezone: z.string().optional().refine(
+    (tz) => tz === undefined || tz.trim() === "",
+    {
+      message: "timezone is NOT YET SUPPORTED: it must be empty or omitted. " +
+        "The day window is always resolved in the swamp process's local " +
+        "timezone; a non-empty value always throws rather than silently " +
+        "using the wrong zone.",
+    },
+  ).describe(
+    "NOT YET SUPPORTED — must be empty or omitted; any non-empty value " +
+      "ALWAYS throws. The day window is always resolved in the swamp " +
+      "process's local timezone.",
   ),
 });
 
@@ -560,6 +617,12 @@ const ListEventsArgs = z.object({
  * when the window was actually resolved in the swamp process's local
  * timezone. Throwing a clear, actionable error is the safe default until
  * timezone-aware resolution is implemented.
+ *
+ * `ListEventsArgs.timezone` already encodes this constraint via a zod
+ * `.refine()` (a non-empty value fails argument validation before `execute`
+ * is even called), but `runListEvents` is also called directly by tests and
+ * other code paths that bypass swamp's schema validation — so this runtime
+ * check stays as the actual enforcement point, not just a schema decoration.
  */
 function rejectUnsupportedTimezone(timezone: string | undefined): void {
   if (timezone !== undefined && timezone.trim() !== "") {
@@ -615,12 +678,29 @@ export async function runListEvents(
 }
 
 /**
+ * Sanitize a value for embedding in a swamp resource instance NAME. Instance
+ * names get concatenated into filesystem paths / resource identifiers
+ * elsewhere in swamp, so they need to be well-formed. `calendarId` is
+ * typically email-shaped (e.g. `someone@example.com`) and gets URL-encoded
+ * for the HTTP path (see {@link buildEventsListUrl}), but the instance name
+ * built here embedded the RAW calendarId — `@`/`.` and other characters can
+ * make for a malformed or surprising instance name. Any character outside
+ * `[a-z0-9_-]` (case-folded) is replaced with `-`; this is lossy (distinct
+ * calendarIds can collide after sanitization) but that's acceptable for a
+ * human-readable name component — the resource DATA and tags still carry the
+ * raw, uncorrupted `calendarId` for anything that needs the real value.
+ */
+export function sanitizeForInstanceName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+}
+
+/**
  * The swamp model: a read-only Google Calendar reader with one method
  * (`list_events`), persisting a typed `events` resource per call.
  */
 export const model = {
   type: "@mgreten/gcal-read",
-  version: "2026.07.20.2",
+  version: "2026.07.20.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     events: {
@@ -655,7 +735,9 @@ export const model = {
         });
         const handle = await context.writeResource(
           "events",
-          `events-${record.calendarId}-${record.date}-${record.ts}`,
+          `events-${
+            sanitizeForInstanceName(record.calendarId)
+          }-${record.date}-${record.ts}`,
           record,
           {
             tags: {

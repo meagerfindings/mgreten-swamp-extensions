@@ -3,13 +3,16 @@ import {
   buildEventsListUrl,
   buildTokenRequestBody,
   type FetchLike,
+  ListEventsArgs,
   MAX_EVENTS_PAGES,
   OAUTH_TOKEN_URL,
   parseEventsResponse,
+  redactSecrets,
   refreshAccessToken,
   requireAuth,
   resolveDayWindow,
   runListEvents,
+  sanitizeForInstanceName,
 } from "./gcal_read.ts";
 
 const FULL_CREDS = {
@@ -783,4 +786,318 @@ Deno.test("runListEvents redacts secrets from a leaked events.list error body", 
     assertMatch(message, /\[redacted\]/);
   }
   assert(threw, "runListEvents should have thrown on the 403");
+});
+
+// ---------------------------------------------------------------------------
+// Regression: adversarial review #1 — redactSecrets: redact-before-truncate
+// ordering, URL-encoded secret forms, and an empty-secret guard.
+// ---------------------------------------------------------------------------
+
+Deno.test("redactSecrets redacts a secret straddling the 500-char truncation boundary", async () => {
+  // Build a leaked body where the secret starts BEFORE char 500 and ends
+  // AFTER it — a naive `text.slice(0, 500)` BEFORE redaction would only see
+  // half the secret and fail to match it, leaking the tail in the clear.
+  const secret = "super-secret-value-that-is-fairly-long-1234567890";
+  const padding = "x".repeat(500 - 20);
+  const leakyBody = `${padding}${secret}${"y".repeat(100)}`;
+  assert(
+    leakyBody.indexOf(secret) < 500 &&
+      leakyBody.indexOf(secret) + secret.length > 500,
+    "test fixture must actually straddle the 500-char boundary",
+  );
+
+  const fetchImpl: FetchLike = () =>
+    Promise.resolve({ ok: false, status: 400, text: () => Promise.resolve(leakyBody) });
+
+  await assertRejects(
+    () =>
+      refreshAccessToken(fetchImpl, {
+        clientId: "client-x",
+        clientSecret: secret,
+        refreshToken: "refresh-unrelated",
+      }),
+    Error,
+  );
+  try {
+    await refreshAccessToken(fetchImpl, {
+      clientId: "client-x",
+      clientSecret: secret,
+      refreshToken: "refresh-unrelated",
+    });
+  } catch (err) {
+    const message = (err as Error).message;
+    assert(
+      !message.includes(secret),
+      "a secret straddling the truncation boundary must still be fully redacted",
+    );
+  }
+});
+
+Deno.test("redactSecrets also redacts the encodeURIComponent() form of a secret", () => {
+  const secret = "sup+er/secret=value&here";
+  const encoded = encodeURIComponent(secret);
+  const text = `raw: ${secret}\nencoded: ${encoded}`;
+  const redacted = redactSecrets(text, [secret]);
+  assert(!redacted.includes(secret), "raw form must be redacted");
+  assert(!redacted.includes(encoded), "URL-encoded form must also be redacted");
+  assertMatch(redacted, /\[redacted\]/);
+});
+
+Deno.test("redactSecrets skips empty-string secrets without corrupting the text", () => {
+  const text = "hello world, nothing sensitive here";
+  const redacted = redactSecrets(text, ["", undefined]);
+  assertEquals(redacted, text);
+});
+
+Deno.test("redactSecrets with a real secret alongside an empty one still redacts correctly", () => {
+  const text = "token=abc123 and other stuff";
+  const redacted = redactSecrets(text, ["", "abc123", undefined]);
+  assertEquals(redacted, "token=[redacted] and other stuff");
+});
+
+// ---------------------------------------------------------------------------
+// Regression: adversarial review #2 — pagination must terminate on a
+// repeated/stuck nextPageToken instead of burning the whole page budget, and
+// events must be deduped by id across pages.
+// ---------------------------------------------------------------------------
+
+Deno.test("runListEvents breaks pagination when nextPageToken repeats, marks truncated", async () => {
+  let calls = 0;
+  const fetchImpl: FetchLike = (url) => {
+    if (url === OAUTH_TOKEN_URL) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ access_token: "at-stuck" })),
+      });
+    }
+    calls += 1;
+    const parsed = new URL(url);
+    const pageToken = parsed.searchParams.get("pageToken");
+    if (!pageToken) {
+      // First page: 1 event, points to "token-A".
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              items: [{
+                id: "evt-1",
+                summary: "First",
+                start: { dateTime: "2026-07-20T09:00:00-06:00" },
+                end: { dateTime: "2026-07-20T09:30:00-06:00" },
+              }],
+              nextPageToken: "token-A",
+            }),
+          ),
+      });
+    }
+    // Every subsequent page (including the one fetched with "token-A")
+    // returns another event but STUCK on the same "token-A" — a repeating
+    // token that would otherwise loop until MAX_EVENTS_PAGES.
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            items: [{
+              id: `evt-stuck-${calls}`,
+              summary: "Stuck",
+              start: { dateTime: "2026-07-20T10:00:00-06:00" },
+              end: { dateTime: "2026-07-20T10:30:00-06:00" },
+            }],
+            nextPageToken: "token-A",
+          }),
+        ),
+    });
+  };
+
+  const warnings: { msg: string; props?: Record<string, unknown> }[] = [];
+  const now = new Date(2026, 6, 20, 8, 0, 0).getTime();
+  const result = await runListEvents(
+    fetchImpl,
+    FULL_GLOBAL_ARGS,
+    { date: "2026-07-20" },
+    now,
+    { warning: (msg, props) => warnings.push({ msg, props }) },
+  );
+
+  // Should stop after the SECOND call (first page + the one page fetched
+  // with "token-A"), not burn through MAX_EVENTS_PAGES.
+  assertEquals(calls, 2, "should break as soon as the repeated token is detected");
+  assertEquals(result.truncated, true);
+  assert(
+    warnings.some((w) => /repeated pageToken/.test(w.msg)),
+    "should log a warning naming the repeated-pageToken condition",
+  );
+});
+
+Deno.test("runListEvents dedups events sharing the same id across pages", async () => {
+  const fetchImpl: FetchLike = (url) => {
+    if (url === OAUTH_TOKEN_URL) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ access_token: "at-dedup" })),
+      });
+    }
+    const parsed = new URL(url);
+    const pageToken = parsed.searchParams.get("pageToken");
+    if (!pageToken) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              items: [
+                {
+                  id: "evt-dup",
+                  summary: "Duplicate",
+                  start: { dateTime: "2026-07-20T09:00:00-06:00" },
+                  end: { dateTime: "2026-07-20T09:30:00-06:00" },
+                },
+              ],
+              nextPageToken: "token-2",
+            }),
+          ),
+      });
+    }
+    // Second page re-returns the SAME event id as page 1 (shouldn't happen
+    // per Google's contract, but dedup is cheap insurance) plus one new one.
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            items: [
+              {
+                id: "evt-dup",
+                summary: "Duplicate",
+                start: { dateTime: "2026-07-20T09:00:00-06:00" },
+                end: { dateTime: "2026-07-20T09:30:00-06:00" },
+              },
+              {
+                id: "evt-new",
+                summary: "New",
+                start: { dateTime: "2026-07-20T11:00:00-06:00" },
+                end: { dateTime: "2026-07-20T11:30:00-06:00" },
+              },
+            ],
+          }),
+        ),
+    });
+  };
+
+  const now = new Date(2026, 6, 20, 8, 0, 0).getTime();
+  const result = await runListEvents(fetchImpl, FULL_GLOBAL_ARGS, { date: "2026-07-20" }, now);
+
+  assertEquals(result.count, 2, "the duplicate event id must only be counted once");
+  assertEquals(result.items.map((e) => e.id).sort(), ["evt-dup", "evt-new"]);
+});
+
+// ---------------------------------------------------------------------------
+// Regression: adversarial review #3 — the timezone arg schema must itself
+// communicate (and enforce) that a non-empty value is always rejected, not
+// just describe that constraint in prose.
+// ---------------------------------------------------------------------------
+
+Deno.test("ListEventsArgs schema rejects a non-empty timezone at validation time", () => {
+  const result = ListEventsArgs.safeParse({ timezone: "America/Denver" });
+  assert(!result.success, "schema-level validation must reject a non-empty timezone");
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => i.message).join(" ");
+    assertMatch(messages, /NOT YET SUPPORTED/);
+  }
+});
+
+Deno.test("ListEventsArgs schema accepts an omitted or empty-string timezone", () => {
+  assert(ListEventsArgs.safeParse({}).success);
+  assert(ListEventsArgs.safeParse({ timezone: "" }).success);
+  assert(ListEventsArgs.safeParse({ timezone: undefined }).success);
+});
+
+Deno.test("ListEventsArgs timezone field description states non-empty always throws", () => {
+  const shape = ListEventsArgs.shape.timezone;
+  // The description must be present and explicit, so `swamp model type
+  // describe` reflects the real runtime behavior rather than just an
+  // undifferentiated "optional string".
+  const description = shape.description ?? "";
+  assertMatch(description, /NOT YET SUPPORTED/);
+  assertMatch(description, /must be empty or omitted/i);
+});
+
+// ---------------------------------------------------------------------------
+// Regression: adversarial review #5 — an email-shaped calendarId must yield a
+// well-formed swamp resource instance name (raw value stays in the data).
+// ---------------------------------------------------------------------------
+
+Deno.test("sanitizeForInstanceName replaces non-[a-z0-9_-] chars with '-'", () => {
+  assertEquals(
+    sanitizeForInstanceName("someone@example.com"),
+    "someone-example-com",
+  );
+  assertEquals(sanitizeForInstanceName("primary"), "primary");
+  assertEquals(sanitizeForInstanceName("Mixed.CASE@Example.COM"), "mixed-case-example-com");
+});
+
+Deno.test("sanitizeForInstanceName never leaves '@' or '.' in its output", () => {
+  const sanitized = sanitizeForInstanceName("a.weird+id@sub.example.co.uk");
+  assert(!sanitized.includes("@"));
+  assert(!sanitized.includes("."));
+  assertMatch(sanitized, /^[a-z0-9_-]+$/);
+});
+
+Deno.test("list_events writeResource instance name is well-formed for an email-shaped calendarId", async () => {
+  const writeResourceCalls: {
+    specName: string;
+    instanceName: string;
+    data: Record<string, unknown>;
+  }[] = [];
+  const fetchImpl: FetchLike = (url) => {
+    if (url === OAUTH_TOKEN_URL) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ access_token: "at-name" })),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ items: [] })),
+    });
+  };
+
+  const now = new Date(2026, 6, 20, 8, 0, 0).getTime();
+  const record = await runListEvents(
+    fetchImpl,
+    FULL_GLOBAL_ARGS,
+    { calendarId: "someone@example.com", date: "2026-07-20" },
+    now,
+  );
+
+  // Mirror the model's execute(): the instance name must sanitize the
+  // calendarId segment specifically, while the record (resource DATA) keeps
+  // the raw, unsanitized value.
+  const sanitizedCalendarId = sanitizeForInstanceName(record.calendarId);
+  const instanceName = `events-${sanitizedCalendarId}-${record.date}-${record.ts}`;
+
+  assertEquals(record.calendarId, "someone@example.com", "raw calendarId stays in the data");
+  assertEquals(sanitizedCalendarId, "someone-example-com", "the calendarId segment must be sanitized");
+  assert(
+    !sanitizedCalendarId.includes("@") && !sanitizedCalendarId.includes("."),
+    "the sanitized calendarId segment must not contain '@' or '.'",
+  );
+  assertMatch(
+    instanceName,
+    /^events-someone-example-com-2026-07-20-.+$/,
+    "instance name must embed the sanitized calendarId but still be recognizable",
+  );
+
+  writeResourceCalls.push({ specName: "events", instanceName, data: record });
+  assertEquals(writeResourceCalls[0].specName, "events");
 });
