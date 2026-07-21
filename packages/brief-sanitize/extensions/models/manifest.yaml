@@ -1,13 +1,16 @@
 manifestVersion: 1
 name: "@mgreten/brief-sanitize"
-version: "2026.07.20.1"
+version: "2026.07.20.2"
 description: >
-  Deterministic, dependency-free sanitizer for untrusted text (email bodies,
-  calendar invites, scraped pages, third-party payloads) before it is fed to
-  an LLM prompt. Strips HTML/entities/obfuscation characters, defangs URLs,
-  truncates, and wraps each item in escaped delimiters so a downstream prompt
-  can safely quote it as data rather than instructions. Defense-in-depth
-  against prompt injection: no LLM, no network, no secrets.
+  Sanitizer for untrusted text (email bodies, calendar invites, scraped
+  pages, third-party payloads) before it is fed to an LLM prompt. Strips
+  HTML to plain text via a real parser (sanitize-html), decodes entities,
+  strips Unicode obfuscation characters (NFKC-normalized, \p{Cf} + variation
+  selectors), defangs http(s)/javascript/data/protocol-relative URLs,
+  truncates, and wraps each item behind a random per-call nonce delimiter
+  (Microsoft "spotlighting", arXiv:2403.14720) so a downstream prompt can
+  safely quote it as data rather than instructions. Defense-in-depth against
+  prompt injection: no LLM, no network, no secrets.
 
 repository: https://github.com/meagerfindings/swamp-brief-sanitize
 
