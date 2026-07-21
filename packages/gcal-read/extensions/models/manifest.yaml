@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/gcal-read"
+version: "2026.07.20.1"
+description: >
+  Read-only Google Calendar reader. Refreshes an OAuth2 access token from a
+  configured refresh token and lists a single day's events (default: today)
+  for a calendar, flattening both timed and all-day events into a simple
+  {id, title, start, end, allDay} shape.
+
+repository: https://github.com/meagerfindings/swamp-gcal-read
+
+models:
+  - gcal_read.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []
