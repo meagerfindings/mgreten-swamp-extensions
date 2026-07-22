@@ -24,10 +24,10 @@ the legacy Network API exposes.
 ## Authentication
 
 All four models share a `globalArguments` schema (`host`, `username`,
-`password`, `site`). A **local-only admin** on the UDM is required — Ubiquiti
-Cloud accounts cannot authenticate against the local API. Create one under
-**UniFi Console → Settings → Admins & Users → Add New Admin** with
-"Restrict to local access only" enabled.
+`password`, optional `totpSecret`, and `site`). Use either a **local-only admin**
+on the UDM or an MFA-enabled account with its TOTP secret. To create a local
+account, go to **UniFi Console → Settings → Admins & Users → Add New Admin** and
+enable "Restrict to local access only."
 
 Store credentials in any swamp vault and reference them via CEL:
 

@@ -33,6 +33,7 @@ Deno.test("totpCode is stable within a 30s step and rolls at the boundary", asyn
 Deno.test("base32Decode handles padding, lowercase and whitespace", () => {
   assertEquals(base32Decode("MZXW6==="), base32Decode("mzxw6"));
   assertEquals(base32Decode("MZXW 6"), base32Decode("MZXW6"));
+  assertEquals(base32Decode(" MZXW6===\n"), base32Decode("MZXW6"));
 });
 
 Deno.test("base32Decode rejects invalid input", () => {

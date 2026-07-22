@@ -19,7 +19,7 @@ const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
  * @throws If the input is empty or contains a non-base32 character.
  */
 export function base32Decode(input: string): Uint8Array<ArrayBuffer> {
-  const clean = input.toUpperCase().replace(/=+$/, "").replace(/\s+/g, "");
+  const clean = input.toUpperCase().replace(/\s+/g, "").replace(/=+$/, "");
   if (clean.length === 0) throw new Error("Empty base32 secret");
   let bits = 0;
   let value = 0;
