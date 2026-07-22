@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/trip-packing"
+version: "2026.07.22.1"
+description: "Deterministically plans trip packing lists and, after explicit confirmation, creates an idempotent Todoist project."
+repository: https://github.com/meagerfindings/swamp-trip-packing
+
+paths:
+  base: manifest
+
+models:
+  - trip-packing.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.md
+  - trip-packing_test.ts
+  - fixtures/family-road-trip.json
+
+platforms: []
