@@ -843,7 +843,7 @@ function generateNonce(): string {
  */
 export const model = {
   type: "@mgreten/brief-sanitize",
-  version: "2026.07.20.4",
+  version: "2026.07.20.5",
   globalArguments: GlobalArgsSchema,
   resources: {
     sanitized: {
@@ -895,9 +895,17 @@ export const model = {
           );
         }
 
+        // Write to a STABLE data name ("sanitized") — swamp auto-versions each
+        // write, so history is preserved AND a downstream consumer can reference
+        // the newest snapshot deterministically with
+        // `data.latest("<instance>", "sanitized").attributes.text`. A
+        // nonce-suffixed name is unpredictable and can't be referenced from a
+        // workflow step input (that lookup needs the DATA name, not the spec
+        // name). The per-batch nonce still lives INSIDE the payload (the
+        // delimiter + result.nonce); it does not belong in the data name.
         const handle = await context.writeResource(
           "sanitized",
-          `sanitized-${nonce}`,
+          "sanitized",
           result as unknown as Record<string, unknown>,
         );
 
