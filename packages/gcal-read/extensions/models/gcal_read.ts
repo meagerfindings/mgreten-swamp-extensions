@@ -756,7 +756,7 @@ export function sanitizeForInstanceName(value: string): string {
  */
 export const model = {
   type: "@mgreten/gcal-read",
-  version: "2026.07.20.4",
+  version: "2026.07.20.5",
   globalArguments: GlobalArgsSchema,
   resources: {
     events: {
@@ -789,11 +789,15 @@ export const model = {
           count: record.count,
           truncated: record.truncated,
         });
+        // STABLE data name keyed by calendar only (not date/timestamp): swamp
+        // auto-versions each write, so history is preserved per calendar AND a
+        // downstream consumer can reference the newest snapshot deterministically
+        // with `data.latest("<instance>", "events-<calendarId>")`. A date/ts in
+        // the name makes it unpredictable and unreferenceable from a workflow
+        // step input; versioning subsumes the old collision concern.
         const handle = await context.writeResource(
           "events",
-          `events-${
-            sanitizeForInstanceName(record.calendarId)
-          }-${record.date}-${record.ts}`,
+          `events-${sanitizeForInstanceName(record.calendarId)}`,
           record,
           {
             tags: {

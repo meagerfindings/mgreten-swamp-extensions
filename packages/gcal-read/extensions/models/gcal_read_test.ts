@@ -1084,9 +1084,12 @@ Deno.test("list_events writeResource instance name is well-formed for an email-s
 
   // Mirror the model's execute(): the instance name must sanitize the
   // calendarId segment specifically, while the record (resource DATA) keeps
-  // the raw, unsanitized value.
+  // the raw, unsanitized value. The name is STABLE per calendar (no date/ts
+  // suffix) so a downstream workflow can reference it deterministically via
+  // `data.latest("<instance>", "events-<calendarId>")`; swamp auto-versions
+  // each write, so history is preserved without the name itself changing.
   const sanitizedCalendarId = sanitizeForInstanceName(record.calendarId);
-  const instanceName = `events-${sanitizedCalendarId}-${record.date}-${record.ts}`;
+  const instanceName = `events-${sanitizedCalendarId}`;
 
   assertEquals(record.calendarId, "someone@example.com", "raw calendarId stays in the data");
   assertEquals(sanitizedCalendarId, "someone-example-com", "the calendarId segment must be sanitized");
@@ -1094,10 +1097,10 @@ Deno.test("list_events writeResource instance name is well-formed for an email-s
     !sanitizedCalendarId.includes("@") && !sanitizedCalendarId.includes("."),
     "the sanitized calendarId segment must not contain '@' or '.'",
   );
-  assertMatch(
+  assertEquals(
     instanceName,
-    /^events-someone-example-com-2026-07-20-.+$/,
-    "instance name must embed the sanitized calendarId but still be recognizable",
+    "events-someone-example-com",
+    "instance name must be the stable events-<sanitized calendarId> form, with no date/ts suffix",
   );
 
   writeResourceCalls.push({ specName: "events", instanceName, data: record });
