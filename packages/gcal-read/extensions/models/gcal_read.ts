@@ -756,7 +756,7 @@ export function sanitizeForInstanceName(value: string): string {
  */
 export const model = {
   type: "@mgreten/gcal-read",
-  version: "2026.07.20.5",
+  version: "2026.07.20.6",
   globalArguments: GlobalArgsSchema,
   resources: {
     events: {
