@@ -39,6 +39,25 @@ globalArguments:
   site: default
 ```
 
+### MFA-enabled accounts (TOTP)
+
+Accounts with MFA enabled reject password-only logins with
+`MFA_AUTH_REQUIRED`. Set the optional `totpSecret` global argument to the
+account's base32 TOTP seed (the string behind the QR code shown at MFA
+enrollment) and the extension derives the current code in-process at login —
+no authenticator app in the loop, so methods stay runnable unattended:
+
+```yaml
+globalArguments:
+  host: 192.0.2.1
+  username: ${{ vault.get(udm, username) }}
+  password: ${{ vault.get(udm, password) }}
+  totpSecret: ${{ vault.get(udm, totp_secret) }}
+  site: default
+```
+
+Local-only admin accounts bypass SSO MFA — omit `totpSecret` for those.
+
 ## Quickstart
 
 ```bash

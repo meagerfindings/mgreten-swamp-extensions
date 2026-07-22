@@ -3,6 +3,7 @@
 // and UDM controllers use self-signed certificates.
 
 import { z } from "npm:zod@4";
+import { totpCode } from "./totp.ts";
 
 export const UnifiGlobalArgsSchema = z.object({
   host: z.string().describe(
@@ -11,6 +12,10 @@ export const UnifiGlobalArgsSchema = z.object({
   username: z.string().describe("Local admin username"),
   password: z.string().meta({ sensitive: true }).describe(
     "Local admin password (use a vault reference)",
+  ),
+  totpSecret: z.string().meta({ sensitive: true }).optional().describe(
+    "Base32 TOTP secret for MFA-enabled accounts (use a vault reference). " +
+      "Omit for local-only admin accounts, which bypass SSO MFA.",
   ),
   site: z.string().default("default").describe("UniFi site name"),
 });
@@ -94,23 +99,34 @@ async function curl(
 export async function login(args: UnifiGlobalArgs): Promise<UnifiClient> {
   const baseUrl = `https://${args.host}`;
 
+  const payload: Record<string, unknown> = {
+    username: args.username,
+    password: args.password,
+    remember: true,
+  };
+  // Accounts with MFA enabled reject password-only logins with
+  // MFA_AUTH_REQUIRED; deriving the code in-process keeps the models
+  // runnable unattended.
+  if (args.totpSecret) {
+    payload.token = await totpCode(args.totpSecret);
+  }
+
   const loginResp = await curl(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      username: args.username,
-      password: args.password,
-      remember: true,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!loginResp.ok) {
     const text = await loginResp.text();
+    const hint = text.includes("MFA_AUTH_REQUIRED")
+      ? " — this account requires MFA; set `totpSecret`, or use a local-only admin account"
+      : "";
     throw new Error(
-      `UniFi login to ${args.host} failed (${loginResp.status}): ${text}`,
+      `UniFi login to ${args.host} failed (${loginResp.status})${hint}: ${text}`,
     );
   }
 
