@@ -1,5 +1,7 @@
 import { assert, assertEquals, assertMatch, assertRejects } from "jsr:@std/assert@1";
 import {
+  buildBriefItemBody,
+  buildBriefItems,
   buildEventsListUrl,
   buildTokenRequestBody,
   type FetchLike,
@@ -1100,4 +1102,159 @@ Deno.test("list_events writeResource instance name is well-formed for an email-s
 
   writeResourceCalls.push({ specName: "events", instanceName, data: record });
   assertEquals(writeResourceCalls[0].specName, "events");
+});
+
+// ---------------------------------------------------------------------------
+// briefItems — generic {kind,title,body} shape for downstream summarizer
+// consumers (e.g. a daily-brief pipeline), mirroring the gmail-read reader's
+// own briefItems convention.
+// ---------------------------------------------------------------------------
+
+Deno.test("buildBriefItemBody: all-day event reads 'All day - <title>'", () => {
+  const body = buildBriefItemBody({
+    title: "Company Holiday",
+    start: "2026-07-20",
+    end: "2026-07-21",
+    allDay: true,
+  });
+  assertEquals(body, "All day - Company Holiday");
+});
+
+Deno.test("buildBriefItemBody: timed event reads '<start> to <end> - <title>'", () => {
+  const body = buildBriefItemBody({
+    title: "Standup",
+    start: "2026-07-20T09:00:00-06:00",
+    end: "2026-07-20T09:15:00-06:00",
+    allDay: false,
+  });
+  assertEquals(
+    body,
+    "2026-07-20T09:00:00-06:00 to 2026-07-20T09:15:00-06:00 - Standup",
+  );
+});
+
+Deno.test("buildBriefItemBody: missing title/start/end fields yield empty strings, never throws", () => {
+  const bodyAllDay = buildBriefItemBody({ allDay: true });
+  assertEquals(bodyAllDay, "All day - ");
+
+  const bodyTimed = buildBriefItemBody({ allDay: false });
+  assertEquals(bodyTimed, " to  - ");
+
+  // Completely empty input (no allDay either) must still resolve, treating
+  // a missing/undefined allDay as the non-all-day branch.
+  const bodyEmpty = buildBriefItemBody({});
+  assertEquals(bodyEmpty, " to  - ");
+});
+
+Deno.test("buildBriefItems: one entry per event, kind is always 'event', title maps through", () => {
+  const events = parseEventsResponse({
+    items: [
+      {
+        id: "evt-1",
+        summary: "Standup",
+        start: { dateTime: "2026-07-20T09:00:00-06:00" },
+        end: { dateTime: "2026-07-20T09:15:00-06:00" },
+      },
+      {
+        id: "evt-2",
+        summary: "Company Holiday",
+        start: { date: "2026-07-20" },
+        end: { date: "2026-07-21" },
+      },
+    ],
+  });
+
+  const briefItems = buildBriefItems(events);
+
+  assertEquals(briefItems.length, events.length);
+  assertEquals(briefItems[0], {
+    kind: "event",
+    title: "Standup",
+    body: "2026-07-20T09:00:00-06:00 to 2026-07-20T09:15:00-06:00 - Standup",
+  });
+  assertEquals(briefItems[1], {
+    kind: "event",
+    title: "Company Holiday",
+    body: "All day - Company Holiday",
+  });
+  assert(briefItems.every((b) => b.kind === "event"));
+});
+
+Deno.test("buildBriefItems: empty events array yields empty briefItems", () => {
+  assertEquals(buildBriefItems([]), []);
+});
+
+Deno.test("runListEvents: result.briefItems has one entry per item, matching length and content", async () => {
+  const fetchImpl: FetchLike = (url) => {
+    if (url === OAUTH_TOKEN_URL) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ access_token: "at-brief" })),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({
+            items: [
+              {
+                id: "evt-a",
+                summary: "1:1",
+                start: { dateTime: "2026-07-20T10:00:00-06:00" },
+                end: { dateTime: "2026-07-20T10:30:00-06:00" },
+              },
+              {
+                id: "evt-b",
+                summary: "Vacation",
+                start: { date: "2026-07-20" },
+                end: { date: "2026-07-22" },
+              },
+            ],
+          }),
+        ),
+    });
+  };
+
+  const now = new Date(2026, 6, 20, 8, 0, 0).getTime();
+  const result = await runListEvents(fetchImpl, FULL_GLOBAL_ARGS, { date: "2026-07-20" }, now);
+
+  assertEquals(result.briefItems.length, result.items.length);
+  assertEquals(result.briefItems, [
+    {
+      kind: "event",
+      title: "1:1",
+      body: "2026-07-20T10:00:00-06:00 to 2026-07-20T10:30:00-06:00 - 1:1",
+    },
+    {
+      kind: "event",
+      title: "Vacation",
+      body: "All day - Vacation",
+    },
+  ]);
+});
+
+Deno.test("runListEvents: empty day yields briefItems [] alongside items []", async () => {
+  const fetchImpl: FetchLike = (url) => {
+    if (url === OAUTH_TOKEN_URL) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ access_token: "at-brief-empty" })),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ items: [] })),
+    });
+  };
+
+  const now = new Date(2026, 6, 20, 12, 0, 0).getTime();
+  const result = await runListEvents(fetchImpl, FULL_GLOBAL_ARGS, {}, now);
+
+  assertEquals(result.items, []);
+  assertEquals(result.briefItems, []);
 });

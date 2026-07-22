@@ -360,6 +360,51 @@ export type CalendarEvent = {
   allDay: boolean;
 };
 
+/**
+ * One generic "summarize this" item, derived from a {@link CalendarEvent}.
+ * `kind`/`title`/`body` mirrors the same convention the gmail-read reader
+ * uses for its own `briefItems` — a downstream summarizer consumes a uniform
+ * `{kind, title, body}` shape regardless of which reader produced it, so it
+ * never has to special-case calendar events vs. emails vs. any other source.
+ */
+export type BriefItem = {
+  kind: string;
+  title: string;
+  body: string;
+};
+
+/**
+ * Build the one-line `body` for a {@link BriefItem} from a flattened
+ * {@link CalendarEvent}. All-day events read "All day - <title>"; timed
+ * events read "<start> to <end> - <title>". Every part is coerced to a
+ * string and missing/undefined fields fall back to "" rather than throwing
+ * or embedding the literal string "undefined" — deterministic and
+ * null-safe by construction, since `CalendarEvent`'s own fields are already
+ * defaulted to "" in {@link parseEventsResponse}.
+ */
+export function buildBriefItemBody(event: Partial<CalendarEvent>): string {
+  const title = String(event.title ?? "");
+  if (event.allDay === true) {
+    return `All day - ${title}`;
+  }
+  const start = String(event.start ?? "");
+  const end = String(event.end ?? "");
+  return `${start} to ${end} - ${title}`;
+}
+
+/**
+ * Derive the generic `briefItems` array from a day's flattened
+ * {@link CalendarEvent}s — one entry per event, same length and order as
+ * `items`. `kind` is always the literal `"event"`.
+ */
+export function buildBriefItems(events: CalendarEvent[]): BriefItem[] {
+  return events.map((event) => ({
+    kind: "event",
+    title: String(event.title ?? ""),
+    body: buildBriefItemBody(event),
+  }));
+}
+
 /** A raw event row as returned by the Google Calendar v3 `events.list` API. */
 type GCalEventRow = {
   id?: string;
@@ -579,6 +624,16 @@ const ListEventsResultSchema = z.object({
     end: z.string(),
     allDay: z.boolean(),
   })),
+  briefItems: z.array(z.object({
+    kind: z.string(),
+    title: z.string(),
+    body: z.string(),
+  })).describe(
+    "Generic {kind,title,body} shape derived from `items`, one entry per " +
+      'event (kind is always "event") — for a downstream summarizer that ' +
+      "wants a uniform shape across readers (e.g. a daily-brief pipeline) " +
+      "without CEL-in-YAML reshaping (map literals break YAML).",
+  ),
 });
 // Intentionally NOT .passthrough(): `runListEvents` constructs this object's
 // fields explicitly (see its return statement) and never attaches extra
@@ -674,6 +729,7 @@ export async function runListEvents(
     count: items.length,
     truncated,
     items,
+    briefItems: buildBriefItems(items),
   };
 }
 
@@ -700,7 +756,7 @@ export function sanitizeForInstanceName(value: string): string {
  */
 export const model = {
   type: "@mgreten/gcal-read",
-  version: "2026.07.20.3",
+  version: "2026.07.20.4",
   globalArguments: GlobalArgsSchema,
   resources: {
     events: {
