@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/brief-sanitize"
-version: "2026.07.20.5"
+version: "2026.07.20.6"
 description: >
   Sanitizer for untrusted text (email bodies, calendar invites, scraped
   pages, third-party payloads) before it is fed to an LLM prompt. Strips

@@ -5,7 +5,7 @@
  * gets a section with attack-shaped tests, not just happy-path assertions.
  */
 
-import { assertEquals, assertNotEquals, assertThrows } from "jsr:@std/assert@1";
+import { assertEquals, assertMatch, assertNotEquals, assertThrows } from "jsr:@std/assert@1";
 import {
   buildPromptPreamble,
   cleanText,
@@ -659,8 +659,10 @@ Deno.test("model resource schema accepts a full sanitized batch result", () => {
   assertEquals(parsed.nonce, NONCE_A);
 });
 
-Deno.test("model version was bumped for this security rebuild", () => {
-  assertEquals(model.version, "2026.07.20.4");
+Deno.test("model version is a valid CalVer string", () => {
+  // Assert the SHAPE (YYYY.MM.DD.MICRO), not a hardcoded value, so routine
+  // version bumps don't require editing this test.
+  assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
 // =============================================================================

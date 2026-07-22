@@ -843,7 +843,7 @@ function generateNonce(): string {
  */
 export const model = {
   type: "@mgreten/brief-sanitize",
-  version: "2026.07.20.5",
+  version: "2026.07.20.6",
   globalArguments: GlobalArgsSchema,
   resources: {
     sanitized: {
