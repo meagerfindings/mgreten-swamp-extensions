@@ -1,0 +1,16 @@
+manifestVersion: 1
+name: "@mgreten/trip-expense-tracker"
+version: "2026.07.22.1"
+description: "Deterministic trip expense accounting with append-only evidence, separate meal-budget and reimbursement tracking, dashboards, and controlled archival."
+repository: "https://github.com/meagerfindings/swamp-trip-expense-tracker"
+paths:
+  base: manifest
+models:
+  - extensions/models/trip_expense_tracker.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+  - extensions/models/trip_expense_tracker_test.ts
+platforms:
+  - linux-x86_64
+  - darwin-aarch64
