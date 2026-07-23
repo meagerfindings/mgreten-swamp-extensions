@@ -92,6 +92,7 @@ Deno.test("retry reconciles a marked partial project without creating a duplicat
         id: `section-${++nextId}`,
         name: body.name,
         project_id: body.project_id,
+        url: `https://app.todoist.com/app/section/section-${nextId}`,
       };
       sections.push(section);
       return Response.json(section);
@@ -102,6 +103,7 @@ Deno.test("retry reconciles a marked partial project without creating a duplicat
         content: body.content,
         project_id: body.project_id,
         section_id: body.section_id,
+        url: `https://app.todoist.com/app/task/task-${nextId}`,
       };
       tasks.push(task);
       return Response.json(task);
@@ -124,7 +126,7 @@ Deno.test("retry reconciles a marked partial project without creating a duplicat
       },
     };
     await model.methods.createProject.execute({
-      ...familyRoadTrip,
+      ...TripInputSchema.parse(familyRoadTrip),
       confirmation: familyRoadTrip.projectName,
     }, context as never);
     assertEquals(projectPosts, []);

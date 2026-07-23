@@ -259,6 +259,18 @@ type ReconciledProject = {
   sections: TodoistEntity[];
   tasks: TodoistEntity[];
 };
+type TripInput = z.infer<typeof TripInputSchema>;
+type CreateProjectInput = TripInput & { confirmation: string };
+interface ModelContext {
+  globalArgs: z.infer<typeof GlobalArgsSchema>;
+  methodArgs?: unknown;
+  logger: { info: (message: string, values: Record<string, unknown>) => void };
+  writeResource: (
+    resource: string,
+    name: string,
+    value: unknown,
+  ) => Promise<Record<string, unknown>>;
+}
 
 /** Locate an existing project only by its stable, non-task marker section. */
 async function findExistingProject(
@@ -365,7 +377,8 @@ function resourceValue(
       url: section.url ?? sectionUrl(section.id),
     })),
     tasks: state.tasks.filter((task) =>
-      task.section_id !== null && desiredSectionIds.has(task.section_id)
+      typeof task.section_id === "string" &&
+      desiredSectionIds.has(task.section_id)
     ).map((task) => ({
       id: task.id,
       content: task.content ?? "",
@@ -395,7 +408,7 @@ export const model = {
       description:
         "Require an exact project-name confirmation before Todoist mutation.",
       labels: ["policy"],
-      execute: (context) => {
+      execute: (context: ModelContext) => {
         const args = context.methodArgs as {
           projectName?: string;
           confirmation?: string;
@@ -414,7 +427,7 @@ export const model = {
       description:
         "Generate and persist a deterministic, read-only categorized packing plan.",
       arguments: TripInputSchema,
-      execute: async (args, context) => {
+      execute: async (args: TripInput, context: ModelContext) => {
         const plan = buildPlan(args);
         context.logger.info(
           "Generated read-only trip packing preview for {projectName}",
@@ -443,7 +456,7 @@ export const model = {
       description:
         "Create or reconcile a marked Todoist project, sections, and tasks only after exact confirmation.",
       arguments: TripInputSchema.extend({ confirmation: z.string().max(120) }),
-      execute: async (args, context) => {
+      execute: async (args: CreateProjectInput, context: ModelContext) => {
         const input = TripInputSchema.parse(args);
         const confirmation = z.string().max(120).parse(
           (args as { confirmation: unknown }).confirmation,
