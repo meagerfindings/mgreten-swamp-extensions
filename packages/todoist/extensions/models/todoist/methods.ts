@@ -32,7 +32,9 @@ export interface DataHandle {
 /** Swamp method execution context. */
 export interface MethodContext {
   globalArgs: GlobalArgs;
-  logger: { info: (msg: string) => void };
+  logger: {
+    info: (msg: string, properties?: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     instance: string,
@@ -43,6 +45,37 @@ export interface MethodContext {
 /** Return type for all method implementations. */
 export interface MethodResult {
   dataHandles: DataHandle[];
+}
+
+const WRITE_CONCURRENCY = 10;
+
+async function writeInBatches<T>(
+  items: T[],
+  write: (item: T) => Promise<DataHandle>,
+): Promise<DataHandle[]> {
+  const handles: DataHandle[] = [];
+  for (let index = 0; index < items.length; index += WRITE_CONCURRENCY) {
+    const settled = await Promise.allSettled(
+      items.slice(index, index + WRITE_CONCURRENCY).map((item) =>
+        Promise.resolve().then(() => write(item))
+      ),
+    );
+    const rejected = settled.find((result): result is PromiseRejectedResult =>
+      result.status === "rejected"
+    );
+    if (rejected) throw rejected.reason;
+    handles.push(
+      ...settled.map((result) =>
+        (result as PromiseFulfilledResult<DataHandle>).value
+      ),
+    );
+  }
+  return handles;
+}
+
+function logValue(value: string, context: MethodContext): string {
+  const token = context.globalArgs.apiToken;
+  return token ? value.split(token).join("[REDACTED]") : value;
 }
 
 function taskResourceData(task: TaskData): Record<string, unknown> {
@@ -88,16 +121,18 @@ export async function syncTasks(
   context: MethodContext,
   args: { filter?: string },
 ): Promise<MethodResult> {
-  context.logger.info(
-    `Syncing tasks${args.filter ? ` (filter: ${args.filter})` : ""}`,
-  );
+  context.logger.info("Syncing Todoist tasks", {
+    filtered: args.filter !== undefined,
+  });
   const tasks = await client.getTasks(args.filter);
-  context.logger.info(`Found ${tasks.length} tasks`);
-  const handles = await Promise.all(
-    tasks.map((task) =>
-      context.writeResource("task", task.id, taskResourceData(task))
-    ),
+  const handles = await writeInBatches(
+    tasks,
+    (task) => context.writeResource("task", task.id, taskResourceData(task)),
   );
+  context.logger.info("Synced {taskCount} Todoist tasks", {
+    taskCount: handles.length,
+    filtered: args.filter !== undefined,
+  });
   return { dataHandles: handles };
 }
 
@@ -106,18 +141,20 @@ export async function syncProjects(
   client: TodoistClient,
   context: MethodContext,
 ): Promise<MethodResult> {
-  context.logger.info("Syncing projects");
+  context.logger.info("Syncing Todoist projects");
   const projects = await client.getProjects();
-  context.logger.info(`Found ${projects.length} projects`);
-  const handles = await Promise.all(
-    projects.map((project) =>
+  const handles = await writeInBatches(
+    projects,
+    (project) =>
       context.writeResource(
         "project",
         project.id,
         projectResourceData(project),
-      )
-    ),
+      ),
   );
+  context.logger.info("Synced {projectCount} Todoist projects", {
+    projectCount: handles.length,
+  });
   return { dataHandles: handles };
 }
 
@@ -144,13 +181,19 @@ export async function createTask(
   }
   if (args.priority !== undefined) input.priority = args.priority;
   if (args.dueString !== undefined) input.dueString = args.dueString;
-  context.logger.info(`Creating task: ${args.content}`);
+  context.logger.info("Creating Todoist task", {
+    projectId: logValue(input.projectId ?? "inbox", context),
+  });
   const task = await client.createTask(input);
   const handle = await context.writeResource(
     "task",
     task.id,
     taskResourceData(task),
   );
+  context.logger.info("Created Todoist task {taskId}", {
+    taskId: logValue(task.id, context),
+    projectId: logValue(task.projectId, context),
+  });
   return { dataHandles: [handle] };
 }
 
@@ -166,7 +209,9 @@ export async function completeTask(
   context: MethodContext,
   args: { taskId: string },
 ): Promise<MethodResult> {
-  context.logger.info(`Completing task ${args.taskId}`);
+  context.logger.info("Completing Todoist task {taskId}", {
+    taskId: logValue(args.taskId, context),
+  });
   const task = await client.getTask(args.taskId);
   await client.closeTask(args.taskId);
   const completedTask = task.isRecurring
@@ -177,6 +222,10 @@ export async function completeTask(
     completedTask.id,
     taskResourceData(completedTask),
   );
+  context.logger.info("Completed Todoist task {taskId}", {
+    taskId: logValue(completedTask.id, context),
+    recurring: task.isRecurring,
+  });
   return { dataHandles: [handle] };
 }
 
@@ -201,13 +250,18 @@ export async function updateTask(
   }
   if (args.priority !== undefined) input.priority = args.priority;
   if (args.dueString !== undefined) input.dueString = args.dueString;
-  context.logger.info(`Updating task ${args.taskId}`);
+  context.logger.info("Updating Todoist task {taskId}", {
+    taskId: logValue(args.taskId, context),
+  });
   const task = await client.updateTask(args.taskId, input);
   const handle = await context.writeResource(
     "task",
     task.id,
     taskResourceData(task),
   );
+  context.logger.info("Updated Todoist task {taskId}", {
+    taskId: logValue(task.id, context),
+  });
   return { dataHandles: [handle] };
 }
 
@@ -217,7 +271,12 @@ export async function deleteTask(
   context: MethodContext,
   args: { taskId: string },
 ): Promise<MethodResult> {
-  context.logger.info(`Deleting task ${args.taskId}`);
+  context.logger.info("Deleting Todoist task {taskId}", {
+    taskId: logValue(args.taskId, context),
+  });
   await client.deleteTask(args.taskId);
+  context.logger.info("Todoist task {taskId} is absent", {
+    taskId: logValue(args.taskId, context),
+  });
   return { dataHandles: [] };
 }

@@ -6,7 +6,8 @@
  * making them available for CEL expressions, data queries, and workflow
  * chaining.
  *
- * No external npm dependencies — uses the runtime's built-in `fetch`.
+ * Uses the runtime's built-in `fetch` and Zod response validation without a
+ * service-specific SDK.
  *
  * @module
  */
@@ -32,6 +33,11 @@ const GlobalArgsSchema = z.object({
     .optional()
     .describe("Default project ID used when no projectId is specified"),
 });
+
+const TodoistIdSchema = z.string().regex(
+  /^[A-Za-z0-9_-]+$/,
+  "Todoist IDs may contain letters, numbers, hyphens, and underscores",
+);
 
 const TaskSchema = z.object({
   id: z.string(),
@@ -75,17 +81,25 @@ function getClient(
 /**
  * Todoist task management model for swamp.
  *
- * Provides 6 methods for managing tasks and projects via Todoist API v1.
+ * Provides 6 methods for task management and project sync via Todoist API v1.
  * Supports Todoist's native filter syntax for task queries and
  * natural language due dates for task creation and updates.
  */
 export const model = {
   type: "@mgreten/todoist",
-  version: "2026.07.23.1",
+  version: "2026.07.24.1",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
       description: "Migrate Todoist transport to API v1; no argument changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.07.24.1",
+      description:
+        "Harden API transport and synchronization; no argument changes",
       upgradeAttributes: (
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,
@@ -158,6 +172,7 @@ export const model = {
           .describe("Comma-separated label names"),
         priority: z
           .number()
+          .int()
           .min(1)
           .max(4)
           .optional()
@@ -188,7 +203,7 @@ export const model = {
     completeTask: {
       description: "Mark a task as completed",
       arguments: z.object({
-        taskId: z.string().describe("Todoist task ID"),
+        taskId: TodoistIdSchema.describe("Todoist task ID"),
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         completeTask(
@@ -201,7 +216,7 @@ export const model = {
     updateTask: {
       description: "Update fields on an existing task",
       arguments: z.object({
-        taskId: z.string().describe("Todoist task ID"),
+        taskId: TodoistIdSchema.describe("Todoist task ID"),
         content: z.string().optional().describe("New task content"),
         description: z.string().optional().describe("New description"),
         labels: z
@@ -210,6 +225,7 @@ export const model = {
           .describe("Comma-separated label names (replaces existing labels)"),
         priority: z
           .number()
+          .int()
           .min(1)
           .max(4)
           .optional()
@@ -237,7 +253,7 @@ export const model = {
     deleteTask: {
       description: "Permanently delete a task",
       arguments: z.object({
-        taskId: z.string().describe("Todoist task ID"),
+        taskId: TodoistIdSchema.describe("Todoist task ID"),
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         deleteTask(

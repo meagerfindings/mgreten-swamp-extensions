@@ -125,7 +125,7 @@ Deno.test("client uses v1 update, close, and delete contracts", async () => {
   globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
     requests.push({ url: String(input), init });
     if (init?.method === "DELETE") {
-      return Promise.resolve(new Response(null, { status: 204 }));
+      return Promise.resolve(Response.json(null));
     }
     if (String(input).endsWith("/close")) {
       return Promise.resolve(Response.json(null));
@@ -228,30 +228,589 @@ Deno.test("completeTask preserves regular and recurring task state", async () =>
   }
 });
 
-Deno.test("client surfaces API status and response details", async () => {
+Deno.test("client surfaces redacted API status and response details", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () =>
     Promise.resolve(
-      new Response('{"error":"rate limited"}', {
-        status: 429,
+      new Response('{"error":"secret-token forbidden"}', {
+        status: 403,
         headers: { "Content-Type": "application/json" },
       }),
     );
 
   try {
-    const client = buildTodoistClient("token");
+    const client = buildTodoistClient("secret-token");
     let message = "";
     try {
       await client.getTask("task-id");
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);
     }
-    assert(message.includes("429"), "HTTP status missing from error");
+    assert(message.includes("403"), "HTTP status missing from error");
     assert(
-      message.includes("rate limited"),
+      message.includes("forbidden"),
       "response detail missing from error",
+    );
+    assert(
+      !message.includes("secret-token"),
+      "token leaked from response body",
+    );
+    assert(message.includes("[REDACTED]"), "token was not visibly redacted");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("client rejects repeated pagination cursors", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.fetch = () => {
+    const cursors = ["cursor-a", "cursor-b", "cursor-a"];
+    const nextCursor = cursors[requestCount];
+    requestCount += 1;
+    return Promise.resolve(Response.json({
+      results: [],
+      next_cursor: nextCursor,
+    }));
+  };
+
+  try {
+    let message = "";
+    try {
+      await buildTodoistClient("token").getTasks();
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(requestCount === 3, "multi-node cursor cycle was not detected");
+    assert(
+      message.includes("repeated pagination cursor"),
+      "cursor-cycle error was not actionable",
     );
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+Deno.test("client accepts valid nullable due fields and rejects incomplete due data", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json(rawTask({
+        due: {
+          string: "tomorrow",
+          date: "2026-07-25",
+          is_recurring: false,
+          datetime: null,
+          timezone: null,
+        },
+      })));
+    const task = await buildTodoistClient("token").getTask("task-id");
+    assert(task.dueDate === "2026-07-25", "valid due date was rejected");
+    assert(task.dueDatetime === "", "nullable datetime was not normalized");
+
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json(rawTask({
+        due: { date: "2026-07-25", is_recurring: false },
+      })));
+    let message = "";
+    try {
+      await buildTodoistClient("token").getTask("task-id");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(message.includes("due.string"), "incomplete due data was accepted");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("client accepts workspace projects without personal-project fields", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({
+      results: [{
+        id: "workspace-project",
+        name: "Workspace project",
+        color: "blue",
+        child_order: 2,
+        is_shared: true,
+        is_favorite: false,
+      }],
+      next_cursor: null,
+    }));
+
+  try {
+    const projects = await buildTodoistClient("token").getProjects();
+    assert(projects.length === 1, "workspace project was not returned");
+    assert(projects[0].parentId === "", "missing parent was not normalized");
+    assert(!projects[0].isInboxProject, "workspace project marked as inbox");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("client validates Todoist response fields", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json(rawTask({ priority: "urgent" })));
+
+  try {
+    let message = "";
+    try {
+      await buildTodoistClient("secret-token").getTask("task-id");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(
+      message.includes("GET /tasks/task-id"),
+      "endpoint missing from error",
+    );
+    assert(message.includes("priority"), "malformed field missing from error");
+    assert(
+      !message.includes("secret-token"),
+      "API token leaked into validation error",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("client distinguishes request timeouts without leaking tokens", async () => {
+  const originalFetch = globalThis.fetch;
+  let signalWasSet = false;
+  globalThis.fetch = (
+    _input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    signalWasSet = init?.signal instanceof AbortSignal;
+    return Promise.reject(
+      new DOMException("request timed out", "TimeoutError"),
+    );
+  };
+
+  try {
+    let message = "";
+    try {
+      await buildTodoistClient("secret-token").getTask("task-id");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(signalWasSet, "request did not include an abort signal");
+    assert(
+      message.includes("timed out after 15000ms"),
+      "timeout not identified",
+    );
+    assert(!message.includes("secret-token"), "API token leaked into error");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("client classifies body timeouts and network failures", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () =>
+          Promise.reject(new DOMException("body timed out", "TimeoutError")),
+      } as Response);
+    let message = "";
+    try {
+      await buildTodoistClient("token").getTask("task-id");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(
+      message.includes("timed out after 15000ms"),
+      "body timeout mislabeled",
+    );
+    assert(
+      !message.includes("invalid JSON"),
+      "body timeout labeled invalid JSON",
+    );
+
+    globalThis.fetch = () =>
+      Promise.reject(new TypeError("secret-token connection reset"));
+    message = "";
+    try {
+      await buildTodoistClient("secret-token").getTask("task-id");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(
+      message.includes("network request failed"),
+      "network error mislabeled",
+    );
+    assert(message.includes("connection reset"), "network detail omitted");
+    assert(
+      !message.includes("secret-token"),
+      "token leaked from network error",
+    );
+
+    globalThis.fetch = () =>
+      Promise.resolve({
+        ok: false,
+        status: 503,
+        headers: new Headers(),
+        text: () =>
+          Promise.reject(new DOMException("body timed out", "TimeoutError")),
+      } as Response);
+    message = "";
+    try {
+      await buildTodoistClient("token").getTask("task-id");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(
+      message.includes("timed out after 15000ms"),
+      "error-body timeout mislabeled",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("client rejects malformed list envelopes", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({ next_cursor: null }));
+
+  try {
+    let message = "";
+    try {
+      await buildTodoistClient("token").getTasks();
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(
+      message.includes("results"),
+      "missing results envelope was accepted",
+    );
+    assert(message.includes("GET /tasks"), "list endpoint missing from error");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("delete is idempotent only for already-absent tasks", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("not found", { status: 404 }));
+    await buildTodoistClient("token").deleteTask("missing-task");
+
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("service unavailable", { status: 503 }));
+    let message = "";
+    try {
+      await buildTodoistClient("token").deleteTask("existing-task");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(message.includes("503"), "non-404 delete error was swallowed");
+    assert(
+      message.includes("service unavailable"),
+      "delete failure omitted API detail",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("GET retries honor Retry-After without retrying mutations", async () => {
+  const originalFetch = globalThis.fetch;
+  let getRequests = 0;
+  globalThis.fetch = () => {
+    getRequests += 1;
+    return Promise.resolve(
+      getRequests === 1
+        ? new Response("rate limited", {
+          status: 429,
+          headers: { "Retry-After": "0" },
+        })
+        : Response.json(rawTask()),
+    );
+  };
+
+  try {
+    const task = await buildTodoistClient("token").getTask("task-id");
+    assert(task.id === "task-id", "GET did not recover after rate limit");
+    assert(getRequests === 2, "GET did not use bounded Retry-After retry");
+
+    let exhaustedRequests = 0;
+    globalThis.fetch = () => {
+      exhaustedRequests += 1;
+      return Promise.resolve(
+        new Response("unavailable", {
+          status: 503,
+          headers: { "Retry-After": "0" },
+        }),
+      );
+    };
+    let message = "";
+    try {
+      await buildTodoistClient("token").getTask("task-id");
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    assert(exhaustedRequests === 3, "GET retries were not bounded");
+    assert(message.includes("503"), "exhausted GET omitted final status");
+
+    let mutationRequests = 0;
+    globalThis.fetch = () => {
+      mutationRequests += 1;
+      return Promise.resolve(new Response("unavailable", { status: 503 }));
+    };
+    try {
+      await buildTodoistClient("token").createTask({ content: "Test" });
+    } catch { /* expected */ }
+    assert(mutationRequests === 1, "mutating request was unsafely retried");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("client rejects unsafe resource IDs before fetch", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.fetch = () => {
+    requestCount += 1;
+    return Promise.resolve(Response.json(rawTask()));
+  };
+
+  try {
+    const client = buildTodoistClient("token");
+    const invalidIds = ["..", "../projects/id", "/", "?", "#", "%2e%2e"];
+    for (const id of invalidIds) {
+      const operations = [
+        () => client.getTask(id),
+        () => client.updateTask(id, { content: "Updated" }),
+        () => client.closeTask(id),
+        () => client.reopenTask(id),
+        () => client.deleteTask(id),
+        () => client.getProject(id),
+      ];
+      for (const operation of operations) {
+        let message = "";
+        try {
+          await operation();
+        } catch (error) {
+          message = error instanceof Error ? error.message : String(error);
+        }
+        assert(
+          message.includes("Invalid Todoist"),
+          `unsafe ID accepted: ${id}`,
+        );
+      }
+    }
+    assert(requestCount === 0, "unsafe ID reached fetch");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("method logs redact tokens embedded in identifiers", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.resolve(Response.json(null));
+  const logs: Array<{
+    message: string;
+    properties?: Record<string, unknown>;
+  }> = [];
+
+  try {
+    await model.methods.deleteTask.execute({ taskId: "secrettoken" }, {
+      globalArgs: { apiToken: "secrettoken" },
+      logger: {
+        info: (
+          message: string,
+          properties?: Record<string, unknown>,
+        ): void => {
+          logs.push({ message, properties });
+        },
+      },
+      writeResource: () => Promise.reject(new Error("unexpected write")),
+    });
+    const serialized = JSON.stringify(logs);
+    assert(!serialized.includes("secrettoken"), "identifier leaked API token");
+    assert(serialized.includes("[REDACTED]"), "identifier was not redacted");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("public schemas reject unsafe IDs and fractional priorities", () => {
+  assert(
+    !model.methods.deleteTask.arguments.safeParse({ taskId: "../projects/id" })
+      .success,
+    "public delete schema accepted an unsafe task ID",
+  );
+  assert(
+    !model.methods.createTask.arguments.safeParse({
+      content: "Test",
+      priority: 1.5,
+    }).success,
+    "create schema accepted fractional priority",
+  );
+  assert(
+    !model.methods.updateTask.arguments.safeParse({
+      taskId: "taskid",
+      priority: 2.5,
+    }).success,
+    "update schema accepted fractional priority",
+  );
+});
+
+Deno.test("task sync bounds writes, preserves order, and logs completion", async () => {
+  const originalFetch = globalThis.fetch;
+  const taskCount = 25;
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({
+      results: Array.from(
+        { length: taskCount },
+        (_, index) => rawTask({ id: `task-${index}` }),
+      ),
+      next_cursor: null,
+    }));
+
+  let activeWrites = 0;
+  let maxActiveWrites = 0;
+  const logs: Array<{
+    message: string;
+    properties?: Record<string, unknown>;
+  }> = [];
+
+  try {
+    const sensitiveFilter = "#Confidential assigned to: Alice";
+    const result = await model.methods.syncTasks.execute({
+      filter: sensitiveFilter,
+    }, {
+      globalArgs: { apiToken: "secret-token" },
+      logger: {
+        info: (
+          message: string,
+          properties?: Record<string, unknown>,
+        ): void => {
+          logs.push({ message, properties });
+        },
+      },
+      writeResource: async (
+        spec: string,
+        instance: string,
+        data: Record<string, unknown>,
+      ) => {
+        activeWrites += 1;
+        maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        activeWrites -= 1;
+        return { spec, instance, data };
+      },
+    });
+
+    assert(maxActiveWrites === 10, "writes did not use the concurrency bound");
+    assert(
+      result.dataHandles.length === taskCount,
+      "not all tasks were written",
+    );
+    assert(
+      result.dataHandles.every((handle, index) =>
+        handle.instance === `task-${index}`
+      ),
+      "bounded writes changed result order",
+    );
+    assert(logs.length === 2, "sync did not log entry and completion");
+    assert(logs[0].message === "Syncing Todoist tasks", "wrong entry log");
+    assert(
+      logs[1].properties?.taskCount === taskCount,
+      "completion log omitted task count",
+    );
+    assert(
+      !JSON.stringify(logs).includes("secret-token"),
+      "API token leaked into logs",
+    );
+    assert(
+      !JSON.stringify(logs).includes(sensitiveFilter),
+      "raw task filter leaked into logs",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("failed write batches settle before rejecting and stop later batches", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({
+      results: Array.from(
+        { length: 25 },
+        (_, index) => rawTask({ id: `task-${index}` }),
+      ),
+      next_cursor: null,
+    }));
+
+  const started: string[] = [];
+  let settledCount = 0;
+  let activeWrites = 0;
+  let maxActiveWrites = 0;
+
+  try {
+    let message = "";
+    try {
+      await model.methods.syncTasks.execute({}, {
+        globalArgs: { apiToken: "token" },
+        logger: { info: (_message: string): void => {} },
+        writeResource: (
+          spec: string,
+          instance: string,
+          data: Record<string, unknown>,
+        ) => {
+          started.push(instance);
+          const index = Number(instance.slice("task-".length));
+          if (index === 2) {
+            settledCount += 1;
+            throw new Error(`write failed for ${instance}`);
+          }
+          return (async () => {
+            activeWrites += 1;
+            maxActiveWrites = Math.max(maxActiveWrites, activeWrites);
+            await new Promise((resolve) =>
+              setTimeout(resolve, index === 5 ? 0 : 2)
+            );
+            activeWrites -= 1;
+            settledCount += 1;
+            if (index === 5) {
+              throw new Error(`write failed for ${instance}`);
+            }
+            return { spec, instance, data };
+          })();
+        },
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    assert(maxActiveWrites <= 10, "failed batch exceeded concurrency bound");
+    assert(started.length === 10, "a later write batch started after failure");
+    assert(
+      settledCount === 10,
+      "method rejected before started writes settled",
+    );
+    assert(activeWrites === 0, "writes remained active after method rejection");
+    assert(
+      message.includes("task-2"),
+      "failure was not selected in deterministic input order",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("model upgrade chain reaches the hardened version", () => {
+  assert(model.version === "2026.07.24.1", "model version was not bumped");
+  assert(
+    model.upgrades.some((upgrade) => upgrade.toVersion === model.version),
+    "upgrade chain does not reach the model version",
+  );
 });
