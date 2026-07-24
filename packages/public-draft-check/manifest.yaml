@@ -1,0 +1,15 @@
+manifestVersion: 1
+name: "@mgreten/public-safe-draft"
+version: "2026.07.24.1"
+description: "Deterministic, caller-supplied public-safe reflective drafting with common operational-detail redaction and a mandatory manual review checklist."
+repository: "https://github.com/meagerfindings/swamp-public-safe-draft"
+models:
+  - public_safe_draft.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+  - extensions/models/public_safe_draft_test.ts
+labels:
+  - privacy
+  - writing
+  - drafting
