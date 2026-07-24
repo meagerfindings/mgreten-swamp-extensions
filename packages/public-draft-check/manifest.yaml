@@ -1,15 +1,15 @@
 manifestVersion: 1
-name: "@mgreten/public-safe-draft"
+name: "@mgreten/public-draft-check"
 version: "2026.07.24.1"
-description: "Deterministic, caller-supplied public-safe reflective drafting with common operational-detail redaction and a mandatory manual review checklist."
-repository: "https://github.com/meagerfindings/swamp-public-safe-draft"
+description: "Deterministic disclosure checks for candidate public drafts, producing non-echoing blocker and review findings for agent and human review."
+repository: "https://github.com/meagerfindings/swamp-public-draft-check"
 models:
-  - public_safe_draft.ts
+  - public_draft_check.ts
 additionalFiles:
   - README.md
   - LICENSE.md
-  - extensions/models/public_safe_draft_test.ts
+  - extensions/models/public_draft_check_test.ts
 labels:
   - privacy
-  - writing
-  - drafting
+  - guardrail
+  - review
