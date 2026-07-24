@@ -271,12 +271,17 @@ function bucketRank(value: string | null): number {
     : 3;
 }
 async function identityFor(event: NormalizedSafetyEvent): Promise<string> {
-  const id = event.source === "nws"
-    ? `${event.category}:${
-      safeDisplayHeadline(event.source, event.category, event.headline)
-    }`
-    : event.sourceEventId ??
-      `${event.category}:${redactHeadline(event.headline)}`;
+  // NWS can revise presentation text, effective/expiry timestamps, and alert
+  // ordering without withdrawing the official alert. Reconcile only by its
+  // canonical ID, so clearance requires authoritative omission of that ID.
+  if (event.source === "nws") {
+    if (!event.sourceEventId) {
+      throw new Error("nws-alert-missing-canonical-id");
+    }
+    return await hash({ source: event.source, id: event.sourceEventId });
+  }
+  const id = event.sourceEventId ??
+    `${event.category}:${redactHeadline(event.headline)}`;
   return await hash({ source: event.source, id });
 }
 async function contentKeyFor(event: NormalizedSafetyEvent): Promise<string> {
@@ -654,7 +659,7 @@ function sourceDue(
 /** Swamp model for generic, private-runtime local safety monitoring. */
 export const model = {
   type: "@mgreten/local-safety-watch",
-  version: "2026.07.12.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     summary: {

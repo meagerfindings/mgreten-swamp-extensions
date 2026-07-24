@@ -142,7 +142,7 @@ Deno.test("reconcileEvents re-redacts legacy provider headlines during updates",
   );
 });
 
-Deno.test("mergeEvents suppresses equivalent duplicate NWS alert records", async () => {
+Deno.test("mergeEvents keeps distinct canonical NWS alert IDs separate", async () => {
   const merged = await mergeEvents([
     {
       ...ACTIVE_CLOSURE,
@@ -161,6 +161,33 @@ Deno.test("mergeEvents suppresses equivalent duplicate NWS alert records", async
     },
   ]);
 
-  assertEquals(merged.length, 1);
-  assertEquals(merged[0].anchorLabels, ["home", "phone-1"]);
+  assertEquals(merged.length, 2);
+});
+
+Deno.test("NWS expiry does not clear an alert while its canonical ID remains active", async () => {
+  const activeNwsAlert: NormalizedSafetyEvent = {
+    ...ACTIVE_CLOSURE,
+    source: "nws",
+    sourceEventId: "nws-canonical-alert-1",
+    category: "weather",
+    expiresAt: "2026-07-12T16:01:00Z",
+  };
+  const first = await reconcileEvents(EMPTY_STATE, [activeNwsAlert], {
+    authoritativeSources: ["nws"],
+    now: "2026-07-12T16:00:00Z",
+  });
+  const stillActiveAfterExpiry = await reconcileEvents(first.state, [activeNwsAlert], {
+    authoritativeSources: ["nws"],
+    now: "2026-07-12T17:00:00Z",
+  });
+  assertEquals(stillActiveAfterExpiry.changes, []);
+  assertEquals(Object.keys(stillActiveAfterExpiry.state.events).length, 1);
+  const firstOmission = await reconcileEvents(stillActiveAfterExpiry.state, [], {
+    authoritativeSources: ["nws"],
+  });
+  assertEquals(firstOmission.changes, []);
+  const secondOmission = await reconcileEvents(firstOmission.state, [], {
+    authoritativeSources: ["nws"],
+  });
+  assertEquals(secondOmission.changes[0].action, "cleared");
 });
