@@ -127,7 +127,14 @@ List available labels for a team. Writes each label as a `label` resource.
 ### createIssue
 
 Create an issue with full control over all fields: `title`, `description`,
-`teamId`, `projectId`, `priority`, `stateId`, `assigneeId`.
+`teamId`, `projectId`, `priority`, `stateId`, `assigneeId`, `parentId`,
+`estimate`.
+
+Pass `parentId` (an existing issue ID) to create the new issue as a
+**sub-issue** of that parent — this is how you build an epic with child
+issues: create the parent first, then create each child with its `parentId`
+set to the parent's ID. Pass `estimate` to set the story-point estimate on
+the team's configured estimation scale.
 
 ### listTeams
 

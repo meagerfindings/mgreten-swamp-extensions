@@ -77,6 +77,10 @@ export interface CreateIssueInput {
   stateId?: string;
   assigneeId?: string;
   labelIds?: string[];
+  /** Parent issue ID — makes this a sub-issue of the given issue. */
+  parentId?: string;
+  /** Story-point estimate on the team's estimation scale. */
+  estimate?: number;
 }
 
 /** Input for updating a Linear issue. */

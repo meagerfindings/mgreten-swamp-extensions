@@ -342,6 +342,8 @@ export async function createIssue(
     priority?: number;
     stateId?: string;
     assigneeId?: string;
+    parentId?: string;
+    estimate?: number;
   },
 ): Promise<MethodResult> {
   const teamId = args.teamId || context.globalArgs.defaultTeamId;
@@ -349,7 +351,10 @@ export async function createIssue(
     throw new Error("No teamId specified and no defaultTeamId configured");
   }
 
-  context.logger.info(`Creating issue "${args.title}" in team ${teamId}`);
+  const parentNote = args.parentId ? ` under parent ${args.parentId}` : "";
+  context.logger.info(
+    `Creating issue "${args.title}" in team ${teamId}${parentNote}`,
+  );
 
   const issue = await client.createIssue({
     title: args.title,
@@ -359,6 +364,8 @@ export async function createIssue(
     priority: args.priority,
     stateId: args.stateId,
     assigneeId: args.assigneeId,
+    parentId: args.parentId,
+    estimate: args.estimate,
   });
 
   const handle = await context.writeResource(

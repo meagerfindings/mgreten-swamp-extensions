@@ -82,6 +82,46 @@ Deno.test("createMyIssue schema accepts its full deterministic payload", () => {
   assertEquals(model.methods.createMyIssue.arguments.parse(input), input);
 });
 
+Deno.test("createIssue schema accepts sub-issue parent and estimate fields", () => {
+  const input = {
+    title: "Vertical slice: upload endpoint + UI",
+    teamId: "team-1",
+    parentId: "issue-epic-1",
+    estimate: 2,
+  };
+  assertEquals(model.methods.createIssue.arguments.parse(input), input);
+  // Unknown keys are stripped by the non-strict schema (swamp enforces
+  // additionalProperties:false at the model boundary, not zod here).
+  assertEquals(
+    model.methods.createIssue.arguments.parse({ ...input, notAField: true }),
+    input,
+  );
+});
+
+Deno.test("client adapter forwards sub-issue parent and estimate to the SDK", async () => {
+  let captured: Record<string, unknown> | undefined;
+  const client = buildLinearClient(sdk({
+    createIssue: (input) => {
+      captured = input as unknown as Record<string, unknown>;
+      return Promise.resolve({
+        success: true,
+        issue: Promise.resolve(issueNode()),
+      });
+    },
+  }));
+
+  const result = await client.createIssue({
+    title: "Vertical slice",
+    teamId: "team-1",
+    parentId: "issue-epic-1",
+    estimate: 2,
+  });
+
+  assertEquals(captured?.parentId, "issue-epic-1");
+  assertEquals(captured?.estimate, 2);
+  assertEquals(result.identifier, "ENG-42");
+});
+
 Deno.test("comment thread resource rejects count and comment type mismatches", () => {
   const thread = {
     issueId: "issue-1",

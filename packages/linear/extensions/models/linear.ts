@@ -135,7 +135,7 @@ function getClient(
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.07.16.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     issue: {
@@ -367,6 +367,14 @@ export const model = {
           .describe("Priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low"),
         stateId: z.string().optional().describe("Workflow state ID"),
         assigneeId: z.string().optional().describe("Assignee user ID"),
+        parentId: z
+          .string()
+          .optional()
+          .describe("Parent issue ID — creates this as a sub-issue"),
+        estimate: z
+          .number()
+          .optional()
+          .describe("Story-point estimate on the team's estimation scale"),
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         createIssue(
@@ -380,6 +388,8 @@ export const model = {
             priority?: number;
             stateId?: string;
             assigneeId?: string;
+            parentId?: string;
+            estimate?: number;
           },
         ),
     },
