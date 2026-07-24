@@ -131,10 +131,33 @@ Create an issue with full control over all fields: `title`, `description`,
 `estimate`.
 
 Pass `parentId` (an existing issue ID) to create the new issue as a
-**sub-issue** of that parent — this is how you build an epic with child
-issues: create the parent first, then create each child with its `parentId`
-set to the parent's ID. Pass `estimate` to set the story-point estimate on
-the team's configured estimation scale.
+**sub-issue** of that parent. Pass `estimate` to set the story-point
+estimate on the team's configured estimation scale. To create a whole epic
+in one call, prefer `createEpic` below.
+
+### createEpic
+
+Create an epic in a single call: one parent issue plus N child sub-issues
+linked to it. The parent is created first; each child is then created with
+its `parentId` set to the parent's returned ID, inheriting the parent's
+`teamId` unless it sets its own.
+
+```yaml
+# method inputs
+parent:
+  title: "Epic: photo upload pipeline"
+  teamId: "team-abc"
+  estimate: 8
+children:
+  - { title: "Slice 1: upload endpoint + minimal UI", estimate: 2 }
+  - { title: "Slice 2: thumbnail render + gallery UI", estimate: 3 }
+```
+
+Every issue (parent and each child) is written as an `issue` resource.
+Linear has no multi-issue transaction, so creation is **not atomic**: if a
+child fails after the parent (and some siblings) succeeded, the method
+throws an error naming how many children were created, so you can reconcile
+rather than blindly recreate the whole epic.
 
 ### listTeams
 

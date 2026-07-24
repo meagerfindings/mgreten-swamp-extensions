@@ -376,6 +376,90 @@ export async function createIssue(
   return { dataHandles: [handle] };
 }
 
+/**
+ * Create a Linear epic: one parent issue, then N child sub-issues linked to
+ * it via `parentId`. Children are created sequentially after the parent so
+ * each can reference the parent's returned ID. Every issue (parent and each
+ * child) is written as an `issue` resource.
+ *
+ * Linear has no multi-issue transaction, so creation is not atomic: if a
+ * child fails after the parent (and some siblings) succeeded, the error names
+ * how many children were created so the caller can reconcile rather than
+ * blindly retry the whole epic.
+ */
+export async function createEpic(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    parent: {
+      title: string;
+      description?: string;
+      teamId?: string;
+      projectId?: string;
+      priority?: number;
+      stateId?: string;
+      assigneeId?: string;
+      estimate?: number;
+    };
+    children: Array<{
+      title: string;
+      description?: string;
+      teamId?: string;
+      projectId?: string;
+      priority?: number;
+      stateId?: string;
+      assigneeId?: string;
+      estimate?: number;
+    }>;
+  },
+): Promise<MethodResult> {
+  const teamId = args.parent.teamId || context.globalArgs.defaultTeamId;
+  if (!teamId) {
+    throw new Error("No teamId specified and no defaultTeamId configured");
+  }
+
+  context.logger.info(
+    `Creating epic "${args.parent.title}" in team ${teamId} with ` +
+      `${args.children.length} child issue(s)`,
+  );
+
+  const parent = await client.createIssue({ ...args.parent, teamId });
+  const handles: DataHandle[] = [
+    await context.writeResource("issue", parent.id, issueResourceData(parent)),
+  ];
+
+  for (let i = 0; i < args.children.length; i++) {
+    const child = args.children[i];
+    try {
+      const created = await client.createIssue({
+        ...child,
+        teamId: child.teamId || teamId,
+        parentId: parent.id,
+      });
+      handles.push(
+        await context.writeResource(
+          "issue",
+          created.id,
+          issueResourceData(created),
+        ),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Epic parent ${parent.identifier} created; child ${i + 1}/` +
+          `${args.children.length} ("${child.title}") failed: ${message}. ` +
+          `${i} child issue(s) were created before the failure.`,
+      );
+    }
+  }
+
+  context.logger.info(
+    `Epic ${parent.identifier} created with ${handles.length - 1} child ` +
+      `issue(s)`,
+  );
+  return { dataHandles: handles };
+}
+
 /** List all Linear teams and sync them as resources. */
 export async function listTeams(
   client: LinearClient,

@@ -122,6 +122,86 @@ Deno.test("client adapter forwards sub-issue parent and estimate to the SDK", as
   assertEquals(result.identifier, "ENG-42");
 });
 
+Deno.test("createEpic schema accepts a parent and children with estimates", () => {
+  const input = {
+    parent: { title: "Epic: photo upload", teamId: "team-1", estimate: 8 },
+    children: [
+      { title: "Slice 1: upload endpoint + UI", estimate: 2 },
+      { title: "Slice 2: thumbnail render + UI", estimate: 3 },
+    ],
+  };
+  assertEquals(model.methods.createEpic.arguments.parse(input), input);
+});
+
+Deno.test("client creates a parent then links each child via parentId", async () => {
+  const seen: Array<Record<string, unknown>> = [];
+  let counter = 0;
+  const client = buildLinearClient(sdk({
+    createIssue: (input) => {
+      seen.push(input as unknown as Record<string, unknown>);
+      counter += 1;
+      const node = { ...issueNode(), id: `issue-${counter}` };
+      return Promise.resolve({ success: true, issue: Promise.resolve(node) });
+    },
+  }));
+
+  // Exercise the fan-out through the exported method so parentId wiring and
+  // resource writes are both covered.
+  const written: Array<{ spec: string; instance: string }> = [];
+  const context = {
+    globalArgs: { apiKey: "k" },
+    logger: { info: () => {} },
+    writeResource: (spec: string, instance: string) => {
+      written.push({ spec, instance });
+      return Promise.resolve({ spec, instance, data: {} });
+    },
+  };
+  const { createEpic } = await import("./linear/methods.ts");
+  const result = await createEpic(client, context, {
+    parent: { title: "Epic", teamId: "team-1" },
+    children: [{ title: "Child A" }, { title: "Child B" }],
+  });
+
+  // Parent created first with no parentId; both children carry the parent id.
+  assertEquals(seen[0].parentId, undefined);
+  assertEquals(seen[1].parentId, "issue-1");
+  assertEquals(seen[2].parentId, "issue-1");
+  // Children inherit the parent's teamId when they omit their own.
+  assertEquals(seen[1].teamId, "team-1");
+  assertEquals(result.dataHandles.length, 3);
+  assertEquals(written.length, 3);
+});
+
+Deno.test("client reports how many children were created before a failure", async () => {
+  let counter = 0;
+  const client = buildLinearClient(sdk({
+    createIssue: () => {
+      counter += 1;
+      if (counter === 3) {
+        return Promise.reject(new Error("rate limited"));
+      }
+      const node = { ...issueNode(), id: `issue-${counter}` };
+      return Promise.resolve({ success: true, issue: Promise.resolve(node) });
+    },
+  }));
+  const context = {
+    globalArgs: { apiKey: "k" },
+    logger: { info: () => {} },
+    writeResource: (spec: string, instance: string) =>
+      Promise.resolve({ spec, instance, data: {} }),
+  };
+  const { createEpic } = await import("./linear/methods.ts");
+  await assertRejects(
+    () =>
+      createEpic(client, context, {
+        parent: { title: "Epic", teamId: "team-1" },
+        children: [{ title: "A" }, { title: "B" }],
+      }),
+    Error,
+    "1 child issue(s) were created before the failure",
+  );
+});
+
 Deno.test("comment thread resource rejects count and comment type mismatches", () => {
   const thread = {
     issueId: "issue-1",

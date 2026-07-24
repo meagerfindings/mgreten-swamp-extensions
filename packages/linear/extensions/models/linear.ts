@@ -17,6 +17,7 @@ import type { MethodContext, MethodResult } from "./linear/methods.ts";
 import {
   addLabels,
   createComment,
+  createEpic,
   createIssue,
   createMyIssue,
   getIssue,
@@ -29,6 +30,42 @@ import {
   listTeams,
   updateIssue,
 } from "./linear/methods.ts";
+
+/**
+ * Shared field shape for an issue created as part of an epic (parent or
+ * child). `parentId` is intentionally absent — `createEpic` sets it on
+ * children automatically from the parent it creates.
+ */
+const epicIssueFields: z.ZodObject<{
+  title: z.ZodString;
+  description: z.ZodOptional<z.ZodString>;
+  teamId: z.ZodOptional<z.ZodString>;
+  projectId: z.ZodOptional<z.ZodString>;
+  priority: z.ZodOptional<z.ZodNumber>;
+  stateId: z.ZodOptional<z.ZodString>;
+  assigneeId: z.ZodOptional<z.ZodString>;
+  estimate: z.ZodOptional<z.ZodNumber>;
+}> = z.object({
+  title: z.string().describe("Issue title"),
+  description: z.string().optional().describe("Issue description (Markdown)"),
+  teamId: z.string().optional().describe("Team ID (defaults to defaultTeamId)"),
+  projectId: z.string().optional().describe("Project ID"),
+  priority: z
+    .number()
+    .min(0)
+    .max(4)
+    .optional()
+    .describe("Priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low"),
+  stateId: z.string().optional().describe("Workflow state ID"),
+  assigneeId: z.string().optional().describe("Assignee user ID"),
+  estimate: z
+    .number()
+    .optional()
+    .describe("Story-point estimate on the team's estimation scale"),
+});
+
+/** Field shape for one issue within a {@link createEpic} call. */
+type EpicIssueFields = z.infer<typeof epicIssueFields>;
 
 const GlobalArgsSchema = z.object({
   apiKey: z
@@ -135,7 +172,7 @@ function getClient(
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.07.24.1",
+  version: "2026.07.24.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     issue: {
@@ -390,6 +427,28 @@ export const model = {
             assigneeId?: string;
             parentId?: string;
             estimate?: number;
+          },
+        ),
+    },
+
+    createEpic: {
+      description:
+        "Create an epic: a parent issue plus N child sub-issues linked to " +
+        "it. Children are created after the parent and inherit its teamId " +
+        "unless they set their own.",
+      arguments: z.object({
+        parent: epicIssueFields.describe("The parent (epic) issue"),
+        children: z
+          .array(epicIssueFields)
+          .describe("Child issues, each created as a sub-issue of the parent"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        createEpic(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            parent: EpicIssueFields;
+            children: EpicIssueFields[];
           },
         ),
     },
