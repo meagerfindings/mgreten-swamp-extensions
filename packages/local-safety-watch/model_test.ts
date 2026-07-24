@@ -176,15 +176,21 @@ Deno.test("NWS expiry does not clear an alert while its canonical ID remains act
     authoritativeSources: ["nws"],
     now: "2026-07-12T16:00:00Z",
   });
-  const stillActiveAfterExpiry = await reconcileEvents(first.state, [activeNwsAlert], {
+  const stillActiveAfterExpiry = await reconcileEvents(first.state, [
+    activeNwsAlert,
+  ], {
     authoritativeSources: ["nws"],
     now: "2026-07-12T17:00:00Z",
   });
   assertEquals(stillActiveAfterExpiry.changes, []);
   assertEquals(Object.keys(stillActiveAfterExpiry.state.events).length, 1);
-  const firstOmission = await reconcileEvents(stillActiveAfterExpiry.state, [], {
-    authoritativeSources: ["nws"],
-  });
+  const firstOmission = await reconcileEvents(
+    stillActiveAfterExpiry.state,
+    [],
+    {
+      authoritativeSources: ["nws"],
+    },
+  );
   assertEquals(firstOmission.changes, []);
   const secondOmission = await reconcileEvents(firstOmission.state, [], {
     authoritativeSources: ["nws"],

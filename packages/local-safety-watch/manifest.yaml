@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/local-safety-watch"
-version: "2026.07.24.1"
+version: "2026.07.24.2"
 description: >
   Privacy-preserving local safety watcher that polls official weather, roadway,
   and wildfire sources, reconciles material event changes, and emits redacted
@@ -10,6 +10,7 @@ paths:
   base: manifest
 additionalFiles:
   - README.md
+  - model_test.ts
   - LICENSE.md
 models:
   - model.ts

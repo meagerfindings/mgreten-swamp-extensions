@@ -659,7 +659,7 @@ function sourceDue(
 /** Swamp model for generic, private-runtime local safety monitoring. */
 export const model = {
   type: "@mgreten/local-safety-watch",
-  version: "2026.07.24.1",
+  version: "2026.07.24.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     summary: {
