@@ -157,8 +157,9 @@ export async function createTask(
 /**
  * Mark a task as completed.
  *
- * Fetches the task before closing so the resource reflects the final state.
- * The Todoist REST API returns 204 from the close endpoint with no body.
+ * Regular tasks are archived after closing, so their final active snapshot is
+ * retained with `isCompleted` set. Recurring tasks remain active with a new due
+ * date, so they are fetched again after closing.
  */
 export async function completeTask(
   client: TodoistClient,
@@ -168,9 +169,14 @@ export async function completeTask(
   context.logger.info(`Completing task ${args.taskId}`);
   const task = await client.getTask(args.taskId);
   await client.closeTask(args.taskId);
-  const data = taskResourceData(task);
-  data.isCompleted = true;
-  const handle = await context.writeResource("task", task.id, data);
+  const completedTask = task.isRecurring
+    ? await client.getTask(args.taskId)
+    : { ...task, isCompleted: true };
+  const handle = await context.writeResource(
+    "task",
+    completedTask.id,
+    taskResourceData(completedTask),
+  );
   return { dataHandles: [handle] };
 }
 

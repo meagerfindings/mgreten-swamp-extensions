@@ -23,9 +23,10 @@ export interface TaskData {
   dueDate: string;
   dueDatetime: string;
   dueString: string;
+  isRecurring: boolean;
   isCompleted: boolean;
   url: string;
-  createdAt: string;
+  createdAt: string | null;
   assigneeId: string;
   order: number;
 }
@@ -88,7 +89,7 @@ interface RawTask {
   priority: number;
   due: RawDue | null;
   checked: boolean;
-  added_at: string;
+  added_at: string | null;
   responsible_uid: string | null;
   child_order: number;
 }
@@ -122,6 +123,7 @@ function normalizeTask(raw: RawTask): TaskData {
     dueDate: raw.due?.date ?? "",
     dueDatetime: raw.due?.datetime ?? "",
     dueString: raw.due?.string ?? "",
+    isRecurring: raw.due?.is_recurring ?? false,
     isCompleted: raw.checked,
     url: `https://app.todoist.com/app/task/${raw.id}`,
     createdAt: raw.added_at,
@@ -140,7 +142,7 @@ function normalizeProject(raw: RawProject): ProjectData {
     isShared: raw.is_shared,
     isFavorite: raw.is_favorite,
     isInboxProject: raw.inbox_project ?? false,
-    url: `https://app.todoist.com/app/projects/${raw.id}`,
+    url: `https://app.todoist.com/app/project/${raw.id}`,
   };
 }
 
@@ -153,7 +155,7 @@ async function fetchAllPages<T>(
   const all: T[] = [];
   let cursor: string | null = null;
   do {
-    const pageParams = { ...params, limit: "200" };
+    const pageParams: Record<string, string> = { ...params, limit: "200" };
     if (cursor) pageParams.cursor = cursor;
     const page = await request<RawListResponse<T>>(
       apiToken,
@@ -221,9 +223,9 @@ export interface TodoistClient {
 export function buildTodoistClient(apiToken: string): TodoistClient {
   return {
     async getTasks(filter?: string): Promise<TaskData[]> {
-      const params: Record<string, string> = {};
-      if (filter) params.filter = filter;
-      const raw = await fetchAllPages<RawTask>(apiToken, "/tasks", params);
+      const path = filter ? "/tasks/filter" : "/tasks";
+      const params: Record<string, string> = filter ? { query: filter } : {};
+      const raw = await fetchAllPages<RawTask>(apiToken, path, params);
       return raw.map(normalizeTask);
     },
 
@@ -243,9 +245,9 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
       if (input.dueString !== undefined) body.due_string = input.dueString;
       if (input.dueLang !== undefined) body.due_lang = input.dueLang;
       if (input.assigneeId !== undefined) {
-        body.responsible_uid = input.assigneeId;
+        body.assignee_id = input.assigneeId;
       }
-      if (input.order !== undefined) body.child_order = input.order;
+      if (input.order !== undefined) body.order = input.order;
       const raw = await request<RawTask>(apiToken, "POST", "/tasks", body);
       return normalizeTask(raw);
     },
@@ -259,7 +261,7 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
       if (input.dueString !== undefined) body.due_string = input.dueString;
       if (input.dueLang !== undefined) body.due_lang = input.dueLang;
       if (input.assigneeId !== undefined) {
-        body.responsible_uid = input.assigneeId;
+        body.assignee_id = input.assigneeId;
       }
       const raw = await request<RawTask>(
         apiToken,

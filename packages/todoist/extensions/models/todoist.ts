@@ -1,9 +1,10 @@
 /**
  * @mgreten/todoist — Todoist task management integration for swamp.
  *
- * Provides task and project CRUD via the Todoist REST API v2. Every API
- * response is written as a swamp resource, making it available for CEL
- * expressions, data queries, and workflow chaining.
+ * Provides task CRUD and project synchronization via the unified Todoist API
+ * v1. Methods write normalized task and project snapshots where applicable,
+ * making them available for CEL expressions, data queries, and workflow
+ * chaining.
  *
  * No external npm dependencies — uses the runtime's built-in `fetch`.
  *
@@ -46,7 +47,7 @@ const TaskSchema = z.object({
   dueString: z.string(),
   isCompleted: z.boolean(),
   url: z.string(),
-  createdAt: z.string(),
+  createdAt: z.string().nullable(),
   assigneeId: z.string(),
   order: z.number(),
   syncedAt: z.string(),
@@ -74,17 +75,26 @@ function getClient(
 /**
  * Todoist task management model for swamp.
  *
- * Provides 6 methods for managing tasks and projects via the Todoist REST
- * API v2. Supports Todoist's native filter syntax for task queries and
+ * Provides 6 methods for managing tasks and projects via Todoist API v1.
+ * Supports Todoist's native filter syntax for task queries and
  * natural language due dates for task creation and updates.
  */
 export const model = {
   type: "@mgreten/todoist",
-  version: "2026.07.16.1",
+  version: "2026.07.23.1",
+  upgrades: [
+    {
+      toVersion: "2026.07.23.1",
+      description: "Migrate Todoist transport to API v1; no argument changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+  ],
   globalArguments: GlobalArgsSchema,
   resources: {
     task: {
-      description: "A Todoist task with full metadata",
+      description: "A Todoist task with normalized metadata",
       schema: TaskSchema,
       lifetime: "infinite" as const,
       garbageCollection: 500,

@@ -1,9 +1,9 @@
 # @mgreten/todoist
 
-Todoist task management integration for swamp. Provides task and project CRUD
-via the Todoist REST API v2 — no external npm dependencies. Every API response
-is written as a swamp resource, making it available for CEL expressions, data
-queries, and workflow chaining.
+Todoist task management integration for swamp. Provides task CRUD and project
+synchronization via the unified Todoist API v1 — no external npm dependencies.
+Methods write normalized task and project snapshots where applicable, making
+them available for CEL expressions, data queries, and workflow chaining.
 
 ## Installation
 
@@ -120,7 +120,7 @@ Permanently delete a task by ID. Returns no data handles.
 
 | Resource  | Description               | Lifetime | GC  |
 | --------- | ------------------------- | -------- | --- |
-| `task`    | Todoist task with metadata | infinite | 500 |
+| `task`    | Todoist task with normalized metadata | infinite | 500 |
 | `project` | Todoist project           | infinite | 100 |
 
 ## CEL Access
@@ -135,7 +135,7 @@ data.latest("my-todoist", "project/<id>").attributes.name
 
 ## How It Works
 
-Communicates with the [Todoist REST API v2](https://developer.todoist.com/rest/v2/)
+Communicates with the [Todoist API v1](https://developer.todoist.com/api/v1/)
 using the runtime's built-in `fetch`. No external npm dependencies. The client
 layer normalizes the API's snake_case responses into camelCase TypeScript
 interfaces before writing them as swamp resources.
