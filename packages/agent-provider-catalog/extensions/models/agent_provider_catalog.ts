@@ -909,6 +909,7 @@ async function readLatestFailureSignal(
  */
 export const model = {
   type: "@mgreten/agent-provider-catalog",
+  version: "2026.07.25.1",
   globalArgs: GlobalArgsSchema,
   data: {
     providerFallbackDecision: {
