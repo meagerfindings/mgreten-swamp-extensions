@@ -16,7 +16,7 @@ export interface CommentData {
 
 const RawCommentSchema = z.object({
   id: z.coerce.string().regex(SAFE_ID),
-  task_id: z.coerce.string().regex(SAFE_ID),
+  task_id: z.coerce.string().regex(SAFE_ID).nullable().optional(),
   project_id: z.coerce.string().nullable().optional(),
   content: z.string(),
   posted_at: z.string(),
@@ -30,10 +30,10 @@ const CommentPageSchema = z.object({
 
 type RawComment = z.infer<typeof RawCommentSchema>;
 
-function normalize(raw: RawComment): CommentData {
+function normalize(raw: RawComment, fallbackTaskId = ""): CommentData {
   return {
     id: raw.id,
-    taskId: raw.task_id,
+    taskId: raw.task_id ?? fallbackTaskId,
     projectId: raw.project_id ?? "",
     content: raw.content,
     postedAt: raw.posted_at,
@@ -103,7 +103,7 @@ export async function fetchTaskComments(
         }`,
       );
     }
-    comments.push(...result.data.results.map(normalize));
+    comments.push(...result.data.results.map((raw) => normalize(raw, taskId)));
     cursor = result.data.next_cursor;
     if (cursor && cursors.has(cursor)) {
       throw new Error(
@@ -131,7 +131,7 @@ export async function createTaskComment(
       }`,
     );
   }
-  return normalize(result.data);
+  return normalize(result.data, taskId);
 }
 
 function resourceData(comment: CommentData): Record<string, unknown> {

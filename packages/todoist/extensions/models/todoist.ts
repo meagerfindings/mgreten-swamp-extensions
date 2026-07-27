@@ -68,7 +68,7 @@ function client(context: MethodContext) {
 /** Typed Todoist model with task, project, and task-comment resources. */
 export const model = {
   type: "@mgreten/todoist",
-  version: "2026.07.27.2",
+  version: "2026.07.27.3",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
@@ -82,7 +82,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.07.27.2",
+      toVersion: "2026.07.27.3",
       description: "Add task-comment synchronization and creation",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
