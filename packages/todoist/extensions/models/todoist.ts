@@ -1,19 +1,6 @@
-/**
- * @mgreten/todoist — Todoist task management integration for swamp.
- *
- * Provides task CRUD and project synchronization via the unified Todoist API
- * v1. Methods write normalized task and project snapshots where applicable,
- * making them available for CEL expressions, data queries, and workflow
- * chaining.
- *
- * Uses the runtime's built-in `fetch` and Zod response validation without a
- * service-specific SDK.
- *
- * @module
- */
 import { z } from "npm:zod@4";
 import { buildTodoistClient } from "./todoist/client.ts";
-import type { MethodContext, MethodResult } from "./todoist/methods.ts";
+import { createComment, syncTaskComments } from "./todoist/comments.ts";
 import {
   completeTask,
   createTask,
@@ -22,23 +9,18 @@ import {
   syncTasks,
   updateTask,
 } from "./todoist/methods.ts";
+import type { MethodContext, MethodResult } from "./todoist/methods.ts";
 
 const GlobalArgsSchema = z.object({
-  apiToken: z
-    .string()
-    .describe("Todoist API token")
-    .meta({ sensitive: true }),
-  defaultProjectId: z
-    .string()
-    .optional()
-    .describe("Default project ID used when no projectId is specified"),
+  apiToken: z.string().describe("Todoist API token").meta({ sensitive: true }),
+  defaultProjectId: z.string().optional().describe(
+    "Default project ID used when no projectId is specified",
+  ),
 });
-
 const TodoistIdSchema = z.string().regex(
   /^[A-Za-z0-9_-]+$/,
   "Todoist IDs may contain letters, numbers, hyphens, and underscores",
 );
-
 const TaskSchema = z.object({
   id: z.string(),
   content: z.string(),
@@ -58,7 +40,6 @@ const TaskSchema = z.object({
   order: z.number(),
   syncedAt: z.string(),
 });
-
 const ProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -71,38 +52,39 @@ const ProjectSchema = z.object({
   url: z.string(),
   syncedAt: z.string(),
 });
-
-function getClient(
-  context: MethodContext,
-): ReturnType<typeof buildTodoistClient> {
+const CommentSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  projectId: z.string(),
+  content: z.string(),
+  postedAt: z.string(),
+  attachment: z.unknown().nullable(),
+  syncedAt: z.string(),
+});
+function client(context: MethodContext) {
   return buildTodoistClient(context.globalArgs.apiToken);
 }
 
-/**
- * Todoist task management model for swamp.
- *
- * Provides 6 methods for task management and project sync via Todoist API v1.
- * Supports Todoist's native filter syntax for task queries and
- * natural language due dates for task creation and updates.
- */
+/** Typed Todoist model with task, project, and task-comment resources. */
 export const model = {
   type: "@mgreten/todoist",
-  version: "2026.07.24.1",
+  version: "2026.07.27.1",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
       description: "Migrate Todoist transport to API v1; no argument changes",
-      upgradeAttributes: (
-        old: Record<string, unknown>,
-      ): Record<string, unknown> => old,
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
       toVersion: "2026.07.24.1",
       description:
         "Harden API transport and synchronization; no argument changes",
-      upgradeAttributes: (
-        old: Record<string, unknown>,
-      ): Record<string, unknown> => old,
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.27.1",
+      description: "Add task-comment synchronization and creation",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
   globalArguments: GlobalArgsSchema,
@@ -119,74 +101,82 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 100,
     },
+    comment: {
+      description: "A Todoist task comment with normalized metadata",
+      schema: CommentSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 1000,
+    },
   },
   methods: {
     syncTasks: {
       description:
-        "Fetch active tasks and write them as resources. Accepts Todoist filter syntax (e.g. 'today', '#Work', '@label', 'priority 1').",
+        "Fetch active tasks and write them as resources. Accepts Todoist filter syntax.",
       arguments: z.object({
-        filter: z
-          .string()
-          .optional()
-          .describe(
-            "Todoist filter query (e.g. 'today', '#Work', 'priority 1'). Omit to fetch all active tasks.",
-          ),
+        filter: z.string().optional().describe(
+          "Todoist filter query; omit to fetch all active tasks",
+        ),
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         syncTasks(
-          getClient(context as MethodContext),
+          client(context as MethodContext),
           context as MethodContext,
           args as { filter?: string },
         ),
     },
-
     syncProjects: {
       description: "Fetch all Todoist projects and sync them as resources",
       arguments: z.object({}),
       execute: (_args: unknown, context: unknown): Promise<MethodResult> =>
         syncProjects(
-          getClient(context as MethodContext),
+          client(context as MethodContext),
           context as MethodContext,
         ),
     },
-
+    syncTaskComments: {
+      description:
+        "Fetch every comment for one Todoist task and write normalized comment resources",
+      arguments: z.object({
+        taskId: TodoistIdSchema.describe("Todoist task ID"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        syncTaskComments(context as MethodContext, args as { taskId: string }),
+    },
+    createTaskComment: {
+      description:
+        "Create a comment on a Todoist task and write its normalized resource",
+      arguments: z.object({
+        taskId: TodoistIdSchema.describe("Todoist task ID"),
+        content: z.string().trim().min(1).max(10_000).describe("Comment text"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        createComment(
+          context as MethodContext,
+          args as { taskId: string; content: string },
+        ),
+    },
     createTask: {
       description: "Create a new Todoist task",
       arguments: z.object({
         content: z.string().describe("Task content (title)"),
-        description: z
-          .string()
-          .optional()
-          .describe("Task description (Markdown)"),
-        projectId: z
-          .string()
-          .optional()
-          .describe("Project ID (defaults to defaultProjectId)"),
-        sectionId: z
-          .string()
-          .optional()
-          .describe("Section ID within the project"),
-        labels: z
-          .string()
-          .optional()
-          .describe("Comma-separated label names"),
-        priority: z
-          .number()
-          .int()
-          .min(1)
-          .max(4)
-          .optional()
-          .describe("Priority: 1=normal, 2=medium, 3=high, 4=urgent"),
-        dueString: z
-          .string()
-          .optional()
-          .describe(
-            "Natural language due date (e.g. 'today', 'next Monday', 'in 3 days')",
-          ),
+        description: z.string().optional().describe(
+          "Task description (Markdown)",
+        ),
+        projectId: z.string().optional().describe(
+          "Project ID (defaults to defaultProjectId)",
+        ),
+        sectionId: z.string().optional().describe(
+          "Section ID within the project",
+        ),
+        labels: z.string().optional().describe("Comma-separated label names"),
+        priority: z.number().int().min(1).max(4).optional().describe(
+          "Priority: 1=normal, 2=medium, 3=high, 4=urgent",
+        ),
+        dueString: z.string().optional().describe("Natural language due date"),
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         createTask(
-          getClient(context as MethodContext),
+          client(context as MethodContext),
           context as MethodContext,
           args as {
             content: string;
@@ -199,7 +189,6 @@ export const model = {
           },
         ),
     },
-
     completeTask: {
       description: "Mark a task as completed",
       arguments: z.object({
@@ -207,37 +196,28 @@ export const model = {
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         completeTask(
-          getClient(context as MethodContext),
+          client(context as MethodContext),
           context as MethodContext,
           args as { taskId: string },
         ),
     },
-
     updateTask: {
       description: "Update fields on an existing task",
       arguments: z.object({
         taskId: TodoistIdSchema.describe("Todoist task ID"),
         content: z.string().optional().describe("New task content"),
         description: z.string().optional().describe("New description"),
-        labels: z
-          .string()
-          .optional()
-          .describe("Comma-separated label names (replaces existing labels)"),
-        priority: z
-          .number()
-          .int()
-          .min(1)
-          .max(4)
-          .optional()
-          .describe("New priority: 1=normal, 2=medium, 3=high, 4=urgent"),
-        dueString: z
-          .string()
-          .optional()
-          .describe("New due date in natural language"),
+        labels: z.string().optional().describe(
+          "Comma-separated label names (replaces existing labels)",
+        ),
+        priority: z.number().int().min(1).max(4).optional().describe(
+          "New priority",
+        ),
+        dueString: z.string().optional().describe("New due date"),
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         updateTask(
-          getClient(context as MethodContext),
+          client(context as MethodContext),
           context as MethodContext,
           args as {
             taskId: string;
@@ -249,7 +229,6 @@ export const model = {
           },
         ),
     },
-
     deleteTask: {
       description: "Permanently delete a task",
       arguments: z.object({
@@ -257,7 +236,7 @@ export const model = {
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         deleteTask(
-          getClient(context as MethodContext),
+          client(context as MethodContext),
           context as MethodContext,
           args as { taskId: string },
         ),

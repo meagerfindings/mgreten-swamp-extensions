@@ -1,148 +1,70 @@
 # @mgreten/todoist
 
-Todoist task management integration for swamp. Provides task CRUD and project
-synchronization via the unified Todoist API v1 without a service-specific SDK.
-Methods write normalized task and project snapshots where applicable, making
-them available for CEL expressions, data queries, and workflow chaining.
+Typed Todoist API v1 integration for Swamp. It supports task CRUD, project sync,
+and evidence-preserving task-comment sync. Read operations use a bounded 15-second
+timeout; comments are written as durable, normalized resources that can be used by
+workflows and review agents.
 
-## Installation
+## Install and configure
 
 ```bash
 swamp extension pull @mgreten/todoist
+swamp vault put todoist-secrets TODOIST_API_TOKEN <your-token>
 ```
 
-## Setup
+Create a model whose `apiToken` global argument references the `TODOIST_API_TOKEN`
+secret in that vault. Keep the token in a vault expression; never put it in a model
+definition or task comment.
 
-Create a Todoist API token at https://app.todoist.com/app/settings/integrations/developer
-and store it in a swamp vault:
+## Comment evidence
+
+Fetch all comments for one known task ID. The method follows Todoist pagination,
+validates response data, and writes one `comment` resource per comment.
 
 ```bash
-swamp vault put my-vault todoist_api_token <your-token>
+swamp model method run my-todoist syncTaskComments \
+  --input taskId="<task-id>"
 ```
 
-Then create a model instance:
+Create a comment only when a human has approved its content:
 
 ```bash
-swamp model create @mgreten/todoist my-todoist \
-  --global-arg apiToken='${{ vault.get(my-vault, todoist_api_token) }}' \
-  --global-arg defaultProjectId="<your-project-id>"
-```
-
-Find your project ID by running `syncProjects` first — the `id` field on each
-project resource is the value to use.
-
-## Usage
-
-```bash
-# Sync all active tasks
-swamp model method run my-todoist syncTasks
-
-# Sync tasks due today
-swamp model method run my-todoist syncTasks --input filter="today"
-
-# Sync tasks in a specific project
-swamp model method run my-todoist syncTasks --input filter="#Work"
-
-# Sync tasks by priority
-swamp model method run my-todoist syncTasks --input filter="priority 1"
-
-# Sync all projects
-swamp model method run my-todoist syncProjects
-
-# Create a task
-swamp model method run my-todoist createTask \
-  --input content="Review PR #42" \
-  --input dueString="today" \
-  --input priority=3
-
-# Create a task with labels
-swamp model method run my-todoist createTask \
-  --input content="Deploy hotfix" \
-  --input labels="urgent, ops" \
-  --input dueString="in 2 hours"
-
-# Complete a task
-swamp model method run my-todoist completeTask --input taskId="<task-id>"
-
-# Update a task
-swamp model method run my-todoist updateTask \
+swamp model method run my-todoist createTaskComment \
   --input taskId="<task-id>" \
-  --input priority=4 \
-  --input dueString="next Monday"
+  --input content="Android Chrome: tested installed PWA capture and relaunch recovery."
+```
 
-# Delete a task
+## Existing task and project operations
+
+```bash
+swamp model method run my-todoist syncTasks --input filter="#Work"
+swamp model method run my-todoist syncProjects
+swamp model method run my-todoist createTask --input content="Review release"
+swamp model method run my-todoist updateTask --input taskId="<task-id>" --input priority=4
+swamp model method run my-todoist completeTask --input taskId="<task-id>"
 swamp model method run my-todoist deleteTask --input taskId="<task-id>"
 ```
 
-## Global Arguments
-
-| Argument            | Type   | Required | Description                                              |
-| ------------------- | ------ | -------- | -------------------------------------------------------- |
-| `apiToken`          | string | Yes      | Todoist API token (use a vault expression)               |
-| `defaultProjectId`  | string | No       | Default project ID when no `projectId` is specified      |
-
-## Methods
-
-### syncTasks
-
-Fetch active tasks and write each one as a `task` resource. Accepts an optional
-`filter` argument using [Todoist filter syntax](https://todoist.com/help/articles/introduction-to-filters-V98wIH):
-`today`, `tomorrow`, `#ProjectName`, `@label`, `priority 1`, `assigned to: me`, etc.
-Omit `filter` to fetch all active tasks.
-
-### syncProjects
-
-Fetch all Todoist projects and write each one as a `project` resource. Use this
-first to discover project IDs for use in `createTask` or as `defaultProjectId`.
-
-### createTask
-
-Create a new task. `content` is required; all other fields are optional.
-`labels` accepts a comma-separated string of label names. `priority` follows
-Todoist's scale: 1=normal, 2=medium, 3=high, 4=urgent. `dueString` accepts
-natural language: `"today"`, `"next Monday"`, `"in 3 days"`.
-
-### completeTask
-
-Mark a task as completed by ID. Fetches the task first to preserve full
-resource data, then closes it.
-
-### updateTask
-
-Update fields on an existing task. Only sends fields that are explicitly
-provided. `labels` replaces the existing label list (not additive).
-
-### deleteTask
-
-Permanently delete a task by ID. Deletion is idempotent: a task that is already
-absent (Todoist returns `404`) is treated as success. Returns no data handles.
-
 ## Resources
 
-| Resource  | Description               | Lifetime | GC  |
-| --------- | ------------------------- | -------- | --- |
-| `task`    | Todoist task with normalized metadata | infinite | 500 |
-| `project` | Todoist project           | infinite | 100 |
+- `task`: normalized active-task snapshot.
+- `project`: normalized Todoist project snapshot.
+- `comment`: normalized task-comment snapshot with `taskId`, `content`, `postedAt`,
+  optional attachment data, and `syncedAt`.
 
-## CEL Access
+For example, after comment sync:
 
-After syncing, reference task and project data in CEL expressions:
-
-```
-data.latest("my-todoist", "task/<id>").attributes.content
-data.latest("my-todoist", "task/<id>").attributes.dueDate
-data.latest("my-todoist", "project/<id>").attributes.name
+```text
+data.latest("my-todoist", "comment/<comment-id>").attributes.content
 ```
 
-## How It Works
+## Safety and behavior
 
-Communicates with the [Todoist API v1](https://developer.todoist.com/api/v1/)
-using the runtime's built-in `fetch`, with a 15-second request timeout, bounded
-`Retry-After` retries for safe reads, and Zod validation of response payloads.
-Mutating requests are not automatically retried. The client layer normalizes
-the API's snake_case responses into camelCase TypeScript interfaces before
-writing them as swamp resources.
+Task IDs are validated before any request. Comment list reads are cursor-paginated
+and fail on malformed data or repeated cursors. Comment creation is a mutation and
+is not retried automatically. This is an independent integration and is not
+created by, affiliated with, or supported by Doist.
 
 ## License
 
-MIT — see LICENSE.txt for details.
+MIT — see LICENSE.txt.

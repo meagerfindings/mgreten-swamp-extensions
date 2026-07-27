@@ -1,9 +1,9 @@
 manifestVersion: 1
 name: "@mgreten/todoist"
-version: "2026.07.24.1"
+version: "2026.07.27.1"
 description: >
-  Todoist task management integration for swamp — task CRUD, project sync,
-  filter-based sync, and natural language due dates via Todoist API v1.
+  Todoist task management integration for swamp — task CRUD, project and
+  task-comment sync, filter-based sync, and natural language due dates via Todoist API v1.
 
 repository: https://github.com/meagerfindings/swamp-todoist
 
@@ -13,5 +13,6 @@ models:
 additionalFiles:
   - README.md
   - LICENSE.txt
+  - todoist_comments_test.ts
 
 platforms: []
