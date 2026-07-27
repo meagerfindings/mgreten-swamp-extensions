@@ -15,9 +15,9 @@ export interface CommentData {
 }
 
 const RawCommentSchema = z.object({
-  id: z.string().regex(SAFE_ID),
-  task_id: z.string().regex(SAFE_ID),
-  project_id: z.string().nullable().optional(),
+  id: z.coerce.string().regex(SAFE_ID),
+  task_id: z.coerce.string().regex(SAFE_ID),
+  project_id: z.coerce.string().nullable().optional(),
   content: z.string(),
   posted_at: z.string(),
   attachment: z.unknown().nullable().optional(),

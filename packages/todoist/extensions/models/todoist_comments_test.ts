@@ -6,8 +6,8 @@ function assert(condition: boolean, message: string): void {
 }
 
 const rawComment = {
-  id: "comment-id",
-  task_id: "task-id",
+  id: 123,
+  task_id: 456,
   project_id: "project-id",
   content: "Android physical-device test passed.",
   posted_at: "2026-07-27T00:00:00Z",
@@ -39,11 +39,11 @@ Deno.test("comment transport paginates, normalizes, and creates with Todoist API
     );
     assert(comments.length === 2, "all comment pages were not returned");
     assert(
-      comments[0].taskId === "task-id" &&
+      comments[0].taskId === "456" &&
         comments[0].postedAt === rawComment.posted_at,
       "comment fields were not normalized",
     );
-    assert(created.id === "comment-id", "created comment was not normalized");
+    assert(created.id === "123", "created comment was not normalized");
     const first = new URL(requests[0].url);
     assert(
       first.pathname === "/api/v1/comments" &&
@@ -100,7 +100,7 @@ Deno.test("syncTaskComments writes a normalized resource", async () => {
       "comment sync did not return one handle",
     );
     assert(
-      written[0].spec === "comment" && written[0].instance === "comment-id",
+      written[0].spec === "comment" && written[0].instance === "123",
       "wrong comment resource identity",
     );
     assert(
