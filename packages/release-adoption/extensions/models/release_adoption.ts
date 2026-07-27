@@ -8,11 +8,17 @@
 
 import { z } from "npm:zod@4";
 import { parse as parseYaml } from "npm:yaml@2.8.0";
+import type { DataHandle } from "jsr:@systeminit/swamp-testing@0.20260604.20";
 
 const VERSION = "2026.07.27.1";
+const COMMAND_TIMEOUT_MS = 120_000;
+const MAX_STDOUT_BYTES = 10 * 1024 * 1024;
+const MAX_STDERR_BYTES = 64 * 1024;
+const MAX_INVENTORY_FILE_BYTES = 1024 * 1024;
 
 const GlobalArgsSchema = z.object({
-  githubRepo: z.string().default("swamp-club/swamp"),
+  githubRepo: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)
+    .default("swamp-club/swamp"),
   fleetRepos: z.array(z.object({ name: z.string(), path: z.string() })),
 });
 const CampaignSchema = z.object({
@@ -20,14 +26,14 @@ const CampaignSchema = z.object({
   fromVersion: z.string(),
   toVersion: z.string(),
   phase: z.enum(["open", "scanned", "analyzing", "applying", "done"]),
-  openedAt: z.string(),
+  openedAt: z.iso.datetime(),
   notes: z.string().optional(),
 });
 const ReleaseSchema = z.object({
   tag: z.string(),
   name: z.string(),
-  publishedAt: z.string(),
-  url: z.string(),
+  publishedAt: z.iso.datetime(),
+  url: z.url(),
   body: z.string(),
 });
 const ReleaseNotesSchema = z.object({
@@ -35,12 +41,41 @@ const ReleaseNotesSchema = z.object({
   fromVersion: z.string(),
   toVersion: z.string(),
   releases: z.array(ReleaseSchema),
-  fetchedAt: z.string(),
+  fetchedAt: z.iso.datetime(),
 });
+const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(JsonValueSchema).max(100_000),
+    z.record(z.string(), JsonValueSchema),
+  ])
+);
+const CliOptionSchema = z.object({
+  flags: z.string(),
+  description: z.string().optional(),
+  required: z.boolean().optional(),
+  collect: z.boolean().optional(),
+}).passthrough();
+const CliCommandSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.object({
+    name: z.string(),
+    description: z.string().optional(),
+    arguments: z.array(JsonValueSchema).max(10_000).optional(),
+    options: z.array(CliOptionSchema).max(10_000).optional(),
+    subcommands: z.array(CliCommandSchema).max(10_000).optional(),
+  }).passthrough()
+);
+const CliHelpSchema = z.object({
+  version: z.string(),
+  root: CliCommandSchema,
+}).passthrough();
 const CliSurfaceSchema = z.object({
   swampVersion: z.string(),
-  capturedAt: z.string(),
-  schema: z.unknown(),
+  capturedAt: z.iso.datetime(),
+  schema: CliHelpSchema,
 });
 const OptionChangeSchema = z.object({
   command: z.string(),
@@ -53,7 +88,7 @@ const SurfaceDiffSchema = z.object({
   removedCommands: z.array(z.string()),
   addedOptions: z.array(OptionChangeSchema),
   removedOptions: z.array(OptionChangeSchema),
-  computedAt: z.string(),
+  computedAt: z.iso.datetime(),
 });
 const WorkflowSchema = z.object({
   name: z.string(),
@@ -61,11 +96,16 @@ const WorkflowSchema = z.object({
   taskTypes: z.array(z.string()),
 });
 const ScriptSchema = z.object({ file: z.string(), lines: z.array(z.number()) });
+const InventoryWarningSchema = z.object({
+  file: z.string(),
+  error: z.string(),
+});
 const RepoInventorySchema = z.object({
   name: z.string(),
   path: z.string(),
   present: z.boolean(),
   error: z.string().optional(),
+  warnings: z.array(InventoryWarningSchema),
   workflows: z.array(WorkflowSchema),
   models: z.array(z.string()),
   extensionModels: z.array(z.string()),
@@ -74,7 +114,7 @@ const RepoInventorySchema = z.object({
 });
 const FleetInventorySchema = z.object({
   campaignId: z.string().optional(),
-  capturedAt: z.string(),
+  capturedAt: z.iso.datetime(),
   repos: z.array(RepoInventorySchema),
 });
 const OpportunitySchema = z.object({
@@ -85,10 +125,23 @@ const OpportunitySchema = z.object({
   feature: z.string(),
   proposal: z.string(),
   status: z.enum(["proposed", "applied", "skipped", "blocked"]),
-  commit: z.string().optional(),
+  commit: z.union([z.url(), z.string().regex(/^[A-Fa-f0-9]+$/)]).optional(),
   notes: z.string().optional(),
-  updatedAt: z.string(),
+  updatedAt: z.iso.datetime(),
 });
+
+const GitHubReleaseResponseSchema = z.array(z.unknown()).transform((entries) =>
+  entries.flatMap((entry) => {
+    const parsed = z.object({
+      tag_name: z.string(),
+      name: z.string().nullable().optional(),
+      published_at: z.iso.datetime(),
+      html_url: z.url(),
+      body: z.string().nullable().optional(),
+    }).safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  })
+);
 
 /** A release returned by the GitHub releases API. */
 export interface GitHubRelease {
@@ -164,18 +217,15 @@ interface CommandResult {
 }
 
 interface MethodContext {
-  globalArgs: z.infer<typeof GlobalArgsSchema>;
-  modelType: string;
-  modelId: string;
+  globalArgs: Record<string, unknown>;
   logger: {
     info: (message: string, properties?: Record<string, unknown>) => void;
-    warning: (message: string, properties?: Record<string, unknown>) => void;
   };
   writeResource: (
     specName: string,
     instanceName: string,
-    data: unknown,
-  ) => Promise<Record<string, unknown>>;
+    data: Record<string, unknown>,
+  ) => Promise<DataHandle>;
   readResource?: (
     instanceName: string,
     version?: number,
@@ -189,9 +239,36 @@ export function sanitizeName(value: string): string {
   return slug || "unnamed";
 }
 
-/** Extract the leading dotted numeric CalVer portion from a swamp tag. */
-export function calVerPrefix(tag: string): string | null {
-  return tag.match(/^\d+(?:\.\d+)*/)?.[0] ?? null;
+/** Parse a complete swamp CalVer tag into numeric comparison segments. */
+export function parseCalVer(tag: string): number[] | null {
+  const match = tag.match(/^v?(\d{8}(?:\.\d+)*)(?:-sha\.[A-Fa-f0-9]+)?$/);
+  if (!match) return null;
+  const segments = match[1].split(".").map(Number);
+  return segments.every(Number.isSafeInteger) ? segments : null;
+}
+
+/** Compare numeric CalVer segments, treating omitted trailing segments as zero. */
+export function compareCalVer(left: number[], right: number[]): number {
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+    if (difference !== 0) return Math.sign(difference);
+  }
+  return 0;
+}
+
+/** Build a collision-resistant resource name from a readable identifier. */
+export async function resourceName(
+  prefix: string,
+  rawId: string,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(rawId),
+  );
+  const hash = [...new Uint8Array(digest)].slice(0, 4).map((value) =>
+    value.toString(16).padStart(2, "0")
+  ).join("");
+  return `${prefix}-${sanitizeName(rawId)}-${hash}`;
 }
 
 /** Return releases whose numeric CalVer lies in the inclusive range. */
@@ -200,14 +277,20 @@ export function filterReleasesInRange(
   fromVersion: string,
   toVersion: string,
 ): GitHubRelease[] {
-  const from = calVerPrefix(fromVersion);
-  const to = calVerPrefix(toVersion);
+  const from = parseCalVer(fromVersion);
+  const to = parseCalVer(toVersion);
   if (!from || !to) {
-    throw new Error("release range requires numeric CalVer tags");
+    throw new Error(
+      `release range endpoints must be complete CalVer tags: ${fromVersion} .. ${toVersion}`,
+    );
+  }
+  if (compareCalVer(from, to) > 0) {
+    throw new Error("release range start exceeds end");
   }
   return releases.filter((release) => {
-    const version = calVerPrefix(release.tag_name);
-    return version !== null && version >= from && version <= to;
+    const version = parseCalVer(release.tag_name);
+    return version !== null && compareCalVer(version, from) >= 0 &&
+      compareCalVer(version, to) <= 0;
   });
 }
 
@@ -246,7 +329,9 @@ export function flattenSurface(schema: unknown): CommandSurface {
     for (const child of children) walk(child, path);
   };
   if (Array.isArray(schema)) { for (const node of schema) walk(node, ""); }
-  else walk(schema, "");
+  else if (schema && typeof schema === "object" && "root" in schema) {
+    walk((schema as Record<string, unknown>).root, "");
+  } else walk(schema, "");
   return { commands };
 }
 
@@ -340,17 +425,59 @@ export function mergeOpportunity(
 async function runCommand(
   command: string,
   args: string[],
+  timeoutMs = COMMAND_TIMEOUT_MS,
 ): Promise<CommandResult> {
-  const output = await new Deno.Command(command, {
+  const child = new Deno.Command(command, {
     args,
     stdout: "piped",
     stderr: "piped",
-  }).output();
+  }).spawn();
+  const collect = async (
+    stream: ReadableStream<Uint8Array>,
+    limit: number,
+  ): Promise<string> => {
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    let captured = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (captured < limit) {
+        const part = value.subarray(0, limit - captured);
+        chunks.push(part);
+        captured += part.length;
+      }
+    }
+    const bytes = new Uint8Array(captured);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return new TextDecoder().decode(bytes);
+  };
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    try {
+      child.kill("SIGKILL");
+    } catch { /* process already exited */ }
+  }, timeoutMs);
+  const [status, stdout, stderr] = await Promise.all([
+    child.status,
+    collect(child.stdout, MAX_STDOUT_BYTES),
+    collect(child.stderr, MAX_STDERR_BYTES),
+  ]).finally(() => clearTimeout(timer));
+  if (timedOut) {
+    throw new Error(
+      `${command} timed out after ${timeoutMs}ms; stderr: ${stderr}`,
+    );
+  }
   return {
-    success: output.success,
-    code: output.code,
-    stdout: new TextDecoder().decode(output.stdout),
-    stderr: new TextDecoder().decode(output.stderr),
+    success: status.success,
+    code: status.code,
+    stdout,
+    stderr,
   };
 }
 
@@ -373,9 +500,25 @@ async function inventoryRepo(
     const stat = await Deno.stat(repo.path);
     if (!stat.isDirectory) throw new Error("path is not a directory");
     const workflows: WorkflowSummary[] = [];
+    const warnings: Array<{ file: string; error: string }> = [];
     for (const file of await listFiles(`${repo.path}/workflows`, /\.ya?ml$/)) {
-      const text = await Deno.readTextFile(`${repo.path}/workflows/${file}`);
-      workflows.push(parseWorkflowYaml(text, file.replace(/\.ya?ml$/, "")));
+      const relativeFile = `workflows/${file}`;
+      const fullPath = `${repo.path}/${relativeFile}`;
+      try {
+        const fileStat = await Deno.stat(fullPath);
+        if (fileStat.size > MAX_INVENTORY_FILE_BYTES) {
+          throw new Error(
+            `file exceeds ${MAX_INVENTORY_FILE_BYTES} byte limit`,
+          );
+        }
+        const text = await Deno.readTextFile(fullPath);
+        workflows.push(parseWorkflowYaml(text, file.replace(/\.ya?ml$/, "")));
+      } catch (error) {
+        warnings.push({
+          file: relativeFile,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     const models: string[] = [];
     try {
@@ -403,19 +546,32 @@ async function inventoryRepo(
     const swampInvokingScripts: Array<{ file: string; lines: number[] }> = [];
     for (const dir of ["bin", "scripts"]) {
       for (const file of await listFiles(`${repo.path}/${dir}`, /.*/)) {
+        const relativeFile = `${dir}/${file}`;
         try {
+          const fileStat = await Deno.stat(`${repo.path}/${relativeFile}`);
+          if (fileStat.size > MAX_INVENTORY_FILE_BYTES) {
+            throw new Error(
+              `file exceeds ${MAX_INVENTORY_FILE_BYTES} byte limit`,
+            );
+          }
           const lines = scanScript(
-            await Deno.readTextFile(`${repo.path}/${dir}/${file}`),
+            await Deno.readTextFile(`${repo.path}/${relativeFile}`),
           );
           if (lines.length) {
-            swampInvokingScripts.push({ file: `${dir}/${file}`, lines });
+            swampInvokingScripts.push({ file: relativeFile, lines });
           }
-        } catch { /* ignore binary/unreadable script files */ }
+        } catch (error) {
+          warnings.push({
+            file: relativeFile,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
     return RepoInventorySchema.parse({
       ...repo,
       present: true,
+      warnings,
       workflows,
       models: models.sort(),
       extensionModels,
@@ -427,6 +583,7 @@ async function inventoryRepo(
       ...repo,
       present: false,
       error: error instanceof Error ? error.message : String(error),
+      warnings: [],
       workflows: [],
       models: [],
       extensionModels: [],
@@ -538,17 +695,21 @@ export const model = {
           notes?: string;
         },
         context: MethodContext,
-      ): Promise<{ dataHandles: Array<Record<string, unknown>> }> => {
+      ): Promise<{ dataHandles: DataHandle[] }> => {
         context.logger.info("Opening campaign {campaignId}", {
           campaignId: args.id,
         });
+        const campaignName = await resourceName("campaign", args.id);
+        const existing = await context.readResource?.(campaignName);
         const handle = await context.writeResource(
           "campaign",
-          `campaign-${sanitizeName(args.id)}`,
+          campaignName,
           CampaignSchema.parse({
+            ...existing,
             ...args,
             phase: "open",
-            openedAt: new Date().toISOString(),
+            openedAt: existing?.openedAt ?? new Date().toISOString(),
+            notes: args.notes ?? existing?.notes,
           }),
         );
         context.logger.info("Opened campaign {campaignId}", {
@@ -567,13 +728,14 @@ export const model = {
       execute: async (
         args: { campaignId: string; fromVersion: string; toVersion: string },
         context: MethodContext,
-      ): Promise<{ dataHandles: Array<Record<string, unknown>> }> => {
+      ): Promise<{ dataHandles: DataHandle[] }> => {
         context.logger.info("Fetching releases for campaign {campaignId}", {
           campaignId: args.campaignId,
         });
+        const globalArgs = GlobalArgsSchema.parse(context.globalArgs);
         const result = await runCommand("gh", [
           "api",
-          `repos/${context.globalArgs.githubRepo}/releases`,
+          `repos/${globalArgs.githubRepo}/releases`,
           "--paginate",
           "--slurp",
         ]);
@@ -584,14 +746,18 @@ export const model = {
         }
         let raw: GitHubRelease[];
         try {
-          const parsed = JSON.parse(result.stdout) as
-            | GitHubRelease[]
-            | GitHubRelease[][];
-          raw = Array.isArray(parsed[0])
-            ? (parsed as GitHubRelease[][]).flat()
-            : parsed as GitHubRelease[];
-        } catch {
-          throw new Error("gh release fetch returned invalid JSON");
+          const parsed: unknown = JSON.parse(result.stdout);
+          if (!Array.isArray(parsed)) {
+            throw new Error("GitHub response is not an array");
+          }
+          const flattened = Array.isArray(parsed[0]) ? parsed.flat() : parsed;
+          raw = GitHubReleaseResponseSchema.parse(flattened);
+        } catch (error) {
+          throw new Error(
+            `gh release fetch returned invalid JSON/shape: ${
+              error instanceof Error ? error.message : String(error)
+            }; stderr: ${result.stderr.trim() || "<empty>"}`,
+          );
         }
         const releases = filterReleasesInRange(
           raw,
@@ -600,14 +766,14 @@ export const model = {
         ).map((release) => ({
           tag: release.tag_name,
           name: release.name ?? release.tag_name,
-          publishedAt: release.published_at ?? "",
-          url: release.html_url ?? "",
+          publishedAt: release.published_at!,
+          url: release.html_url!,
           body: release.body ?? "",
         }));
         const handles = [
           await context.writeResource(
             "releaseNotes",
-            `notes-${sanitizeName(args.campaignId)}`,
+            await resourceName("notes", args.campaignId),
             ReleaseNotesSchema.parse({
               ...args,
               releases,
@@ -615,7 +781,7 @@ export const model = {
             }),
           ),
         ];
-        const campaignName = `campaign-${sanitizeName(args.campaignId)}`;
+        const campaignName = await resourceName("campaign", args.campaignId);
         const campaign = await context.readResource?.(campaignName);
         if (campaign) {
           handles.push(
@@ -639,7 +805,7 @@ export const model = {
       execute: async (
         _args: Record<string, never>,
         context: MethodContext,
-      ): Promise<{ dataHandles: Array<Record<string, unknown>> }> => {
+      ): Promise<{ dataHandles: DataHandle[] }> => {
         context.logger.info("Capturing swamp CLI surface");
         const [versionResult, helpResult] = await Promise.all([
           runCommand("swamp", ["--version"]),
@@ -653,11 +819,15 @@ export const model = {
         if (!helpResult.success) {
           throw new Error(`swamp help failed: ${helpResult.stderr.trim()}`);
         }
-        let schema: unknown;
+        let schema: z.infer<typeof CliHelpSchema>;
         try {
-          schema = JSON.parse(helpResult.stdout);
-        } catch {
-          throw new Error("swamp help returned invalid JSON");
+          schema = CliHelpSchema.parse(JSON.parse(helpResult.stdout));
+        } catch (error) {
+          throw new Error(
+            `swamp help returned invalid JSON/shape: ${
+              error instanceof Error ? error.message : String(error)
+            }; stderr: ${helpResult.stderr.trim() || "<empty>"}`,
+          );
         }
         const swampVersion = versionResult.stdout.match(
           /\d+(?:\.\d+)+(?:-sha\.[A-Za-z0-9]+)?/,
@@ -683,7 +853,7 @@ export const model = {
       execute: async (
         args: { fromVersion: string; toVersion: string },
         context: MethodContext,
-      ): Promise<{ dataHandles: Array<Record<string, unknown>> }> => {
+      ): Promise<{ dataHandles: DataHandle[] }> => {
         context.logger.info("Diffing swamp surfaces {from} to {to}", {
           from: args.fromVersion,
           to: args.toVersion,
@@ -727,20 +897,22 @@ export const model = {
       execute: async (
         args: { campaignId?: string },
         context: MethodContext,
-      ): Promise<{ dataHandles: Array<Record<string, unknown>> }> => {
+      ): Promise<{ dataHandles: DataHandle[] }> => {
         context.logger.info("Inventorying {count} fleet repositories", {
-          count: context.globalArgs.fleetRepos.length,
+          count: GlobalArgsSchema.parse(context.globalArgs).fleetRepos.length,
         });
+        const globalArgs = GlobalArgsSchema.parse(context.globalArgs);
         const settled = await Promise.allSettled(
-          context.globalArgs.fleetRepos.map(inventoryRepo),
+          globalArgs.fleetRepos.map(inventoryRepo),
         );
         const repos = settled.map((result, index) =>
           result.status === "fulfilled"
             ? result.value
             : RepoInventorySchema.parse({
-              ...context.globalArgs.fleetRepos[index],
+              ...globalArgs.fleetRepos[index],
               present: false,
               error: String(result.reason),
+              warnings: [],
               workflows: [],
               models: [],
               extensionModels: [],
@@ -750,7 +922,7 @@ export const model = {
         );
         const capturedAt = new Date().toISOString();
         const suffix = args.campaignId
-          ? sanitizeName(args.campaignId)
+          ? await resourceName("campaign", args.campaignId)
           : sanitizeName(capturedAt);
         const handle = await context.writeResource(
           "fleetInventory",
@@ -770,10 +942,12 @@ export const model = {
         status: OpportunitySchema.shape.status.optional(),
       }),
       execute: async (
-        args: Omit<Opportunity, "updatedAt">,
+        args: Omit<Opportunity, "status" | "updatedAt"> & {
+          status?: Opportunity["status"];
+        },
         context: MethodContext,
-      ): Promise<{ dataHandles: Array<Record<string, unknown>> }> => {
-        const name = `opp-${sanitizeName(args.id)}`;
+      ): Promise<{ dataHandles: DataHandle[] }> => {
+        const name = await resourceName("opp", args.id);
         context.logger.info("Recording opportunity {opportunityId}", {
           opportunityId: args.id,
         });
@@ -786,7 +960,9 @@ export const model = {
           args,
           new Date().toISOString(),
         );
-        const handle = await context.writeResource("opportunity", name, merged);
+        const handle = await context.writeResource("opportunity", name, {
+          ...merged,
+        });
         context.logger.info(
           "Recorded opportunity {opportunityId} as {status}",
           { opportunityId: args.id, status: merged.status },

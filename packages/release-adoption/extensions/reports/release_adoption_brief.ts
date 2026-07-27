@@ -37,6 +37,7 @@ interface ReportContext {
 interface Artifact extends Record<string, unknown> {
   __name: string;
   __createdAt: string;
+  __version: number;
 }
 
 interface ReportResult {
@@ -52,7 +53,18 @@ async function loadArtifacts(
     context.modelType,
     context.modelId,
   );
+  const newestByName = new Map<string, DataEntry>();
   for (const entry of entries) {
+    const current = newestByName.get(entry.name);
+    if (
+      !current || entry.version > current.version ||
+      (entry.version === current.version &&
+        (entry.createdAt ?? "").localeCompare(current.createdAt ?? "") > 0)
+    ) {
+      newestByName.set(entry.name, entry);
+    }
+  }
+  for (const entry of newestByName.values()) {
     const specName = entry.tags?.specName;
     if (!specName) continue;
     const raw = await context.dataRepository.getContent(
@@ -71,6 +83,7 @@ async function loadArtifacts(
         ...value,
         __name: entry.name,
         __createdAt: entry.createdAt ?? "",
+        __version: entry.version,
       };
       grouped.set(specName, [...(grouped.get(specName) ?? []), artifact]);
     } catch { /* skip corrupt historical artifacts */ }
@@ -80,7 +93,8 @@ async function loadArtifacts(
 
 function latest(items: Artifact[]): Artifact | undefined {
   return [...items].sort((a, b) =>
-    b.__createdAt.localeCompare(a.__createdAt)
+    b.__createdAt.localeCompare(a.__createdAt) ||
+    b.__version - a.__version || b.__name.localeCompare(a.__name)
   )[0];
 }
 
@@ -101,24 +115,39 @@ function campaignIdFromContext(context: ReportContext): string | undefined {
   return undefined;
 }
 
-function firstBodyLines(body: unknown): string {
+function fencedBody(body: unknown): string {
   if (typeof body !== "string" || body.length === 0) {
     return "_No release body._";
   }
-  return body.split(/\r?\n/).slice(0, 40).join("\n");
+  const excerpt = body.split(/\r?\n/).slice(0, 40).join("\n");
+  const longestRun = Math.max(
+    0,
+    ...[...excerpt.matchAll(/`+/g)].map((match) => match[0].length),
+  );
+  const fence = "`".repeat(Math.max(3, longestRun + 1));
+  return `${fence}text\n${excerpt}\n${fence}`;
 }
 
 function countArray(value: unknown): number {
   return Array.isArray(value) ? value.length : 0;
 }
 
+function inline(value: unknown): string {
+  return String(value ?? "").replace(/\\/g, "\\\\").replace(/\r?\n/g, " ")
+    .replace(/([#*_[\]<>])/g, "\\$1");
+}
+
+function tableCell(value: unknown): string {
+  return inline(value).replace(/\|/g, "\\|");
+}
+
 function markdownLink(commit: unknown, repo: unknown): string {
   if (typeof commit !== "string" || !commit) return "";
   if (commit.startsWith("http://") || commit.startsWith("https://")) {
-    return `[${commit}](${commit})`;
+    return `[${inline(commit)}](<${commit.replace(/[<>]/g, "")}>)`;
   }
   if (typeof repo === "string" && /^[^/]+\/[^/]+$/.test(repo)) {
-    return `[${commit}](https://github.com/${repo}/commit/${commit})`;
+    return `[${inline(commit)}](https://github.com/${repo}/commit/${commit})`;
   }
   return `\`${commit}\``;
 }
@@ -132,6 +161,7 @@ export const report = {
   labels: ["release-adoption", "brief"],
   execute: async (context: ReportContext): Promise<ReportResult> => {
     if (context.modelType !== "@mgreten/release-adoption") {
+      context.logger.info("Skipping release-adoption brief: wrong model type");
       return {
         markdown:
           "Report skipped — this report only supports `@mgreten/release-adoption`.",
@@ -145,13 +175,20 @@ export const report = {
     const requestedId = campaignIdFromContext(context);
     const campaigns = artifacts.get("campaign") ?? [];
     const campaign = requestedId
-      ? campaigns.find((item) => item.id === requestedId) ?? latest(campaigns)
+      ? campaigns.find((item) => item.id === requestedId)
       : latest(campaigns);
     if (!campaign) {
+      const reason = requestedId ? "campaign_not_found" : "no_campaign";
+      context.logger.info("Skipping release-adoption brief: {reason}", {
+        reason,
+      });
       return {
-        markdown:
-          "# Release Adoption Brief\n\nNo campaign data found. Run `open-campaign` first.",
-        json: { skipped: true, reason: "no_campaign" },
+        markdown: requestedId
+          ? `# Release Adoption Brief\n\nCampaign \`${
+            inline(requestedId)
+          }\` was not found.`
+          : "# Release Adoption Brief\n\nNo campaign data found. Run `open-campaign` first.",
+        json: { skipped: true, reason, campaignId: requestedId },
       };
     }
     const campaignId = String(campaign.id);
@@ -175,12 +212,14 @@ export const report = {
       item.campaignId === campaignId
     );
 
-    let markdown = `# Release Adoption Brief: ${campaignId}\n\n`;
-    markdown +=
-      `- **Upgrade:** ${campaign.fromVersion} → ${campaign.toVersion}\n`;
-    markdown +=
-      `- **Phase:** ${campaign.phase}\n- **Opened:** ${campaign.openedAt}\n`;
-    if (campaign.notes) markdown += `- **Notes:** ${campaign.notes}\n`;
+    let markdown = `# Release Adoption Brief: ${inline(campaignId)}\n\n`;
+    markdown += `- **Upgrade:** ${inline(campaign.fromVersion)} → ${
+      inline(campaign.toVersion)
+    }\n`;
+    markdown += `- **Phase:** ${inline(campaign.phase)}\n- **Opened:** ${
+      inline(campaign.openedAt)
+    }\n`;
+    if (campaign.notes) markdown += `- **Notes:** ${inline(campaign.notes)}\n`;
 
     markdown += "\n## Release Notes\n\n";
     const releases = Array.isArray(notes?.releases)
@@ -188,10 +227,12 @@ export const report = {
       : [];
     if (!releases.length) markdown += "No release notes captured.\n";
     for (const release of releases) {
-      markdown += `### [${release.tag}](${release.url}) — ${
-        String(release.name)
-      } (${String(release.body ?? "").length} chars)\n\n`;
-      markdown += `${firstBodyLines(release.body)}\n\n`;
+      markdown += `### [${inline(release.tag)}](<${
+        String(release.url).replace(/[<>]/g, "")
+      }>) — ${inline(release.name)} (${
+        String(release.body ?? "").length
+      } chars)\n\n`;
+      markdown += `${fencedBody(release.body)}\n\n`;
     }
 
     markdown += "## CLI Surface Diff\n\n";
@@ -212,7 +253,9 @@ export const report = {
             (value as Record<string, unknown>).option
           }`
       ).join("<br>");
-      markdown += `| ${label} | ${values.length} | ${rendered || "—"} |\n`;
+      markdown += `| ${label} | ${values.length} | ${
+        tableCell(rendered || "—")
+      } |\n`;
     }
 
     markdown +=
@@ -221,8 +264,10 @@ export const report = {
       ? inventory.repos as Array<Record<string, unknown>>
       : [];
     for (const repo of repos) {
-      markdown += `| ${repo.name} | ${
-        repo.present ? "yes" : `no — ${repo.error ?? "unknown error"}`
+      markdown += `| ${tableCell(repo.name)} | ${
+        tableCell(
+          repo.present ? "yes" : `no — ${repo.error ?? "unknown error"}`,
+        )
       } | ${countArray(repo.workflows)} | ${countArray(repo.models)} | ${
         countArray(repo.extensionModels)
       } | ${countArray(repo.reports)} | ${
@@ -241,10 +286,11 @@ export const report = {
       for (const item of group) {
         const checked = status === "applied" ? "x" : " ";
         const commit = markdownLink(item.commit, item.repo);
-        markdown +=
-          `- [${checked}] **${item.repo} / ${item.target}** — ${item.feature}: ${item.proposal}${
-            commit ? ` (${commit})` : ""
-          }${item.notes ? ` — ${item.notes}` : ""}\n`;
+        markdown += `- [${checked}] **${inline(item.repo)} / ${
+          inline(item.target)
+        }** — ${inline(item.feature)}: ${inline(item.proposal)}${
+          commit ? ` (${commit})` : ""
+        }${item.notes ? ` — ${inline(item.notes)}` : ""}\n`;
       }
     }
 
