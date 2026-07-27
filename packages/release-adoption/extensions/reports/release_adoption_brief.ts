@@ -9,7 +9,7 @@ interface DataEntry {
   name: string;
   version: number;
   tags: Record<string, string>;
-  createdAt?: string;
+  createdAt?: unknown;
 }
 
 interface ReportContext {
@@ -45,6 +45,13 @@ interface ReportResult {
   json: Record<string, unknown>;
 }
 
+function sortableTimestamp(value: unknown): string {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : value.toISOString();
+  }
+  return value == null ? "" : String(value);
+}
+
 async function loadArtifacts(
   context: ReportContext,
 ): Promise<Map<string, Artifact[]>> {
@@ -59,7 +66,9 @@ async function loadArtifacts(
     if (
       !current || entry.version > current.version ||
       (entry.version === current.version &&
-        (entry.createdAt ?? "").localeCompare(current.createdAt ?? "") > 0)
+        sortableTimestamp(entry.createdAt).localeCompare(
+            sortableTimestamp(current.createdAt),
+          ) > 0)
     ) {
       newestByName.set(entry.name, entry);
     }
@@ -82,7 +91,7 @@ async function loadArtifacts(
       const artifact: Artifact = {
         ...value,
         __name: entry.name,
-        __createdAt: entry.createdAt ?? "",
+        __createdAt: sortableTimestamp(entry.createdAt),
         __version: entry.version,
       };
       grouped.set(specName, [...(grouped.get(specName) ?? []), artifact]);

@@ -90,6 +90,42 @@ Deno.test("diffs commands and per-command options", () => {
   });
 });
 
+Deno.test("diffs nested command flags and subtree global options", () => {
+  const before = {
+    version: "20260726.015855.0",
+    root: {
+      name: "swamp",
+      subcommands: [{
+        name: "workflow",
+        subcommands: [{
+          name: "run",
+          options: [{ flags: "--timeout" }],
+          globalOptions: [{ flags: "--json" }],
+        }],
+      }],
+    },
+  };
+  const after = structuredClone(before);
+  const run = after.root.subcommands[0].subcommands[0];
+  run.options.push(
+    { flags: "--fail-on" },
+    { flags: "--junit" },
+    { flags: "--out" },
+  );
+  run.globalOptions.push({ flags: "--show-properties" });
+  assertEquals(diffSurfaces(before, after), {
+    addedCommands: [],
+    removedCommands: [],
+    addedOptions: [
+      { command: "swamp workflow run", option: "--fail-on" },
+      { command: "swamp workflow run", option: "--junit" },
+      { command: "swamp workflow run", option: "--out" },
+      { command: "swamp workflow run", option: "--show-properties" },
+    ],
+    removedOptions: [],
+  });
+});
+
 Deno.test("parses workflow YAML inventory", () => {
   const summary = parseWorkflowYaml(
     `name: Example\njobs:\n  first:\n    steps:\n      - task: '@mgreten/a'\n      - type: '@mgreten/b'\n      - task:\n          type: model_method\n  second:\n    steps:\n      - task: '@mgreten/a'\n`,
@@ -220,7 +256,13 @@ Deno.test("open-campaign execute reopens idempotently and preserves openedAt", a
 function reportContext(
   methodArgs: Record<string, unknown>,
   artifacts: Array<
-    { name: string; version: number; specName: string; data: unknown }
+    {
+      name: string;
+      version: number;
+      specName: string;
+      data: unknown;
+      createdAt?: unknown;
+    }
   >,
 ) {
   return {
@@ -237,7 +279,9 @@ function reportContext(
           name: item.name,
           version: item.version,
           tags: { specName: item.specName },
-          createdAt: "2026-07-27T00:00:00.000Z",
+          createdAt: Object.hasOwn(item, "createdAt")
+            ? item.createdAt
+            : "2026-07-27T00:00:00.000Z",
         }))),
       getContent: (
         _type: string,
@@ -336,4 +380,35 @@ Deno.test("report uses latest opportunity artifact version and safe markdown", a
   assertMatch(result.markdown, /### Applied[\s\S]*target\|cell/);
   assertMatch(result.markdown, /repo\\\|cell.*line one line two/);
   assertMatch(result.markdown, /````text/);
+});
+
+Deno.test("report sorts Date and missing artifact timestamps safely", async () => {
+  const campaign = {
+    id: "campaign",
+    fromVersion: "20260726.1",
+    toVersion: "20260727.1",
+    phase: "open",
+    openedAt: "2026-07-27T00:00:00.000Z",
+  };
+  const context = reportContext({}, [
+    {
+      name: "older",
+      version: 1,
+      specName: "campaign",
+      data: { ...campaign, id: "missing-date" },
+      createdAt: undefined,
+    },
+    {
+      name: "newer",
+      version: 1,
+      specName: "campaign",
+      data: campaign,
+      createdAt: new Date("2026-07-27T01:00:00.000Z"),
+    },
+  ]);
+  const result = await report.execute(context);
+  assertEquals(
+    (result.json.campaign as Record<string, unknown>).id,
+    "campaign",
+  );
 });

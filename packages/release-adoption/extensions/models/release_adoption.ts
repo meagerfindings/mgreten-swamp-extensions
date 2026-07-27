@@ -10,7 +10,7 @@ import { z } from "npm:zod@4";
 import { parse as parseYaml } from "npm:yaml@2.8.0";
 import type { DataHandle } from "jsr:@systeminit/swamp-testing@0.20260604.20";
 
-const VERSION = "2026.07.27.3";
+const VERSION = "2026.07.27.4";
 const COMMAND_TIMEOUT_MS = 120_000;
 const MAX_STDOUT_BYTES = 10 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
@@ -297,6 +297,13 @@ export function filterReleasesInRange(
 /** Flatten a machine-readable swamp help tree into commands and options. */
 export function flattenSurface(schema: unknown): CommandSurface {
   const commands = new Map<string, Set<string>>();
+  const optionName = (option: unknown): string | undefined => {
+    if (typeof option === "string") return option;
+    if (!option || typeof option !== "object") return undefined;
+    const item = option as Record<string, unknown>;
+    const name = item.flags ?? item.name ?? item.long ?? item.flag;
+    return typeof name === "string" ? name : undefined;
+  };
   const walk = (node: unknown, parent: string): void => {
     if (!node || typeof node !== "object") return;
     const record = node as Record<string, unknown>;
@@ -306,18 +313,11 @@ export function flattenSurface(schema: unknown): CommandSurface {
       : nodeName || parent;
     if (path) {
       const options = new Set<string>();
-      const rawOptions = Array.isArray(record.options)
-        ? record.options
-        : Array.isArray(record.flags)
-        ? record.flags
-        : [];
+      const rawOptions = [record.options, record.flags, record.globalOptions]
+        .flatMap((value) => Array.isArray(value) ? value : []);
       for (const option of rawOptions) {
-        if (typeof option === "string") options.add(option);
-        else if (option && typeof option === "object") {
-          const item = option as Record<string, unknown>;
-          const name = item.name ?? item.long ?? item.flag;
-          if (typeof name === "string") options.add(name);
-        }
+        const name = optionName(option);
+        if (name) options.add(name);
       }
       commands.set(path, options);
     }
