@@ -57,6 +57,7 @@ jobs:
         task:
           type: assert
           expr: >-
+            data.latest("hermes-review-collector", "daily").tags.?workflowRunId.orValue("") == run.id &&
             data.latest("hermes-review-collector", "daily").attributes.windowStart < data.latest("hermes-review-collector", "daily").attributes.windowEnd
           message: "Hermes review summary must cover a non-empty time window"
           severity: high
