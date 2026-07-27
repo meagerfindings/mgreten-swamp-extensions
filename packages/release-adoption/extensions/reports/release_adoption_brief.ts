@@ -160,14 +160,6 @@ export const report = {
   scope: "method" as const,
   labels: ["release-adoption", "brief"],
   execute: async (context: ReportContext): Promise<ReportResult> => {
-    if (context.modelType !== "@mgreten/release-adoption") {
-      context.logger.info("Skipping release-adoption brief: wrong model type");
-      return {
-        markdown:
-          "Report skipped — this report only supports `@mgreten/release-adoption`.",
-        json: { skipped: true, reason: "wrong_model_type" },
-      };
-    }
     context.logger.info("Building release-adoption brief for {model}", {
       model: context.definition.name,
     });

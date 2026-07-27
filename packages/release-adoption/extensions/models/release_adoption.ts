@@ -10,7 +10,7 @@ import { z } from "npm:zod@4";
 import { parse as parseYaml } from "npm:yaml@2.8.0";
 import type { DataHandle } from "jsr:@systeminit/swamp-testing@0.20260604.20";
 
-const VERSION = "2026.07.27.2";
+const VERSION = "2026.07.27.3";
 const COMMAND_TIMEOUT_MS = 120_000;
 const MAX_STDOUT_BYTES = 10 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/release-adoption"
-version: "2026.07.27.2"
+version: "2026.07.27.3"
 description: >
   Deterministic release-adoption campaigns for swamp: capture release notes and
   CLI surfaces, diff upgrades, inventory repository fleets, and track adoption
