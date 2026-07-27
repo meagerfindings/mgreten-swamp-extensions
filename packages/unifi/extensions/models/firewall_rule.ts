@@ -53,8 +53,15 @@ type FirewallRule = z.infer<typeof FirewallRuleSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/firewall-rule",
-  version: "2026.07.22.1",
+  version: "2026.07.27.1",
   globalArguments: UnifiGlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.27.1",
+      description: "Package version alignment; no global argument changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     rule: {
       description: "A UniFi legacy firewall rule.",

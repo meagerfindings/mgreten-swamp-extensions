@@ -1,13 +1,14 @@
 manifestVersion: 1
 name: "@mgreten/unifi"
-version: "2026.07.22.1"
+version: "2026.07.27.1"
 description: >
   Manage a Ubiquiti UniFi Dream Machine (UDM / UDM Pro / UDM SE) via the
-  legacy Network firewall API: firewall groups, firewall rules, clients,
-  and networks. Complements @stack72/ubiquity (which focuses on traffic
-  collection) by enabling configuration-as-data workflows: sync existing
-  groups/rules into the swamp data model, reconcile group membership,
-  create or delete firewall rules, and toggle rule state.
+  legacy Network API: firewall groups, firewall rules, clients, PoE device
+  restarts, and networks. Complements @stack72/ubiquity (which focuses on
+  traffic collection) by enabling configuration-as-data workflows: sync
+  existing groups/rules into the swamp data model, reconcile group membership,
+  create or delete firewall rules, toggle rule state, and safely power-cycle a
+  wired client's resolved switch port.
 
 repository: https://github.com/meagerfindings/swamp-unifi
 

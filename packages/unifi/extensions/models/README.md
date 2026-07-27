@@ -1,8 +1,8 @@
 # @mgreten/unifi
 
 Manage a Ubiquiti UniFi Dream Machine (UDM / UDM Pro / UDM SE) via the
-**legacy Network firewall API** — firewall groups, firewall rules, clients,
-and networks — as first-class swamp models. Complements
+**legacy Network API** — firewall groups, firewall rules, clients, PoE device
+restarts, and networks — as first-class swamp models. Complements
 [`@stack72/ubiquity`](https://github.com/stack72/swamp-ubiquity) (which focuses
 on traffic collection) by enabling configuration-as-data workflows.
 
@@ -18,7 +18,7 @@ the legacy Network API exposes.
 | ------------------------------- | -------------------------------------- | ------------------------------------ |
 | `@mgreten/unifi/firewall-group` | IPv4/IPv6 address and port groups      | `sync` (factory), `set-members`      |
 | `@mgreten/unifi/firewall-rule`  | LAN/WAN/GUEST firewall rules           | `sync`, `create`, `delete`, `toggle-enabled` |
-| `@mgreten/unifi/client`         | Known clients (active + configured)    | `sync` (factory)                     |
+| `@mgreten/unifi/client`         | Known clients and wired PoE devices    | `sync` (factory), `power-cycle-poe`  |
 | `@mgreten/unifi/network`        | Configured networks (VLANs / subnets)  | `sync` (factory)                     |
 
 ## Authentication
@@ -81,6 +81,37 @@ swamp model method run my-groups set-members \
   --input name='IP Cameras' \
   --input 'members:json=["192.0.2.22","192.0.2.23"]'
 ```
+
+## Restart a PoE device
+
+`power-cycle-poe` resolves the active wired client's current switch and port,
+then asks UniFi to cycle that port's PoE power. It accepts a client name,
+hostname, or MAC address (names are case-insensitive, and uniquely matching
+camel-cased words may be reordered). The method rejects ambiguous names,
+wireless clients, missing topology, non-PoE ports, uplinks, and ports with
+multiple learned clients rather than risking the wrong port.
+
+```bash
+swamp model method run my-clients power-cycle-poe \
+  --input device=front-door-camera
+```
+
+For a device whose physical topology should not change, pin the expected switch
+and port as additional assertions:
+
+```bash
+swamp model method run my-clients power-cycle-poe \
+  --input device=front-door-camera \
+  --input expectedSwitch='Example PoE Switch' \
+  --input expectedPort=7
+```
+
+This briefly removes power from the resolved switch port and will interrupt any
+device connected to it. Each controller-accepted command is recorded as a
+`power_cycle` data artifact with the client, switch, port, controller response,
+and acknowledgment timestamp. Acceptance does not independently prove physical
+power loss or completion; verify the device reconnects when that distinction
+matters.
 
 ## TLS notes
 

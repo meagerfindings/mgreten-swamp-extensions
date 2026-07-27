@@ -27,8 +27,15 @@ type Network = z.infer<typeof NetworkSchema>;
  */
 export const model = {
   type: "@mgreten/unifi/network",
-  version: "2026.07.22.1",
+  version: "2026.07.27.1",
   globalArguments: UnifiGlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.27.1",
+      description: "Package version alignment; no global argument changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     network: {
       description: "A configured UniFi network (VLAN/subnet).",
