@@ -10,7 +10,7 @@ import { z } from "npm:zod@4";
 import { parse as parseYaml } from "npm:yaml@2.8.0";
 import type { DataHandle } from "jsr:@systeminit/swamp-testing@0.20260604.20";
 
-const VERSION = "2026.07.27.1";
+const VERSION = "2026.07.27.2";
 const COMMAND_TIMEOUT_MS = 120_000;
 const MAX_STDOUT_BYTES = 10 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
@@ -737,7 +737,8 @@ export const model = {
           "api",
           `repos/${globalArgs.githubRepo}/releases`,
           "--paginate",
-          "--slurp",
+          "--jq",
+          `.[] | select((.tag_name | sub("^v"; "") | split("-sha.")[0]) >= "${args.fromVersion}" and (.tag_name | sub("^v"; "") | split("-sha.")[0]) <= "${args.toVersion}") | {tag_name, name, published_at, html_url, body}`,
         ]);
         if (!result.success) {
           throw new Error(
@@ -746,12 +747,10 @@ export const model = {
         }
         let raw: GitHubRelease[];
         try {
-          const parsed: unknown = JSON.parse(result.stdout);
-          if (!Array.isArray(parsed)) {
-            throw new Error("GitHub response is not an array");
-          }
-          const flattened = Array.isArray(parsed[0]) ? parsed.flat() : parsed;
-          raw = GitHubReleaseResponseSchema.parse(flattened);
+          const entries = result.stdout.trim()
+            ? result.stdout.trim().split("\n").map((line) => JSON.parse(line))
+            : [];
+          raw = GitHubReleaseResponseSchema.parse(entries);
         } catch (error) {
           throw new Error(
             `gh release fetch returned invalid JSON/shape: ${
