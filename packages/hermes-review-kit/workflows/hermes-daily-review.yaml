@@ -49,3 +49,14 @@ jobs:
         dependsOn: []
         weight: 0
         allowFailure: false
+      - name: verify-summary-window
+        dependsOn:
+          - step: collect
+            condition:
+              type: succeeded
+        task:
+          type: assert
+          expr: >-
+            data.latest("hermes-review-collector", "daily").attributes.windowStart < data.latest("hermes-review-collector", "daily").attributes.windowEnd
+          message: "Hermes review summary must cover a non-empty time window"
+          severity: high
