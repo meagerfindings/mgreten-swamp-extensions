@@ -221,6 +221,18 @@ export const report = {
       inline(campaign.openedAt)
     }\n`;
     if (campaign.notes) markdown += `- **Notes:** ${inline(campaign.notes)}\n`;
+    if (campaign.phase === "completed") {
+      markdown += `- **Closed:** ${inline(campaign.closedAt)}\n`;
+      if (campaign.outcome) {
+        markdown += `- **Outcome:** ${inline(campaign.outcome)}\n`;
+      }
+      const tally = ["applied", "skipped", "blocked"].map((status) =>
+        `${status} ${
+          opportunities.filter((item) => item.status === status).length
+        }`
+      ).join(" · ");
+      markdown += `- **Final tally:** ${tally}\n`;
+    }
 
     markdown += "\n## Release Notes\n\n";
     const releases = Array.isArray(notes?.releases)

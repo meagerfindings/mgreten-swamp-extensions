@@ -1,5 +1,11 @@
-import { assertEquals, assertMatch, assertThrows } from "jsr:@std/assert@1";
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from "jsr:@std/assert@1";
 import { createModelTestContext } from "jsr:@systeminit/swamp-testing";
+import type { DataHandle } from "jsr:@systeminit/swamp-testing";
 import {
   compareCalVer,
   diffSurfaces,
@@ -253,6 +259,143 @@ Deno.test("open-campaign execute reopens idempotently and preserves openedAt", a
   });
 });
 
+function closeContext(
+  campaign: Record<string, unknown>,
+  opportunities: Array<Record<string, unknown>> = [],
+) {
+  const writes: Array<{ name: string; data: Record<string, unknown> }> = [];
+  const encoded = new Map(
+    opportunities.map((item, index) => [
+      `opp-${index}`,
+      new TextEncoder().encode(JSON.stringify(item)),
+    ]),
+  );
+  return {
+    context: {
+      modelType: "@mgreten/release-adoption",
+      modelId: "model-id",
+      globalArgs: {},
+      logger: { info: () => {} },
+      readResource: () => Promise.resolve(campaign),
+      writeResource: (
+        _specName: string,
+        name: string,
+        data: Record<string, unknown>,
+      ) => {
+        writes.push({ name, data });
+        return Promise.resolve({ name, version: 1 } as unknown as DataHandle);
+      },
+      dataRepository: {
+        findAllForModel: () =>
+          Promise.resolve(opportunities.map((_item, index) => ({
+            name: `opp-${index}`,
+            version: 1,
+            tags: { specName: "opportunity" },
+          }))),
+        getContent: (
+          _type: string,
+          _modelId: string,
+          name: string,
+        ) => Promise.resolve(encoded.get(name) ?? null),
+      },
+    },
+    writes,
+  };
+}
+
+const scannedCampaign = {
+  id: "campaign",
+  fromVersion: "20260726.1",
+  toVersion: "20260727.1",
+  phase: "scanned",
+  openedAt: "2026-07-27T00:00:00.000Z",
+};
+
+function opportunity(
+  status: "proposed" | "applied" | "skipped" | "blocked",
+) {
+  return {
+    id: `opp-${status}`,
+    campaignId: "campaign",
+    repo: "owner/repo",
+    target: "workflow",
+    feature: "assert steps",
+    proposal: "adopt assertions",
+    status,
+    updatedAt: "2026-07-27T01:00:00.000Z",
+  };
+}
+
+Deno.test("close-campaign completes an old campaign schema", async () => {
+  const { context, writes } = closeContext(scannedCampaign, [
+    opportunity("applied"),
+    opportunity("skipped"),
+  ]);
+  await model.methods["close-campaign"].execute({
+    campaignId: "campaign",
+    outcome: "finished",
+  }, context);
+  assertEquals(writes.length, 1);
+  assertEquals(writes[0].data.phase, "completed");
+  assertEquals(writes[0].data.outcome, "finished");
+  assertMatch(String(writes[0].data.closedAt), /^2026-/);
+});
+
+Deno.test("close-campaign refuses proposed items without partial writes", async () => {
+  const { context, writes } = closeContext(scannedCampaign, [
+    opportunity("proposed"),
+  ]);
+  await assertRejects(
+    () =>
+      model.methods["close-campaign"].execute(
+        { campaignId: "campaign" },
+        context,
+      ),
+    Error,
+    "opp-proposed (owner/repo/workflow)",
+  );
+  assertEquals(writes, []);
+});
+
+Deno.test("close-campaign is a no-op when already completed", async () => {
+  const { context, writes } = closeContext({
+    ...scannedCampaign,
+    phase: "completed",
+    closedAt: "2026-07-27T02:00:00.000Z",
+  });
+  const result = await model.methods["close-campaign"].execute(
+    { campaignId: "campaign" },
+    context,
+  );
+  assertEquals(result.dataHandles, []);
+  assertEquals(writes, []);
+});
+
+Deno.test("record-opportunity refuses mutation after close", async () => {
+  const name = await resourceName("campaign", "campaign");
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { githubRepo: "swamp-club/swamp", fleetRepos: [] },
+    methodName: "record-opportunity",
+    storedResources: {
+      [name]: {
+        ...scannedCampaign,
+        phase: "completed",
+        closedAt: "2026-07-27T02:00:00.000Z",
+      },
+    },
+  });
+  await assertRejects(
+    () =>
+      model.methods["record-opportunity"].execute(
+        opportunity("applied"),
+        context,
+      ),
+    Error,
+    "closed campaign ledgers are immutable",
+  );
+  assertEquals(getWrittenResources(), []);
+});
+
 function reportContext(
   methodArgs: Record<string, unknown>,
   artifacts: Array<
@@ -380,6 +523,39 @@ Deno.test("report uses latest opportunity artifact version and safe markdown", a
   assertMatch(result.markdown, /### Applied[\s\S]*target\|cell/);
   assertMatch(result.markdown, /repo\\\|cell.*line one line two/);
   assertMatch(result.markdown, /````text/);
+});
+
+Deno.test("report renders completed campaign metadata and final tally", async () => {
+  const context = reportContext({ campaignId: "campaign" }, [
+    {
+      name: "campaign",
+      version: 2,
+      specName: "campaign",
+      data: {
+        ...scannedCampaign,
+        phase: "completed",
+        closedAt: "2026-07-27T02:00:00.000Z",
+        outcome: "All work finished",
+      },
+    },
+    ...(["applied", "applied", "skipped", "blocked"] as const).map((
+      status,
+      index,
+    ) => ({
+      name: `opp-${index}`,
+      version: 1,
+      specName: "opportunity",
+      data: { ...opportunity(status), id: `opp-${index}` },
+    })),
+  ]);
+  const result = await report.execute(context);
+  assertMatch(result.markdown, /\*\*Phase:\*\* completed/);
+  assertMatch(result.markdown, /\*\*Closed:\*\* 2026-07-27T02:00:00.000Z/);
+  assertMatch(result.markdown, /\*\*Outcome:\*\* All work finished/);
+  assertMatch(
+    result.markdown,
+    /\*\*Final tally:\*\* applied 2 · skipped 1 · blocked 1/,
+  );
 });
 
 Deno.test("report sorts Date and missing artifact timestamps safely", async () => {

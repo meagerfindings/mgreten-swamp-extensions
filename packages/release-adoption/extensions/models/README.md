@@ -27,11 +27,15 @@ swamp model create @mgreten/release-adoption adoption \
 swamp model method run adoption open-campaign --input id=july \
   --input fromVersion=20260720.000000.0 --input toVersion=20260727.000000.0
 swamp model method run adoption inventory-fleet --input campaignId=july
+swamp model method run adoption close-campaign --input campaignId=july \
+  --input outcome="Adoption work completed"
 ```
 
 Campaign and ledger resources are retained indefinitely with bounded history;
 fleet inventory expires after 90 days. See the repository-level README for the
-complete method sequence and resource details.
+complete method sequence and resource details. `close-campaign` refuses to
+complete while proposed opportunities remain; completed campaign ledgers are
+immutable and repeated close calls are safe no-ops.
 
 ## License
 

@@ -10,7 +10,7 @@ import { z } from "npm:zod@4";
 import { parse as parseYaml } from "npm:yaml@2.8.0";
 import type { DataHandle } from "jsr:@systeminit/swamp-testing@0.20260604.20";
 
-const VERSION = "2026.07.27.4";
+const VERSION = "2026.07.27.5";
 const COMMAND_TIMEOUT_MS = 120_000;
 const MAX_STDOUT_BYTES = 10 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
@@ -25,8 +25,17 @@ const CampaignSchema = z.object({
   id: z.string(),
   fromVersion: z.string(),
   toVersion: z.string(),
-  phase: z.enum(["open", "scanned", "analyzing", "applying", "done"]),
+  phase: z.enum([
+    "open",
+    "scanned",
+    "analyzing",
+    "applying",
+    "done",
+    "completed",
+  ]),
   openedAt: z.iso.datetime(),
+  closedAt: z.iso.datetime().optional(),
+  outcome: z.string().max(500).optional(),
   notes: z.string().optional(),
 });
 const ReleaseSchema = z.object({
@@ -217,6 +226,8 @@ interface CommandResult {
 }
 
 interface MethodContext {
+  modelType?: string;
+  modelId?: string;
   globalArgs: Record<string, unknown>;
   logger: {
     info: (message: string, properties?: Record<string, unknown>) => void;
@@ -230,6 +241,67 @@ interface MethodContext {
     instanceName: string,
     version?: number,
   ) => Promise<Record<string, unknown> | null>;
+  dataRepository?: {
+    findAllForModel: (
+      type: string,
+      modelId: string,
+    ) => Promise<
+      Array<{ name: string; version: number; tags?: Record<string, string> }>
+    >;
+    getContent: (
+      type: string,
+      modelId: string,
+      name: string,
+      version?: number,
+    ) => Promise<Uint8Array | null>;
+  };
+}
+
+function assertCampaignMutable(
+  campaign: Record<string, unknown> | null | undefined,
+  campaignId: string,
+): void {
+  if (campaign?.phase === "completed") {
+    throw new Error(
+      `campaign ${campaignId} is completed; closed campaign ledgers are immutable`,
+    );
+  }
+}
+
+async function campaignOpportunities(
+  context: MethodContext,
+  campaignId: string,
+): Promise<Opportunity[]> {
+  if (!context.dataRepository || !context.modelType || !context.modelId) {
+    throw new Error("close-campaign requires model data repository access");
+  }
+  const entries = await context.dataRepository.findAllForModel(
+    context.modelType,
+    context.modelId,
+  );
+  const latest = new Map<string, { name: string; version: number }>();
+  for (const entry of entries) {
+    if (entry.tags?.specName !== "opportunity") continue;
+    const current = latest.get(entry.name);
+    if (!current || entry.version > current.version) {
+      latest.set(entry.name, entry);
+    }
+  }
+  const opportunities: Opportunity[] = [];
+  for (const entry of latest.values()) {
+    const raw = await context.dataRepository.getContent(
+      context.modelType,
+      context.modelId,
+      entry.name,
+      entry.version,
+    );
+    if (!raw) continue;
+    const parsed = OpportunitySchema.parse(
+      JSON.parse(new TextDecoder().decode(raw)),
+    );
+    if (parsed.campaignId === campaignId) opportunities.push(parsed);
+  }
+  return opportunities;
 }
 
 /** Convert arbitrary identifiers into non-empty stable resource-name slugs. */
@@ -623,6 +695,14 @@ async function dependencyCheck(
 export const model = {
   type: "@mgreten/release-adoption",
   version: VERSION,
+  upgrades: [{
+    toVersion: VERSION,
+    description:
+      "Add the backward-compatible completed campaign lifecycle and close metadata",
+    upgradeAttributes: (
+      old: Record<string, unknown>,
+    ): Record<string, unknown> => old,
+  }],
   globalArguments: GlobalArgsSchema,
   resources: {
     campaign: {
@@ -701,6 +781,7 @@ export const model = {
         });
         const campaignName = await resourceName("campaign", args.id);
         const existing = await context.readResource?.(campaignName);
+        assertCampaignMutable(existing, args.id);
         const handle = await context.writeResource(
           "campaign",
           campaignName,
@@ -733,6 +814,9 @@ export const model = {
           campaignId: args.campaignId,
         });
         const globalArgs = GlobalArgsSchema.parse(context.globalArgs);
+        const campaignName = await resourceName("campaign", args.campaignId);
+        const campaign = await context.readResource?.(campaignName);
+        assertCampaignMutable(campaign, args.campaignId);
         const result = await runCommand("gh", [
           "api",
           `repos/${globalArgs.githubRepo}/releases`,
@@ -780,8 +864,6 @@ export const model = {
             }),
           ),
         ];
-        const campaignName = await resourceName("campaign", args.campaignId);
-        const campaign = await context.readResource?.(campaignName);
         if (campaign) {
           handles.push(
             await context.writeResource(
@@ -897,6 +979,12 @@ export const model = {
         args: { campaignId?: string },
         context: MethodContext,
       ): Promise<{ dataHandles: DataHandle[] }> => {
+        if (args.campaignId) {
+          const campaign = await context.readResource?.(
+            await resourceName("campaign", args.campaignId),
+          );
+          assertCampaignMutable(campaign, args.campaignId);
+        }
         context.logger.info("Inventorying {count} fleet repositories", {
           count: GlobalArgsSchema.parse(context.globalArgs).fleetRepos.length,
         });
@@ -946,6 +1034,9 @@ export const model = {
         },
         context: MethodContext,
       ): Promise<{ dataHandles: DataHandle[] }> => {
+        const campaignName = await resourceName("campaign", args.campaignId);
+        const campaign = await context.readResource?.(campaignName);
+        assertCampaignMutable(campaign, args.campaignId);
         const name = await resourceName("opp", args.id);
         context.logger.info("Recording opportunity {opportunityId}", {
           opportunityId: args.id,
@@ -966,6 +1057,57 @@ export const model = {
           "Recorded opportunity {opportunityId} as {status}",
           { opportunityId: args.id, status: merged.status },
         );
+        return { dataHandles: [handle] };
+      },
+    },
+    "close-campaign": {
+      description:
+        "Complete a campaign after every proposed opportunity has an outcome.",
+      arguments: z.object({
+        campaignId: z.string(),
+        outcome: z.string().max(500).optional(),
+      }),
+      execute: async (
+        args: { campaignId: string; outcome?: string },
+        context: MethodContext,
+      ): Promise<{ dataHandles: DataHandle[] }> => {
+        context.logger.info("Closing campaign {campaignId}", {
+          campaignId: args.campaignId,
+        });
+        const name = await resourceName("campaign", args.campaignId);
+        const raw = await context.readResource?.(name);
+        if (!raw) throw new Error(`campaign ${args.campaignId} was not found`);
+        const campaign = CampaignSchema.parse(raw);
+        if (campaign.phase === "completed") {
+          context.logger.info("Campaign {campaignId} is already completed", {
+            campaignId: args.campaignId,
+          });
+          return { dataHandles: [] };
+        }
+        const proposed = (await campaignOpportunities(context, args.campaignId))
+          .filter((item) => item.status === "proposed");
+        if (proposed.length) {
+          const items = proposed.map((item) =>
+            `${item.id} (${item.repo}/${item.target})`
+          )
+            .join(", ");
+          throw new Error(
+            `campaign ${args.campaignId} cannot be completed; proposed opportunities remain: ${items}. Record each as applied, blocked, or skipped first`,
+          );
+        }
+        const handle = await context.writeResource(
+          "campaign",
+          name,
+          CampaignSchema.parse({
+            ...campaign,
+            phase: "completed",
+            closedAt: new Date().toISOString(),
+            outcome: args.outcome,
+          }),
+        );
+        context.logger.info("Completed campaign {campaignId}", {
+          campaignId: args.campaignId,
+        });
         return { dataHandles: [handle] };
       },
     },
