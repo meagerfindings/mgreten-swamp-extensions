@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@mgreten/release-adoption"
+version: "2026.07.27.1"
+description: >
+  Deterministic release-adoption campaigns for swamp: capture release notes and
+  CLI surfaces, diff upgrades, inventory repository fleets, and track adoption
+  opportunities and outcomes in an agent-writable ledger.
+repository: https://github.com/meagerfindings/swamp-release-adoption
+models:
+  - release_adoption.ts
+reports:
+  - release_adoption_brief.ts
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+labels:
+  - release-adoption
+  - fleet
+  - upgrade
+platforms: []
+dependencies: []
