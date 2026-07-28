@@ -228,9 +228,15 @@ function rows(
   return expenses.map((expense) => {
     const amendment = latest.get(expense.expenseId);
     return LedgerRowSchema.parse({
-      ...expense,
+      expenseId: expense.expenseId,
+      occurredOn: expense.occurredOn,
+      expenseClass: expense.expenseClass,
+      category: expense.category,
+      merchant: expense.merchant,
+      amountCents: expense.amountCents,
       receiptStatus: amendment?.receiptStatus ?? expense.receiptStatus,
       submissionStatus: amendment?.submissionStatus ?? "not_submitted",
+      reimbursable: expense.reimbursable,
       reimbursementCents: amendment?.reimbursementCents ?? 0,
     });
   }).sort((a, b) =>
@@ -346,7 +352,7 @@ function dashboard(
  */
 export const model = {
   type: "@mgreten/trip-expense-tracker",
-  version: "2026.07.22.1",
+  version: "2026.07.28.1",
   // Initial version: upgrades are intentionally omitted because no predecessor exists. Future versions must add ordered pure migrations.
   globalArguments: GlobalArgumentsSchema,
   // Runtime method arguments remain strictly validated before every resource write.

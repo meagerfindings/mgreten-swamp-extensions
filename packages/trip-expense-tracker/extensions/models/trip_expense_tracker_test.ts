@@ -1,4 +1,5 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { model } from "./trip_expense_tracker.ts";
 
 Deno.test("synthetic date validation rejects impossible and out-of-trip dates", () => {
   const date = (value: string) => {
@@ -188,4 +189,59 @@ Deno.test("synthetic cleanup request is archive-bound, immutable, and not eviden
     "trip_archive",
   ];
   assertEquals(retainedEvidence.includes("trip_archive"), true);
+});
+
+Deno.test("buildDashboard projects noted expense rows to its strict public schema", async () => {
+  const tripId = "note-trip";
+  const resources = new Map<string, unknown>([
+    [`${tripId}--configuration`, {
+      tripId,
+      title: "Note fixture",
+      startDate: "2026-10-01",
+      endDate: "2026-10-01",
+      currency: "USD",
+      mealBudgetCents: 1_000,
+      providedMeals: [],
+    }],
+    [`${tripId}--index`, {
+      tripId,
+      expenseIds: ["exp_note_fixture"],
+      amendmentIds: [],
+      archived: false,
+      cleanupRequested: false,
+    }],
+    ["exp_note_fixture--ledger", {
+      expenseId: "exp_note_fixture",
+      occurredOn: "2026-10-01",
+      expenseClass: "budgeted_meal",
+      category: "lunch",
+      merchant: "Fixture Cafe",
+      amountCents: 500,
+      receiptStatus: "attached",
+      reimbursable: false,
+      note: "Receipt context must remain ledger-only.",
+    }],
+  ]);
+  const written = new Map<string, unknown>();
+  const context = {
+    globalArgs: { tripId },
+    logger: { info: () => {}, error: () => {} },
+    readResource: (name: string) =>
+      Promise.resolve(resources.get(name) ?? null),
+    writeResource: (_spec: string, name: string, value: unknown) => {
+      written.set(name, value);
+      return Promise.resolve({ name });
+    },
+  };
+  const execute = model.methods.buildDashboard.execute as (
+    args: unknown,
+    context: unknown,
+  ) => Promise<unknown>;
+  await execute({ tripId }, context);
+  const dashboard = written.get(`${tripId}--dashboard`) as {
+    expenseLedger: Array<Record<string, unknown>>;
+  };
+  assertEquals(dashboard.expenseLedger.length, 1);
+  assertEquals(dashboard.expenseLedger[0].note, undefined);
+  assertEquals(dashboard.expenseLedger[0].merchant, "Fixture Cafe");
 });
