@@ -40,6 +40,10 @@ swamp model method run my-todoist createTaskComment \
 swamp model method run my-todoist syncTasks --input filter="#Work"
 swamp model method run my-todoist syncProjects
 swamp model method run my-todoist createTask --input content="Review release"
+swamp model method run my-todoist createTask \
+  --input content="Verify the release" \
+  --input projectId="<project-id>" \
+  --input parentId="<parent-task-id>"
 swamp model method run my-todoist updateTask --input taskId="<task-id>" --input priority=4
 swamp model method run my-todoist completeTask --input taskId="<task-id>"
 swamp model method run my-todoist deleteTask --input taskId="<task-id>"

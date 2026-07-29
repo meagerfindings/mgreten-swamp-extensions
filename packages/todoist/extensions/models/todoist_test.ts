@@ -55,6 +55,7 @@ Deno.test("client paginates the v1 filter endpoint and normalizes task fields", 
     const tasks = await client.getTasks("today");
     await client.createTask({
       content: "Test task",
+      parentId: "parent-id",
       assigneeId: "user-id",
       order: 3,
     });
@@ -80,10 +81,58 @@ Deno.test("client paginates the v1 filter endpoint and normalizes task fields", 
     assert(secondPageUrl.searchParams.get("query") === "today", "query lost");
 
     const createBody = JSON.parse(String(requests[2].init?.body));
+    assert(createBody.parent_id === "parent-id", "wrong parent field");
     assert(createBody.assignee_id === "user-id", "wrong assignee field");
     assert(createBody.order === 3, "wrong create order field");
     assert(!("responsible_uid" in createBody), "Sync assignee field used");
     assert(!("child_order" in createBody), "update-only order field used");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("createTask exposes and forwards parentId for subtasks", async () => {
+  const originalFetch = globalThis.fetch;
+  let createBody: Record<string, unknown> = {};
+  globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+    createBody = JSON.parse(String(init?.body));
+    return Promise.resolve(Response.json(rawTask({ parent_id: "parent-id" })));
+  };
+
+  const written: Array<
+    { spec: string; instance: string; data: Record<string, unknown> }
+  > = [];
+
+  try {
+    const args = {
+      content: "Child task",
+      projectId: "project-id",
+      parentId: "parent-id",
+    };
+    assert(
+      model.methods.createTask.arguments.safeParse(args).success,
+      "public create schema rejected parentId",
+    );
+
+    await model.methods.createTask.execute(args, {
+      globalArgs: { apiToken: "token" },
+      logger: { info: (_message: string): void => {} },
+      writeResource: (
+        spec: string,
+        instance: string,
+        data: Record<string, unknown>,
+      ) => {
+        written.push({ spec, instance, data });
+        return Promise.resolve({ spec, instance, data });
+      },
+    });
+
+    assert(createBody.parent_id === "parent-id", "method dropped parentId");
+    assert(written.length === 1, "createTask did not write one resource");
+    assert(
+      written[0].data.parentId === "parent-id",
+      "created subtask resource lost parentId",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -807,8 +856,8 @@ Deno.test("failed write batches settle before rejecting and stop later batches",
   }
 });
 
-Deno.test("model upgrade chain reaches the hardened version", () => {
-  assert(model.version === "2026.07.24.1", "model version was not bumped");
+Deno.test("model upgrade chain reaches the current version", () => {
+  assert(model.version === "2026.07.28.1", "model version was not bumped");
   assert(
     model.upgrades.some((upgrade) => upgrade.toVersion === model.version),
     "upgrade chain does not reach the model version",

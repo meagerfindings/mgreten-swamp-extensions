@@ -167,6 +167,7 @@ export async function createTask(
     description?: string;
     projectId?: string;
     sectionId?: string;
+    parentId?: string;
     labels?: string;
     priority?: number;
     dueString?: string;
@@ -176,6 +177,7 @@ export async function createTask(
   if (args.description !== undefined) input.description = args.description;
   input.projectId = args.projectId ?? context.globalArgs.defaultProjectId;
   if (args.sectionId !== undefined) input.sectionId = args.sectionId;
+  if (args.parentId !== undefined) input.parentId = args.parentId;
   if (args.labels !== undefined) {
     input.labels = args.labels.split(",").map((l) => l.trim()).filter(Boolean);
   }

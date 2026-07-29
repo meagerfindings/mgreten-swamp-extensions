@@ -68,7 +68,7 @@ function client(context: MethodContext) {
 /** Typed Todoist model with task, project, and task-comment resources. */
 export const model = {
   type: "@mgreten/todoist",
-  version: "2026.07.27.3",
+  version: "2026.07.28.1",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
@@ -85,6 +85,14 @@ export const model = {
       toVersion: "2026.07.27.3",
       description: "Add task-comment synchronization and creation",
       upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.28.1",
+      description:
+        "Allow createTask to assign a parent task; no stored changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
     },
   ],
   globalArguments: GlobalArgsSchema,
@@ -168,6 +176,9 @@ export const model = {
         sectionId: z.string().optional().describe(
           "Section ID within the project",
         ),
+        parentId: TodoistIdSchema.optional().describe(
+          "Parent task ID for creating a subtask",
+        ),
         labels: z.string().optional().describe("Comma-separated label names"),
         priority: z.number().int().min(1).max(4).optional().describe(
           "Priority: 1=normal, 2=medium, 3=high, 4=urgent",
@@ -183,6 +194,7 @@ export const model = {
             description?: string;
             projectId?: string;
             sectionId?: string;
+            parentId?: string;
             labels?: string;
             priority?: number;
             dueString?: string;
