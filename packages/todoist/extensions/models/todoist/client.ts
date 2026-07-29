@@ -76,6 +76,13 @@ export interface UpdateTaskInput {
   assigneeId?: string;
 }
 
+/** Destination for moving an existing Todoist task. */
+export interface MoveTaskInput {
+  projectId?: string;
+  sectionId?: string;
+  parentId?: string;
+}
+
 const RawDueSchema = z.object({
   string: z.string(),
   date: z.string(),
@@ -267,6 +274,7 @@ async function requestOnce<T>(
   body?: Record<string, unknown>,
   params?: Record<string, string>,
   responseSchema?: z.ZodType<T>,
+  requestId?: string,
 ): Promise<T> {
   const safePath = redactSecret(path, apiToken);
   let url = `${BASE_URL}${path}`;
@@ -280,6 +288,7 @@ async function requestOnce<T>(
       headers: {
         Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
+        ...(requestId ? { "X-Request-Id": requestId } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -345,6 +354,7 @@ async function request<T>(
   body?: Record<string, unknown>,
   params?: Record<string, string>,
   responseSchema?: z.ZodType<T>,
+  requestId?: string,
 ): Promise<T> {
   for (let attempt = 0;; attempt += 1) {
     try {
@@ -355,6 +365,7 @@ async function request<T>(
         body,
         params,
         responseSchema,
+        requestId,
       );
     } catch (error) {
       const retryable = method === "GET" &&
@@ -370,14 +381,18 @@ async function request<T>(
 
 /** High-level Todoist client with typed return values. */
 export interface TodoistClient {
+  /** Verify Todoist connectivity and authentication. */
+  checkConnection(): Promise<void>;
   /** Fetch active tasks, optionally filtered by Todoist query syntax. */
   getTasks(filter?: string): Promise<TaskData[]>;
   /** Fetch a single active task by ID. */
   getTask(id: string): Promise<TaskData>;
   /** Create a new task. */
-  createTask(input: CreateTaskInput): Promise<TaskData>;
+  createTask(input: CreateTaskInput, requestId?: string): Promise<TaskData>;
   /** Update fields on an existing task. */
   updateTask(id: string, input: UpdateTaskInput): Promise<TaskData>;
+  /** Move a task to a project, section, or parent task. */
+  moveTask(id: string, input: MoveTaskInput): Promise<TaskData>;
   /** Mark a task as completed. */
   closeTask(id: string): Promise<void>;
   /** Reopen a completed task. */
@@ -393,6 +408,17 @@ export interface TodoistClient {
 /** Build a {@link TodoistClient} from a Todoist API token. */
 export function buildTodoistClient(apiToken: string): TodoistClient {
   return {
+    async checkConnection(): Promise<void> {
+      await request(
+        apiToken,
+        "GET",
+        "/projects",
+        undefined,
+        { limit: "1" },
+        listResponseSchema(RawProjectSchema),
+      );
+    },
+
     async getTasks(filter?: string): Promise<TaskData[]> {
       const path = filter ? "/tasks/filter" : "/tasks";
       const params: Record<string, string> = filter ? { query: filter } : {};
@@ -413,7 +439,10 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
       return normalizeTask(raw);
     },
 
-    async createTask(input: CreateTaskInput): Promise<TaskData> {
+    async createTask(
+      input: CreateTaskInput,
+      requestId?: string,
+    ): Promise<TaskData> {
       const body: Record<string, unknown> = { content: input.content };
       if (input.description !== undefined) body.description = input.description;
       if (input.projectId !== undefined) body.project_id = input.projectId;
@@ -434,6 +463,7 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
         body,
         undefined,
         RawTaskSchema,
+        requestId,
       );
       return normalizeTask(raw);
     },
@@ -450,6 +480,23 @@ export function buildTodoistClient(apiToken: string): TodoistClient {
       if (input.assigneeId !== undefined) {
         body.assignee_id = input.assigneeId;
       }
+      const raw = await request<RawTask>(
+        apiToken,
+        "POST",
+        path,
+        body,
+        undefined,
+        RawTaskSchema,
+      );
+      return normalizeTask(raw);
+    },
+
+    async moveTask(id: string, input: MoveTaskInput): Promise<TaskData> {
+      const path = `${resourcePath("tasks", id)}/move`;
+      const body: Record<string, unknown> = {};
+      if (input.projectId !== undefined) body.project_id = input.projectId;
+      if (input.sectionId !== undefined) body.section_id = input.sectionId;
+      if (input.parentId !== undefined) body.parent_id = input.parentId;
       const raw = await request<RawTask>(
         apiToken,
         "POST",

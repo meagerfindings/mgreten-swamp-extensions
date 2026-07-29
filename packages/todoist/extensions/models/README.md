@@ -14,7 +14,8 @@ swamp vault put todoist-secrets TODOIST_API_TOKEN <your-token>
 
 Create a model whose `apiToken` global argument references the `TODOIST_API_TOKEN`
 secret in that vault. Keep the token in a vault expression; never put it in a model
-definition or task comment.
+definition or task comment. Personal API tokens are supported. OAuth tokens need
+Todoist's `data:read_write` scope, plus `data:delete` when using `deleteTask`.
 
 ## Comment evidence
 
@@ -43,8 +44,12 @@ swamp model method run my-todoist createTask --input content="Review release"
 swamp model method run my-todoist createTask \
   --input content="Verify the release" \
   --input projectId="<project-id>" \
-  --input parentId="<parent-task-id>"
+  --input parentId="<parent-task-id>" \
+  --input requestId="<stable-uuid>"
 swamp model method run my-todoist updateTask --input taskId="<task-id>" --input priority=4
+swamp model method run my-todoist updateTask --input taskId="<task-id>" --input labels=""
+swamp model method run my-todoist moveTasks \
+  --input 'moves=[{"taskId":"<task-id>","sectionId":"<section-id>"}]'
 swamp model method run my-todoist completeTask --input taskId="<task-id>"
 swamp model method run my-todoist deleteTask --input taskId="<task-id>"
 ```
@@ -66,7 +71,16 @@ data.latest("my-todoist", "comment/<comment-id>").attributes.content
 
 Task IDs are validated before any request. Comment list reads are cursor-paginated
 and fail on malformed data or repeated cursors. Comment creation is a mutation and
-is not retried automatically. This is an independent integration and is not
+is not retried automatically. Task creation accepts a caller-generated `requestId`
+that is sent as Todoist's `X-Request-Id` header. Reusing the same UUID when retrying
+the same logical creation mitigates duplicate tasks, but Todoist's public REST v1
+documentation does not guarantee replay deduplication; use a new UUID for every
+distinct task. A labeled `live` preflight check verifies Todoist connectivity and
+read authentication before every mutation. It does not prove that a token has each
+mutation-specific permission. `moveTasks` accepts up to 100 moves in one model
+execution and requires exactly one destination (`projectId`, `sectionId`, or
+`parentId`) per task. Passing an empty `labels` string to `updateTask` removes every
+label from that task. This is an independent integration and is not
 created by, affiliated with, or supported by Doist.
 
 ## License

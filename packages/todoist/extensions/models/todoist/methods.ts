@@ -10,6 +10,7 @@
 
 import type {
   CreateTaskInput,
+  MoveTaskInput,
   ProjectData,
   TaskData,
   TodoistClient,
@@ -171,6 +172,7 @@ export async function createTask(
     labels?: string;
     priority?: number;
     dueString?: string;
+    requestId?: string;
   },
 ): Promise<MethodResult> {
   const input: CreateTaskInput = { content: args.content };
@@ -186,7 +188,7 @@ export async function createTask(
   context.logger.info("Creating Todoist task", {
     projectId: logValue(input.projectId ?? "inbox", context),
   });
-  const task = await client.createTask(input);
+  const task = await client.createTask(input, args.requestId);
   const handle = await context.writeResource(
     "task",
     task.id,
@@ -265,6 +267,40 @@ export async function updateTask(
     taskId: logValue(task.id, context),
   });
   return { dataHandles: [handle] };
+}
+
+/** Move one or more tasks to a project, section, or parent task. */
+export async function moveTasks(
+  client: TodoistClient,
+  context: MethodContext,
+  args: {
+    moves: Array<{
+      taskId: string;
+      projectId?: string;
+      sectionId?: string;
+      parentId?: string;
+    }>;
+  },
+): Promise<MethodResult> {
+  context.logger.info("Moving {taskCount} Todoist tasks", {
+    taskCount: args.moves.length,
+  });
+  const tasks: TaskData[] = [];
+  for (const move of args.moves) {
+    const input: MoveTaskInput = {};
+    if (move.projectId !== undefined) input.projectId = move.projectId;
+    if (move.sectionId !== undefined) input.sectionId = move.sectionId;
+    if (move.parentId !== undefined) input.parentId = move.parentId;
+    tasks.push(await client.moveTask(move.taskId, input));
+  }
+  const handles = await writeInBatches(
+    tasks,
+    (task) => context.writeResource("task", task.id, taskResourceData(task)),
+  );
+  context.logger.info("Moved {taskCount} Todoist tasks", {
+    taskCount: handles.length,
+  });
+  return { dataHandles: handles };
 }
 
 /** Permanently delete a task. */

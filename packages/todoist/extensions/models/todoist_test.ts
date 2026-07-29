@@ -86,6 +86,10 @@ Deno.test("client paginates the v1 filter endpoint and normalizes task fields", 
     assert(createBody.order === 3, "wrong create order field");
     assert(!("responsible_uid" in createBody), "Sync assignee field used");
     assert(!("child_order" in createBody), "update-only order field used");
+    assert(
+      new Headers(requests[2].init?.headers).get("X-Request-Id") === null,
+      "client invented a request ID when the caller omitted one",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -94,8 +98,10 @@ Deno.test("client paginates the v1 filter endpoint and normalizes task fields", 
 Deno.test("createTask exposes and forwards parentId for subtasks", async () => {
   const originalFetch = globalThis.fetch;
   let createBody: Record<string, unknown> = {};
+  let createHeaders = new Headers();
   globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
     createBody = JSON.parse(String(init?.body));
+    createHeaders = new Headers(init?.headers);
     return Promise.resolve(Response.json(rawTask({ parent_id: "parent-id" })));
   };
 
@@ -108,6 +114,7 @@ Deno.test("createTask exposes and forwards parentId for subtasks", async () => {
       content: "Child task",
       projectId: "project-id",
       parentId: "parent-id",
+      requestId: "9b675491-3d74-4b2d-9b45-4278a32e779d",
     };
     assert(
       model.methods.createTask.arguments.safeParse(args).success,
@@ -128,11 +135,77 @@ Deno.test("createTask exposes and forwards parentId for subtasks", async () => {
     });
 
     assert(createBody.parent_id === "parent-id", "method dropped parentId");
+    assert(
+      createHeaders.get("X-Request-Id") === args.requestId,
+      "method dropped the Todoist request ID header",
+    );
     assert(written.length === 1, "createTask did not write one resource");
     assert(
       written[0].data.parentId === "parent-id",
       "created subtask resource lost parentId",
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("live preflight verifies Todoist connectivity for every mutation", async () => {
+  const check = model.checks["todoist-connectivity"];
+  const expectedMethods = [
+    "createTaskComment",
+    "createTask",
+    "completeTask",
+    "updateTask",
+    "moveTasks",
+    "deleteTask",
+  ];
+  assert(
+    check.labels.includes("live"),
+    "connectivity check is not live-labeled",
+  );
+  assert(
+    expectedMethods.every((method) => check.appliesTo.includes(method)),
+    "connectivity check does not cover every mutation",
+  );
+
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let authorization = "";
+  try {
+    globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+      requestedUrl = String(input);
+      authorization = new Headers(init?.headers).get("Authorization") ?? "";
+      return Promise.resolve(Response.json({ results: [], next_cursor: null }));
+    };
+    const passing = await check.execute({
+      globalArgs: { apiToken: "token" },
+    });
+    assert(passing.pass, "valid Todoist connectivity failed preflight");
+    const url = new URL(requestedUrl);
+    assert(
+      url.pathname === "/api/v1/projects",
+      "check used the wrong endpoint",
+    );
+    assert(url.searchParams.get("limit") === "1", "check fetched excess data");
+    assert(authorization === "Bearer token", "check omitted authentication");
+
+    globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+      authorization = new Headers(init?.headers).get("Authorization") ?? "";
+      return Promise.resolve(
+        new Response("secret-token unauthorized", { status: 401 }),
+      );
+    };
+    const failing = await check.execute({
+      globalArgs: { apiToken: "secret-token" },
+    });
+    assert(!failing.pass, "authentication failure passed preflight");
+    const errors = "errors" in failing ? failing.errors?.join(" ") ?? "" : "";
+    assert(
+      authorization === "Bearer secret-token",
+      "failing check omitted authentication",
+    );
+    assert(errors.includes("401"), "preflight error omitted API status");
+    assert(!errors.includes("secret-token"), "preflight error leaked token");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -168,7 +241,7 @@ Deno.test("client paginates and normalizes v1 projects", async () => {
   }
 });
 
-Deno.test("client uses v1 update, close, and delete contracts", async () => {
+Deno.test("client uses v1 update, move, close, and delete contracts", async () => {
   const originalFetch = globalThis.fetch;
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
@@ -184,7 +257,11 @@ Deno.test("client uses v1 update, close, and delete contracts", async () => {
 
   try {
     const client = buildTodoistClient("token");
-    await client.updateTask("task-id", { assigneeId: "user-id" });
+    await client.updateTask("task-id", {
+      assigneeId: "user-id",
+      labels: [],
+    });
+    await client.moveTask("task-id", { sectionId: "section-id" });
     await client.closeTask("task-id");
     await client.deleteTask("task-id");
 
@@ -196,11 +273,78 @@ Deno.test("client uses v1 update, close, and delete contracts", async () => {
     const updateBody = JSON.parse(String(requests[0].init?.body));
     assert(updateBody.assignee_id === "user-id", "wrong update assignee field");
     assert(
-      new URL(requests[1].url).pathname.endsWith("/tasks/task-id/close"),
+      Array.isArray(updateBody.labels) && updateBody.labels.length === 0,
+      "empty labels were not forwarded to clear the task",
+    );
+    assert(
+      new URL(requests[1].url).pathname.endsWith("/tasks/task-id/move"),
+      "wrong move path",
+    );
+    assert(requests[1].init?.method === "POST", "move did not use POST");
+    const moveBody = JSON.parse(String(requests[1].init?.body));
+    assert(moveBody.section_id === "section-id", "wrong move destination");
+    assert(
+      Object.keys(moveBody).length === 1,
+      "move sent an unintended destination",
+    );
+    assert(
+      new URL(requests[2].url).pathname.endsWith("/tasks/task-id/close"),
       "wrong close path",
     );
-    assert(requests[1].init?.method === "POST", "close did not use POST");
-    assert(requests[2].init?.method === "DELETE", "delete did not use DELETE");
+    assert(requests[2].init?.method === "POST", "close did not use POST");
+    assert(requests[3].init?.method === "DELETE", "delete did not use DELETE");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("moveTasks moves in order and writes snapshots after API success", async () => {
+  const originalFetch = globalThis.fetch;
+  const events: string[] = [];
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    const taskId = new URL(String(input)).pathname.split("/").at(-2) ?? "";
+    events.push(`api:${taskId}`);
+    return Promise.resolve(Response.json(rawTask({
+      id: taskId,
+      section_id: body.section_id ?? null,
+      parent_id: body.parent_id ?? null,
+    })));
+  };
+
+  try {
+    const result = await model.methods.moveTasks.execute({
+      moves: [
+        { taskId: "task-one", sectionId: "section-id" },
+        { taskId: "task-two", parentId: "parent-id" },
+      ],
+    }, {
+      globalArgs: { apiToken: "token" },
+      logger: { info: (_message: string): void => {} },
+      writeResource: (
+        spec: string,
+        instance: string,
+        data: Record<string, unknown>,
+      ) => {
+        events.push(`write:${instance}`);
+        return Promise.resolve({ spec, instance, data });
+      },
+    });
+
+    assert(
+      events.join(",") ===
+        "api:task-one,api:task-two,write:task-one,write:task-two",
+      "moves were reordered or resources were written before all API calls passed",
+    );
+    assert(result.dataHandles.length === 2, "moveTasks lost a task snapshot");
+    assert(
+      result.dataHandles[0].data.sectionId === "section-id",
+      "section destination was not normalized",
+    );
+    assert(
+      result.dataHandles[1].data.parentId === "parent-id",
+      "parent destination was not normalized",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -609,14 +753,24 @@ Deno.test("GET retries honor Retry-After without retrying mutations", async () =
     assert(message.includes("503"), "exhausted GET omitted final status");
 
     let mutationRequests = 0;
-    globalThis.fetch = () => {
+    let mutationRequestId = "";
+    globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
       mutationRequests += 1;
+      mutationRequestId = new Headers(init?.headers).get("X-Request-Id") ?? "";
       return Promise.resolve(new Response("unavailable", { status: 503 }));
     };
+    const requestId = "5a31f57b-2f07-4d68-a482-9f16a7797bf2";
     try {
-      await buildTodoistClient("token").createTask({ content: "Test" });
+      await buildTodoistClient("token").createTask(
+        { content: "Test" },
+        requestId,
+      );
     } catch { /* expected */ }
     assert(mutationRequests === 1, "mutating request was unsafely retried");
+    assert(
+      mutationRequestId === requestId,
+      "failed mutation did not preserve its request ID",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -704,11 +858,47 @@ Deno.test("public schemas reject unsafe IDs and fractional priorities", () => {
     "create schema accepted fractional priority",
   );
   assert(
+    !model.methods.createTask.arguments.safeParse({
+      content: "Test",
+      requestId: "not-a-uuid",
+    }).success,
+    "create schema accepted an invalid request ID",
+  );
+  assert(
     !model.methods.updateTask.arguments.safeParse({
       taskId: "taskid",
       priority: 2.5,
     }).success,
     "update schema accepted fractional priority",
+  );
+  assert(
+    model.methods.updateTask.arguments.safeParse({
+      taskId: "taskid",
+      labels: "",
+    }).success,
+    "update schema rejected clearing every label",
+  );
+  assert(
+    !model.methods.moveTasks.arguments.safeParse({
+      moves: [{ taskId: "taskid" }],
+    }).success,
+    "move schema accepted a missing destination",
+  );
+  assert(
+    !model.methods.moveTasks.arguments.safeParse({
+      moves: [{
+        taskId: "taskid",
+        sectionId: "sectionid",
+        parentId: "parentid",
+      }],
+    }).success,
+    "move schema accepted multiple destinations",
+  );
+  assert(
+    !model.methods.moveTasks.arguments.safeParse({
+      moves: [{ taskId: "taskid", sectionId: "../unsafe" }],
+    }).success,
+    "move schema accepted an unsafe destination ID",
   );
 });
 
@@ -857,7 +1047,7 @@ Deno.test("failed write batches settle before rejecting and stop later batches",
 });
 
 Deno.test("model upgrade chain reaches the current version", () => {
-  assert(model.version === "2026.07.28.1", "model version was not bumped");
+  assert(model.version === "2026.07.29.1", "model version was not bumped");
   assert(
     model.upgrades.some((upgrade) => upgrade.toVersion === model.version),
     "upgrade chain does not reach the model version",

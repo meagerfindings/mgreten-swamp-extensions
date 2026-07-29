@@ -5,6 +5,7 @@ import {
   completeTask,
   createTask,
   deleteTask,
+  moveTasks,
   syncProjects,
   syncTasks,
   updateTask,
@@ -20,6 +21,27 @@ const GlobalArgsSchema = z.object({
 const TodoistIdSchema = z.string().regex(
   /^[A-Za-z0-9_-]+$/,
   "Todoist IDs may contain letters, numbers, hyphens, and underscores",
+);
+const RequestIdSchema = z.uuid().describe(
+  "Stable UUID sent as X-Request-Id; reuse it when retrying task creation",
+);
+const MoveTaskSchema = z.object({
+  taskId: TodoistIdSchema.describe("Todoist task ID"),
+  projectId: TodoistIdSchema.optional().describe(
+    "Destination project ID",
+  ),
+  sectionId: TodoistIdSchema.optional().describe(
+    "Destination section ID",
+  ),
+  parentId: TodoistIdSchema.optional().describe(
+    "Destination parent task ID",
+  ),
+}).refine(
+  (move) =>
+    [move.projectId, move.sectionId, move.parentId].filter((id) =>
+      id !== undefined
+    ).length === 1,
+  { message: "Each move must specify exactly one destination" },
 );
 const TaskSchema = z.object({
   id: z.string(),
@@ -68,7 +90,7 @@ function client(context: MethodContext) {
 /** Typed Todoist model with task, project, and task-comment resources. */
 export const model = {
   type: "@mgreten/todoist",
-  version: "2026.07.28.1",
+  version: "2026.07.29.1",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
@@ -94,6 +116,22 @@ export const model = {
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,
     },
+    {
+      toVersion: "2026.07.28.2",
+      description:
+        "Add createTask request IDs and live mutation preflight; no stored changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.07.29.1",
+      description:
+        "Add fan-out task moves and document clearing labels; no stored changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
   ],
   globalArguments: GlobalArgsSchema,
   resources: {
@@ -114,6 +152,37 @@ export const model = {
       schema: CommentSchema,
       lifetime: "infinite" as const,
       garbageCollection: 1000,
+    },
+  },
+  checks: {
+    "todoist-connectivity": {
+      description:
+        "Verify Todoist connectivity and authentication before mutations",
+      labels: ["live"],
+      appliesTo: [
+        "createTaskComment",
+        "createTask",
+        "completeTask",
+        "updateTask",
+        "moveTasks",
+        "deleteTask",
+      ],
+      execute: async (context: { globalArgs: { apiToken: string } }) => {
+        try {
+          await buildTodoistClient(context.globalArgs.apiToken)
+            .checkConnection();
+          return { pass: true };
+        } catch (error) {
+          const token = context.globalArgs.apiToken;
+          const detail =
+            (error instanceof Error ? error.message : String(error))
+              .split(token).join("[REDACTED]");
+          return {
+            pass: false,
+            errors: [`Cannot connect to Todoist: ${detail}`],
+          };
+        }
+      },
     },
   },
   methods: {
@@ -184,6 +253,7 @@ export const model = {
           "Priority: 1=normal, 2=medium, 3=high, 4=urgent",
         ),
         dueString: z.string().optional().describe("Natural language due date"),
+        requestId: RequestIdSchema.optional(),
       }),
       execute: (args: unknown, context: unknown): Promise<MethodResult> =>
         createTask(
@@ -198,6 +268,7 @@ export const model = {
             labels?: string;
             priority?: number;
             dueString?: string;
+            requestId?: string;
           },
         ),
     },
@@ -220,7 +291,7 @@ export const model = {
         content: z.string().optional().describe("New task content"),
         description: z.string().optional().describe("New description"),
         labels: z.string().optional().describe(
-          "Comma-separated label names (replaces existing labels)",
+          "Comma-separated label names; replaces existing labels, and an empty string clears all labels",
         ),
         priority: z.number().int().min(1).max(4).optional().describe(
           "New priority",
@@ -238,6 +309,28 @@ export const model = {
             labels?: string;
             priority?: number;
             dueString?: string;
+          },
+        ),
+    },
+    moveTasks: {
+      description:
+        "Move one or more existing task trees to a project, section, or parent task",
+      arguments: z.object({
+        moves: z.array(MoveTaskSchema).min(1).max(100).describe(
+          "Task moves processed in order within one model execution",
+        ),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        moveTasks(
+          client(context as MethodContext),
+          context as MethodContext,
+          args as {
+            moves: Array<{
+              taskId: string;
+              projectId?: string;
+              sectionId?: string;
+              parentId?: string;
+            }>;
           },
         ),
     },
