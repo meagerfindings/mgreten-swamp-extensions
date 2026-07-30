@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@mgreten/tailscale-oauth-client"
+version: "2026.07.29.1"
+description: >
+  Safely stage, verify, record cutover for, synchronize, and revoke
+  replace-only Tailscale OAuth clients using the fixed official API.
+repository: https://github.com/meagerfindings/swamp-tailscale-oauth
+paths:
+  base: manifest
+additionalFiles:
+  - README.md
+  - LICENSE.md
+  - model_test.ts
+models:
+  - model.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
