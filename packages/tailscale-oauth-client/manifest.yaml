@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/tailscale-oauth-client"
-version: "2026.07.29.1"
+version: "2026.07.29.2"
 description: >
   Safely stage, verify, record cutover for, synchronize, and revoke
   replace-only Tailscale OAuth clients using the fixed official API.

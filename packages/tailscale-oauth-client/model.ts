@@ -27,7 +27,7 @@ const CreateRequest = z.object({
   description: Description,
   scopes: Scopes,
   tags: Tags,
-}).strict()
+})
   .refine((v) => !needsTags(v.scopes) || v.tags.length > 0, {
     message: "tags are required for devices:core or auth_keys scopes",
     path: ["tags"],
@@ -36,12 +36,12 @@ const CandidateRef = z.object({
   requestId: RequestId,
   candidateRequestId: RequestId,
   candidateId: Id,
-}).strict();
+});
 const Evidence = z.array(z.string().trim().min(1).max(300)).min(1).max(20);
 
 /** Validates the vault-backed OAuth client used to administer trust credentials. */
 export const GlobalArgsSchema = z.object({
-  managerClientId: z.string().min(1).max(300).meta({ sensitive: true }),
+  managerClientId: z.string().min(1).max(300),
   managerClientSecret: z.string().min(1).max(1000).meta({ sensitive: true }),
   timeoutSeconds: z.number().int().min(2).max(30).default(10),
 }).strict();
@@ -69,10 +69,10 @@ const ProviderKeySchema = z.object({
   key: z.string().min(1).max(4096),
   description: Description,
   created: Timestamp,
-  updated: Timestamp,
+  updated: Timestamp.nullish(),
   scopes: Scopes,
-  tags: Tags,
-  userId: z.string().max(200),
+  tags: Tags.nullish(),
+  userId: z.string().max(200).nullish(),
   invalid: z.boolean().optional(),
   revoked: Timestamp.nullable().optional(),
 });
@@ -97,7 +97,7 @@ const PreviewSchema = CreateRequest.extend({
 }).strict();
 const VerificationSchema = z.object({
   requestId: RequestId,
-  candidateId: Id,
+  candidateId: z.string().max(200).optional(),
   verifiedAt: Timestamp,
   requestedScopes: Scopes,
   requestedTags: Tags,
@@ -115,7 +115,7 @@ const CutoverSchema = CandidateRef.extend({
   recordedAt: Timestamp,
   verificationVerifiedAt: Timestamp,
 }).strict();
-const RevokeRequest = CandidateRef.extend({ previousClientId: Id }).strict();
+const RevokeRequest = CandidateRef.extend({ previousClientId: Id });
 const RevokePreviewSchema = RevokeRequest.extend({
   confirmation: Confirmation,
   warning: z.string().max(500),
@@ -126,7 +126,7 @@ const RevocationSchema = RevokeRequest.extend({
 }).strict();
 const CreationAttemptSchema = z.object({
   requestId: RequestId,
-  request: CreateRequest,
+  request: CreateRequest.strict(),
   requestHash: z.string().regex(/^[0-9a-f]{64}$/),
   attemptedAt: Timestamp,
   state: z.enum(["attempted", "completed"]),
@@ -134,7 +134,7 @@ const CreationAttemptSchema = z.object({
 }).strict();
 const RevocationAttemptSchema = z.object({
   requestId: RequestId,
-  request: RevokeRequest,
+  request: RevokeRequest.strict(),
   requestHash: z.string().regex(/^[0-9a-f]{64}$/),
   attemptedAt: Timestamp,
   state: z.enum(["attempted", "completed"]),
@@ -487,7 +487,21 @@ export async function createCandidate(
       "Candidate state exists without its creation journal; reconcile metadata and vaulted credential before retrying",
     );
   }
-  const bearer = await managerToken(context, fetcher, "oauth_keys");
+  const creationScopes = normalized.scopes.includes("all") ? ["all"] : [
+    ...new Set([
+      "oauth_keys",
+      ...normalized.scopes.filter((scope) => scope !== "oauth_keys:read"),
+    ]),
+  ];
+  const globals = GlobalArgsSchema.parse(context.globalArgs);
+  const bearer = (await token(
+    globals.managerClientId,
+    globals.managerClientSecret,
+    creationScopes,
+    normalized.tags,
+    context,
+    fetcher,
+  )).access_token;
   const attempted = {
     requestId: normalized.requestId,
     request: normalized,
@@ -550,10 +564,10 @@ export async function createCandidate(
     keyType: "client" as const,
     description: provider.description,
     scopes: provider.scopes,
-    tags: provider.tags,
+    tags: provider.tags ?? [],
     created: provider.created,
-    updated: provider.updated,
-    userId: provider.userId,
+    updated: provider.updated ?? provider.created,
+    userId: provider.userId ?? "",
     status: provider.invalid || provider.revoked
       ? "revoked" as const
       : "active" as const,
@@ -638,7 +652,6 @@ export async function verifyCandidate(
   );
   const receipt = {
     requestId: args.requestId,
-    candidateId: metadata.id,
     verifiedAt: now(),
     requestedScopes: metadata.scopes,
     requestedTags: metadata.tags,
@@ -677,7 +690,6 @@ async function prerequisites(
   ) throw new Error("Matching active candidate metadata is required");
   if (
     !verification || verification.requestId !== args.candidateRequestId ||
-    verification.candidateId !== args.candidateId ||
     !same(verification.requestedScopes, metadata.scopes) ||
     !same(verification.requestedTags, metadata.tags)
   ) {
@@ -1035,10 +1047,10 @@ export async function syncCandidate(
         keyType: "client" as const,
         description: live.description,
         scopes: live.scopes,
-        tags: live.tags,
+        tags: live.tags ?? [],
         created: live.created,
-        updated: live.updated,
-        userId: live.userId,
+        updated: live.updated ?? live.created,
+        userId: live.userId ?? "",
         status: live.invalid || live.revoked
           ? "revoked" as const
           : "active" as const,
@@ -1061,7 +1073,7 @@ export async function syncCandidate(
 /** Public Swamp model for receipt-gated Tailscale OAuth client replacement. */
 export const model = {
   type: "@mgreten/tailscale-oauth-client",
-  version: "2026.07.29.1",
+  version: "2026.07.29.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     createPreview: {
@@ -1172,17 +1184,17 @@ export const model = {
     },
     createCandidate: {
       description: "Create and vault one exactly journaled candidate",
-      arguments: CreateRequest.extend({ confirmation: Confirmation }).strict(),
+      arguments: CreateRequest.extend({ confirmation: Confirmation }),
       execute: createCandidate,
     },
     verifyCandidate: {
       description: "Verify full configured candidate OAuth issuance",
-      arguments: z.object({ requestId: RequestId }).strict(),
+      arguments: z.object({ requestId: RequestId }),
       execute: verifyCandidate,
     },
     previewCutover: {
       description: "Preview recording verified operator cutover evidence",
-      arguments: CandidateRef.extend({ evidence: Evidence }).strict(),
+      arguments: CandidateRef.extend({ evidence: Evidence }),
       execute: async (
         args: z.infer<typeof CandidateRef> & { evidence: string[] },
         ctx: Context,
@@ -1206,7 +1218,7 @@ export const model = {
       arguments: CandidateRef.extend({
         evidence: Evidence,
         confirmation: Confirmation,
-      }).strict(),
+      }),
       execute: recordCutover,
     },
     previewRevoke: {
@@ -1244,12 +1256,12 @@ export const model = {
     },
     revokePrevious: {
       description: "Preflight and journal exact previous-client revocation",
-      arguments: RevokeRequest.extend({ confirmation: Confirmation }).strict(),
+      arguments: RevokeRequest.extend({ confirmation: Confirmation }),
       execute: revokePrevious,
     },
     syncCandidate: {
       description: "Refresh candidate metadata or provider absence",
-      arguments: z.object({ requestId: RequestId }).strict(),
+      arguments: z.object({ requestId: RequestId }),
       execute: syncCandidate,
     },
   },

@@ -165,7 +165,7 @@ async function revokePreview(h: ReturnType<typeof harness>, value = refs) {
   }).confirmation;
 }
 
-Deno.test("contracts are strict, bounded, tag-aware, and sensitive", () => {
+Deno.test("contracts are bounded, runtime-compatible, tag-aware, and sensitive", () => {
   assert(
     !model.methods.previewCreate.arguments.safeParse({
       ...base,
@@ -194,15 +194,49 @@ Deno.test("contracts are strict, bounded, tag-aware, and sensitive", () => {
     }).success,
     "all does not require tags",
   );
+  const runtimeGlobals = {
+    managerClientId: "manager-id",
+    managerClientSecret: "manager-secret",
+    timeoutSeconds: 10,
+  };
+  const runtimeInputs = [
+    [model.methods.previewCreate.arguments, base],
+    [
+      model.methods.createCandidate.arguments,
+      { ...base, confirmation: `create-candidate:${"0".repeat(64)}` },
+    ],
+    [model.methods.verifyCandidate.arguments, { requestId: base.requestId }],
+    [
+      model.methods.previewCutover.arguments,
+      { ...refs, evidence: ["deployed"] },
+    ],
+    [
+      model.methods.recordCutover.arguments,
+      {
+        ...refs,
+        evidence: ["deployed"],
+        confirmation: `record-cutover:${"0".repeat(64)}`,
+      },
+    ],
+    [model.methods.previewRevoke.arguments, refs],
+    [
+      model.methods.revokePrevious.arguments,
+      { ...refs, confirmation: `revoke-previous:${"0".repeat(64)}` },
+    ],
+    [model.methods.syncCandidate.arguments, { requestId: base.requestId }],
+  ] as const;
+  for (const [schema, input] of runtimeInputs) {
+    const parsed = schema.parse({ ...input, ...runtimeGlobals });
+    assert(
+      !("managerClientId" in parsed) &&
+        !("managerClientSecret" in parsed) &&
+        !("timeoutSeconds" in parsed),
+      "runtime-injected global arguments are stripped",
+    );
+  }
   assert(
-    !model.methods.verifyCandidate.arguments.safeParse({
-      requestId: base.requestId,
-      requestedScopes: [],
-    }).success,
-    "subset options removed",
-  );
-  assert(
-    GlobalArgsSchema.shape.managerClientSecret.meta()?.sensitive &&
+    !GlobalArgsSchema.shape.managerClientId.meta()?.sensitive &&
+      GlobalArgsSchema.shape.managerClientSecret.meta()?.sensitive &&
       CandidateCredentialSchema.shape.clientSecret.meta()?.sensitive &&
       model.resources.candidateCredential.sensitiveOutput,
     "secrets marked",
@@ -213,18 +247,35 @@ Deno.test("contracts are strict, bounded, tag-aware, and sensitive", () => {
     "journals durable",
   );
   assert(
+    !model.resources.candidateCreationAttempt.schema.safeParse({
+      requestId: base.requestId,
+      request: { ...base, unexpected: true },
+      requestHash: "0".repeat(64),
+      attemptedAt: "2026-07-30T01:00:00Z",
+      state: "attempted",
+    }).success &&
+      !model.resources.revocationAttempt.schema.safeParse({
+        requestId: refs.requestId,
+        request: { ...refs, unexpected: true },
+        requestHash: "0".repeat(64),
+        attemptedAt: "2026-07-30T01:00:00Z",
+        state: "attempted",
+      }).success,
+    "persisted journal requests stay strict",
+  );
+  assert(
     model.methods.createCandidate.arguments.safeParse({
       ...base,
       confirmation: `create-candidate:${"0".repeat(64)}`,
     }).success,
-    "strict enriched create args accepted",
+    "enriched create args accepted",
   );
   assert(
     model.methods.revokePrevious.arguments.safeParse({
       ...refs,
       confirmation: `revoke-previous:${"0".repeat(64)}`,
     }).success,
-    "strict enriched revoke args accepted",
+    "enriched revoke args accepted",
   );
 });
 
@@ -243,7 +294,13 @@ Deno.test("creation journal is written after bearer and before POST; completed r
       url.endsWith("/oauth/token")
         ? tokenResponse({ scope: "oauth_keys" })
         : new Response(
-          JSON.stringify({ ...provider(metadata.id), key: "CANDIDATE-SECRET" }),
+          JSON.stringify({
+            ...provider(metadata.id),
+            key: "CANDIDATE-SECRET",
+            tags: null,
+            updated: null,
+            userId: null,
+          }),
           { status: 200 },
         ),
     );
@@ -265,6 +322,92 @@ Deno.test("creation journal is written after bearer and before POST; completed r
       state: string;
     }).state === "completed",
     "completed journal",
+  );
+  const created = h.stored.get(`candidate-${base.requestId}`) as {
+    tags: string[];
+    updated: string;
+    userId: string;
+  };
+  assert(
+    created.tags.length === 0 &&
+      created.updated === "2026-07-30T00:00:00Z" &&
+      created.userId === "",
+    "nullable provider metadata is normalized",
+  );
+});
+
+Deno.test("candidate creation requests every delegated scope and tag", async () => {
+  const request = {
+    ...base,
+    requestId: "candidate-delegated",
+    scopes: ["oauth_keys", "devices:core"],
+    tags: ["tag:container"],
+  };
+  const h = harness();
+  const confirmation = await preview(h, request);
+  let tokenBody = "";
+  await createCandidate(
+    { ...request, confirmation },
+    h.context,
+    (url, init) => {
+      if (url.endsWith("/oauth/token")) {
+        tokenBody = String(init.body);
+        return Promise.resolve(tokenResponse({
+          scope: "oauth_keys devices:core",
+        }));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ...provider(metadata.id, {
+              scopes: request.scopes,
+              tags: request.tags,
+            }),
+            key: "CANDIDATE-SECRET",
+          }),
+          { status: 200 },
+        ),
+      );
+    },
+  );
+  assert(
+    tokenBody.includes("scope=oauth_keys+devices%3Acore") &&
+      tokenBody.includes("tags=tag%3Acontainer"),
+    "delegated creation grant",
+  );
+});
+
+Deno.test("all-scope candidate creation requests an all-scope bearer", async () => {
+  const request = {
+    ...base,
+    requestId: "candidate-administrator",
+    scopes: ["all"],
+  };
+  const h = harness();
+  const confirmation = await preview(h, request);
+  let tokenBody = "";
+  await createCandidate(
+    { ...request, confirmation },
+    h.context,
+    (url, init) => {
+      if (url.endsWith("/oauth/token")) {
+        tokenBody = String(init.body);
+        return Promise.resolve(tokenResponse({ scope: "all" }));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ...provider(metadata.id, { scopes: request.scopes }),
+            key: "CANDIDATE-SECRET",
+          }),
+          { status: 200 },
+        ),
+      );
+    },
+  );
+  assert(
+    tokenBody.includes("scope=all") && !tokenBody.includes("oauth_keys"),
+    "all-scope creation grant",
   );
 });
 
@@ -519,6 +662,22 @@ Deno.test("identity mismatches and stale embedded cutover identity are rejected"
   await expectError(
     () => model.methods.previewRevoke.execute(refs, stale.context),
     "embedded identities",
+  );
+});
+
+Deno.test("legacy verification receipts with runtime-redacted candidate IDs remain usable", async () => {
+  const h = ready({
+    [`verification-${base.requestId}`]: verification({ candidateId: "***" }),
+  });
+  await model.methods.previewCutover.execute({
+    requestId: refs.requestId,
+    candidateRequestId: base.requestId,
+    candidateId: metadata.id,
+    evidence: ["done"],
+  }, h.context);
+  assert(
+    h.stored.has(`cutover-preview-${refs.requestId}`),
+    "legacy verification receipt accepted",
   );
 });
 
