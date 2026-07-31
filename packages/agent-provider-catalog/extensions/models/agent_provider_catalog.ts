@@ -909,9 +909,9 @@ async function readLatestFailureSignal(
  */
 export const model = {
   type: "@mgreten/agent-provider-catalog",
-  version: "2026.07.25.1",
+  version: "2026.07.30.1",
   globalArgs: GlobalArgsSchema,
-  data: {
+  resources: {
     providerFallbackDecision: {
       description:
         "An advisory tiered-provider-fallback decision: for a role's agent-invocation signal it records advance/no-fallback/park, the from (and, when advancing, to) provider/model tier, the full reason chain, the attempt bound, and the catalog/policy versions; keyed by (workItem, role, attempt) and idempotent per that key. Does NOT re-dispatch any stage",

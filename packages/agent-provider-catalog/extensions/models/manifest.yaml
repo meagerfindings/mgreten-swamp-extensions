@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/agent-provider-catalog"
-version: "2026.07.25.1"
+version: "2026.07.30.1"
 description: >
   A pure, deterministic provider/model catalog with tiered fallback and
   dispatch resolution for agent-dispatch pipelines: a caller-supplied,

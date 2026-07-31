@@ -34,9 +34,10 @@ import {
   isFallbackTriggerClass,
   latestFailureSignal,
   listAgentCatalog,
+  model,
   ProviderFallbackDecisionSchema,
-  type RoleMap,
   resolveAgentDispatch,
+  type RoleMap,
 } from "./agent_provider_catalog.ts";
 
 // A deterministic test catalog. Two multi-tier roles (implementer, reviewer)
@@ -492,7 +493,12 @@ Deno.test("resolveAgentDispatch: an exhausted tier / attempt bound parks on the 
 Deno.test("resolveAgentDispatch: every resolution parses its schema and JSON round-trips without loss", () => {
   const at = "2026-07-18T00:00:00.000Z";
   const cases: Array<Parameters<typeof resolveAgentDispatch>[2]> = [
-    { workItem: "WI-905", role: "correctness", instanceName: "i-c", attempt: 1 },
+    {
+      workItem: "WI-905",
+      role: "correctness",
+      instanceName: "i-c",
+      attempt: 1,
+    },
     {
       workItem: "WI-905",
       role: "security",
@@ -644,4 +650,15 @@ Deno.test("latestFailureSignal: returns failureClass only for the newest FAILED 
 
   // No matching record => undefined.
   assertEquals(latestFailureSignal(failed, "WI-9", "implement"), undefined);
+});
+
+Deno.test("model registration exposes resources and methods", () => {
+  assertEquals(Object.keys(model.resources).sort(), [
+    "agentDispatch",
+    "providerFallbackDecision",
+  ]);
+  assertEquals(Object.keys(model.methods).sort(), [
+    "recordProviderFallback",
+    "resolveAgentDispatch",
+  ]);
 });
