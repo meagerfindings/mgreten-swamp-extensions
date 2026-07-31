@@ -65,6 +65,17 @@ const InstallationSchema = z.object({
   installedAt: z.iso.datetime(),
 });
 
+const DashboardSchema = z.object({
+  device: z.string(),
+  title: z.string(),
+  value: z.number().int(),
+  subtitle: z.string(),
+  rank: z.number().int().nullable().optional(),
+  streakDays: z.number().int().nullable().optional(),
+  sourceUpdatedAt: z.string().optional(),
+  updatedAt: z.iso.datetime(),
+});
+
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 type CommandResult = {
@@ -102,6 +113,7 @@ const textDecoder = new TextDecoder();
 const PROBE_MARKER = "SWAMP_EXPLORER_PROBE=";
 const FILE_MARKER = "SWAMP_EXPLORER_FILE=";
 const SCORE_MARKER = "SWAMP_EXPLORER_SCORE_OK";
+const DASHBOARD_MARKER = "SWAMP_EXPLORER_DASHBOARD_OK";
 const MAX_CAPTURE_LENGTH = 32_000;
 
 /** Run a bounded subprocess and capture a limited amount of output. */
@@ -241,6 +253,48 @@ display.update()
 print("${SCORE_MARKER}")`;
 }
 
+/** Build a MicroPython program that stages, saves, and immediately renders a dashboard snapshot. */
+export function buildDashboardProgram(args: {
+  title: string;
+  value: number;
+  subtitle?: string;
+  rank?: number | null;
+  streakDays?: number | null;
+  sourceUpdatedAt?: string;
+}): string {
+  const subtitle = args.subtitle ?? "TOKENS BURNED TODAY";
+  const snapshot = JSON.stringify({
+    version: 1,
+    title: args.title,
+    value: args.value,
+    valueText: args.value.toLocaleString("en-US"),
+    subtitle,
+    rank: args.rank ?? null,
+    streakDays: args.streakDays ?? null,
+    sourceUpdatedAt: args.sourceUpdatedAt ?? null,
+  });
+  return `from explorer import display
+import os
+snapshot = ${pythonLiteral(snapshot)}
+with open("swamp_dashboard.tmp", "w") as f:
+    f.write(snapshot)
+try:
+    os.remove("swamp_dashboard.json")
+except OSError:
+    pass
+os.rename("swamp_dashboard.tmp", "swamp_dashboard.json")
+${
+    buildScoreProgram({
+      username: args.title,
+      score: args.value,
+      rank: args.rank,
+      streakDays: args.streakDays,
+      subtitle,
+    })
+  }
+print("${DASHBOARD_MARKER}")`;
+}
+
 /** Validate a factory-menu app filename and protect lifecycle/library files. */
 export function validateTarget(target: string): void {
   if (!/^[a-z][a-z0-9_]*\.py$/.test(target)) {
@@ -354,13 +408,21 @@ async function installApp(
 /** Pimoroni Explorer model definition. */
 export const model = {
   type: "@mgreten/pimoroni-explorer",
-  version: "2026.07.31.1",
+  version: "2026.07.31.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.31.1",
       description:
         "Add bundled rickroll installation; no global argument schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.07.31.2",
+      description:
+        "Add a persistent factory-menu dashboard and snapshot updates; no global argument schema changes",
       upgradeAttributes: (
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,
@@ -390,6 +452,13 @@ export const model = {
       schema: InstallationSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
+    },
+    dashboard: {
+      description:
+        "Latest persistent dashboard snapshot written to the Explorer",
+      schema: DashboardSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 50,
     },
   },
   methods: {
@@ -561,6 +630,84 @@ export const model = {
           },
           context,
         ),
+    },
+    installDashboard: {
+      description:
+        "Install the bundled persistent Swamp dashboard into the factory Explorer menu without replacing main.py",
+      arguments: z.object({
+        force: z.boolean().default(false),
+      }),
+      execute: (
+        args: { force: boolean; _runner?: CommandRunner },
+        context: MethodContext,
+      ) =>
+        installApp(
+          {
+            appPath: context.extensionFile("apps/swamp_dashboard.py.txt"),
+            target: "swamp_dashboard.py",
+            force: args.force,
+            _runner: args._runner,
+          },
+          context,
+        ),
+    },
+    updateDashboard: {
+      description:
+        "Persist the latest dashboard snapshot on the Explorer with a staged write and render it immediately",
+      arguments: z.object({
+        title: z.string().min(1).max(24),
+        value: z.number().int().nonnegative(),
+        subtitle: z.string().min(1).max(24).default("TOKENS BURNED TODAY"),
+        rank: z.number().int().positive().nullable().optional(),
+        streakDays: z.number().int().nonnegative().nullable().optional(),
+        sourceUpdatedAt: z.string().optional(),
+      }),
+      execute: async (
+        args: {
+          title: string;
+          value: number;
+          subtitle: string;
+          rank?: number | null;
+          streakDays?: number | null;
+          sourceUpdatedAt?: string;
+          _runner?: CommandRunner;
+        },
+        context: MethodContext,
+      ) => {
+        context.logger.info(
+          "Updating persistent dashboard on {device} with {value}",
+          { device: context.globalArgs.device, value: args.value },
+        );
+        const result = await runMpremote(
+          context.globalArgs,
+          ["exec", buildDashboardProgram(args)],
+          "update persistent dashboard",
+          args._runner,
+        );
+        if (!result.stdout.includes(DASHBOARD_MARKER)) {
+          throw new Error(
+            "Explorer did not confirm that the dashboard snapshot was saved",
+          );
+        }
+        const handle = await context.writeResource(
+          "dashboard",
+          "dashboard-current",
+          {
+            device: context.globalArgs.device,
+            title: args.title,
+            value: args.value,
+            subtitle: args.subtitle,
+            rank: args.rank,
+            streakDays: args.streakDays,
+            sourceUpdatedAt: args.sourceUpdatedAt,
+            updatedAt: new Date().toISOString(),
+          },
+        );
+        context.logger.info("Updated persistent dashboard on {device}", {
+          device: context.globalArgs.device,
+        });
+        return { dataHandles: [handle] };
+      },
     },
   },
 };

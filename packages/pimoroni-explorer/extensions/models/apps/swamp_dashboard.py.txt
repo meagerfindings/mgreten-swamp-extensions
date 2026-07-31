@@ -1,0 +1,60 @@
+# Stored as .txt for registry safety; installDashboard deploys it as swamp_dashboard.py.
+import json
+import time
+
+from explorer import BLACK, WHITE, display
+
+
+GREEN = display.create_pen(35, 210, 120)
+MUTED = display.create_pen(135, 150, 145)
+SNAPSHOT = "swamp_dashboard.json"
+
+
+def load_snapshot():
+    try:
+        with open(SNAPSHOT, "r") as source:
+            data = json.load(source)
+        if not isinstance(data, dict) or data.get("version") != 1:
+            raise ValueError("unsupported snapshot")
+        return data
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {
+            "title": "SWAMP DASHBOARD",
+            "valueText": "NO DATA",
+            "subtitle": "RUN updateDashboard",
+            "rank": None,
+            "streakDays": None,
+        }
+
+
+def draw(data):
+    title = str(data.get("title", "SWAMP"))[:24]
+    subtitle = str(data.get("subtitle", "SWAMP DASHBOARD"))[:24]
+    value_text = str(data.get("valueText", data.get("value", 0)))
+    rank = data.get("rank")
+    streak = data.get("streakDays")
+
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_font("bitmap8")
+    display.set_pen(GREEN)
+    display.text(subtitle, 16, 16, scale=2)
+    display.set_pen(WHITE)
+    value_scale = 5 if len(value_text) <= 6 else (4 if len(value_text) <= 8 else 3)
+    display.text(value_text, 16, 54, scale=value_scale)
+    display.set_pen(MUTED)
+    display.text(title, 18, 132, scale=2)
+    y = 172
+    if rank is not None:
+        display.text("RANK #" + str(rank), 18, y, scale=2)
+        y += 26
+    if streak is not None:
+        display.text("STREAK " + str(streak) + " DAYS", 18, y, scale=2)
+    display.update()
+
+
+draw(load_snapshot())
+
+# Keep the app active so the factory reset button remains the path back to menu.
+while True:
+    time.sleep(1)

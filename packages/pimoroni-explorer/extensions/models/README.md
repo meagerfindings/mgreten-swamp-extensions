@@ -2,7 +2,7 @@
 
 A Swamp model for a USB-connected [Pimoroni Explorer](https://github.com/pimoroni/explorer). It uses MicroPython's `mpremote` utility to verify board identity, record firmware and filesystem observations, run temporary scripts from RAM, safely install menu applications, and render a Swamp Club score card. The model protects `boot.py`, `main.py`, and `explorer.py`, refuses accidental overwrites, and records successful operations as versioned Swamp data.
 
-This initial beta has comprehensive mocked tests but has not yet been exercised against physical Explorer hardware. Keep the board connected over USB while invoking methods. Explorer has no onboard Wi-Fi.
+The extension has been exercised against a physical Explorer over USB. Keep the board connected while invoking methods. Explorer has no onboard Wi-Fi, but its persistent dashboard can show the last saved snapshot while powered independently.
 
 ## Installation
 
@@ -57,6 +57,18 @@ Install the bundled rickroll demo without locating or downloading a separate scr
 swamp model method run explorer installRickRoll
 ```
 
+Install the persistent dashboard, then save and immediately display its latest snapshot:
+
+```sh
+swamp model method run explorer installDashboard
+swamp model method run explorer updateDashboard \
+  --input title='CLAUDE + AMP + CODEX' \
+  --input value=143862958 \
+  --input subtitle='TOKENS BURNED TODAY'
+```
+
+`updateDashboard` writes `swamp_dashboard.json` on the device. After a reboot, select `swamp_dashboard.py` from the factory menu to show the last snapshot without a host connection. USB is still required to refresh the values; the extension never replaces `main.py` or auto-starts itself.
+
 `install` hashes both files. Identical content is a no-op. Different existing content is rejected unless `force=true` is explicitly supplied.
 
 ## Global arguments
@@ -74,6 +86,8 @@ swamp model method run explorer installRickRoll
 - `run` executes a local Python file from RAM and captures bounded output.
 - `install` safely places a lowercase Python module in the factory menu.
 - `installRickRoll` installs the bundled display-and-speaker demo as `rick_roll.py`.
+- `installDashboard` installs the bundled persistent dashboard as `swamp_dashboard.py`.
+- `updateDashboard` stages and saves `swamp_dashboard.json`, then renders the snapshot immediately. The saved snapshot survives resets and independent power.
 
 ## How it works
 

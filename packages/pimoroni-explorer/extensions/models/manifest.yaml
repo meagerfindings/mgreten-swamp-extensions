@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/pimoroni-explorer"
-version: "2026.07.31.1"
+version: "2026.07.31.2"
 description: >
   Inspect, run code on, safely install apps to, and display Swamp Club scores
   on a USB-connected Pimoroni Explorer running MicroPython.
@@ -11,6 +11,7 @@ additionalFiles:
   - README.md
   - LICENSE.txt
   - apps/rick_roll.py.txt
+  - apps/swamp_dashboard.py.txt
 platforms:
   - darwin-aarch64
   - darwin-x86_64

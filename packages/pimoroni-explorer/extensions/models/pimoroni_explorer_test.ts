@@ -1,6 +1,7 @@
 // Unit coverage uses injected command runners; no physical board is required.
 import { assert, assertEquals, assertRejects, assertStringIncludes } from "jsr:@std/assert@1";
 import {
+  buildDashboardProgram,
   buildProbeProgram,
   buildScoreProgram,
   type CommandRunner,
@@ -272,6 +273,82 @@ Deno.test("installRickRoll resolves and installs the bundled menu app", async ()
   assertEquals(writes[0].data.target, "rick_roll.py");
 });
 
+Deno.test("installDashboard resolves and installs the bundled persistent menu app", async () => {
+  const { context, writes } = fakeContext();
+  const calls: string[][] = [];
+  const runner: CommandRunner = (_command, args) => {
+    calls.push(args);
+    const stdout = calls.length === 1
+      ? 'SWAMP_EXPLORER_FILE={"exists":false,"sha256":null}\n'
+      : "";
+    return Promise.resolve({ success: true, code: 0, stdout, stderr: "", timedOut: false });
+  };
+  await model.methods.installDashboard.execute(
+    { force: false, _runner: runner },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+  assertEquals(calls.length, 2);
+  assert(calls[1][4].endsWith("/apps/swamp_dashboard.py.txt"));
+  assertEquals(calls[1][5], ":swamp_dashboard.py");
+  assertEquals(writes[0].specName, "installation");
+  assertEquals(writes[0].data.target, "swamp_dashboard.py");
+});
+
+Deno.test("updateDashboard persists encoded values and records device confirmation", async () => {
+  const { context, writes } = fakeContext();
+  let commandArgs: string[] = [];
+  const runner: CommandRunner = (_command, args) => {
+    commandArgs = args;
+    return Promise.resolve({
+      success: true,
+      code: 0,
+      stdout: "SWAMP_EXPLORER_SCORE_OK\nSWAMP_EXPLORER_DASHBOARD_OK\n",
+      stderr: "",
+      timedOut: false,
+    });
+  };
+  await model.methods.updateDashboard.execute(
+    {
+      title: 'CLAUDE "AMP"',
+      value: 143_862_958,
+      subtitle: "TOKENS BURNED TODAY",
+      sourceUpdatedAt: "2026-07-31T14:57:54Z",
+      _runner: runner,
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+  assertEquals(commandArgs.slice(0, 3), ["connect", "auto", "exec"]);
+  assertStringIncludes(commandArgs[3], "swamp_dashboard.tmp");
+  assertStringIncludes(commandArgs[3], "swamp_dashboard.json");
+  assertStringIncludes(commandArgs[3], "143,862,958");
+  assertStringIncludes(commandArgs[3], 'CLAUDE \\\"AMP\\\"');
+  assertEquals(writes[0].specName, "dashboard");
+  assertEquals(writes[0].name, "dashboard-current");
+  assertEquals(writes[0].data.value, 143_862_958);
+});
+
+Deno.test("updateDashboard does not persist Swamp state without save confirmation", async () => {
+  const { context, writes } = fakeContext();
+  await assertRejects(
+    () =>
+      model.methods.updateDashboard.execute(
+        {
+          title: "ALL AGENTS",
+          value: 42,
+          subtitle: "TOKENS BURNED TODAY",
+          _runner: successfulRunner("SWAMP_EXPLORER_SCORE_OK\n"),
+        },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "did not confirm",
+  );
+  assertEquals(writes.length, 0);
+});
+
 Deno.test("score program renders optional rank and streak", () => {
   const program = buildScoreProgram({
     username: "mgreten",
@@ -296,6 +373,18 @@ Deno.test("score program accepts missing nullable profile metrics", () => {
   });
   assertStringIncludes(program, "rank = None");
   assertStringIncludes(program, "streak = None");
+});
+
+Deno.test("dashboard program saves a versioned snapshot before rendering", () => {
+  const program = buildDashboardProgram({
+    title: "CLAUDE + AMP + CODEX",
+    value: 143_862_958,
+    subtitle: "TOKENS BURNED TODAY",
+  });
+  assertStringIncludes(program, '\\"version\\":1');
+  assertStringIncludes(program, '\\"valueText\\":\\"143,862,958\\"');
+  assert(program.indexOf("os.rename") < program.indexOf("display.update()"));
+  assertStringIncludes(program, "SWAMP_EXPLORER_DASHBOARD_OK");
 });
 
 Deno.test("probe program imports the Explorer display", () => {
