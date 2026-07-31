@@ -2,9 +2,11 @@
 import { assert, assertEquals, assertRejects, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   buildDashboardProgram,
+  buildDashboardPagesProgram,
   buildProbeProgram,
   buildScoreProgram,
   type CommandRunner,
+  DashboardPagesArgumentsSchema,
   model,
   validateTarget,
 } from "./pimoroni_explorer.ts";
@@ -385,6 +387,164 @@ Deno.test("dashboard program saves a versioned snapshot before rendering", () =>
   assertStringIncludes(program, '\\"valueText\\":\\"143,862,958\\"');
   assert(program.indexOf("os.rename") < program.indexOf("display.update()"));
   assertStringIncludes(program, "SWAMP_EXPLORER_DASHBOARD_OK");
+});
+
+Deno.test("dashboard pages schema enforces bounds and discriminated page shapes", () => {
+  const metric = {
+    kind: "metric" as const,
+    title: "SWAMP SCORE",
+    subtitle: "TOTAL",
+    value: 123_456,
+    secondaryLabel: "TODAY / 24H",
+    secondaryValue: 789,
+  };
+  const status = {
+    kind: "status" as const,
+    title: "HOME ASSISTANT",
+    lines: [{ label: "Front Door", state: "OPEN", severity: "warning" as const }],
+  };
+  assert(DashboardPagesArgumentsSchema.safeParse({ pages: [metric, status] }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({ pages: [] }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({ pages: Array(7).fill(metric) }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({
+    pages: [{ ...metric, title: "x".repeat(25) }],
+  }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({
+    pages: [{ ...status, lines: [{ label: "Front Door", state: "OPEN", severity: "bad" }] }],
+  }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({
+    pages: [{ kind: "metric", title: "X", subtitle: "Y", value: -1, lines: [] }],
+  }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({
+    pages: [{ ...metric, secondaryLabel: undefined }],
+  }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({
+    pages: [{ ...metric, secondaryValue: undefined }],
+  }).success);
+  assert(DashboardPagesArgumentsSchema.safeParse({
+    pages: [{
+      kind: "metric",
+      title: "T".repeat(24),
+      subtitle: "S".repeat(24),
+      value: Number.MAX_SAFE_INTEGER,
+      secondaryLabel: "L".repeat(24),
+      secondaryValue: Number.MAX_SAFE_INTEGER,
+    }, {
+      kind: "status",
+      title: "T".repeat(24),
+      subtitle: "S".repeat(24),
+      lines: [{
+        label: "L".repeat(22),
+        state: "S".repeat(12),
+        severity: "critical",
+      }],
+    }],
+  }).success);
+  assert(!DashboardPagesArgumentsSchema.safeParse({
+    pages: [{ ...metric, value: Number.MAX_SAFE_INTEGER + 1 }],
+  }).success);
+});
+
+Deno.test("dashboard pages program safely encodes hostile strings and stages before render", () => {
+  const program = buildDashboardPagesProgram({
+    pages: [{
+      kind: "status",
+      title: 'HOME "\\\nimport os',
+      subtitle: "STATUS",
+      lines: [{
+        label: 'Front Door\\\nprint("oops")',
+        state: "OPEN",
+        severity: "warning",
+      }],
+    }],
+  });
+  assertStringIncludes(program, 'snapshot = "{\\"version\\":2');
+  assertStringIncludes(program, 'HOME \\\\\\\"\\\\\\\\\\\\nimport os');
+  assert(program.indexOf("from explorer import") < program.indexOf("with open"));
+  assert(program.indexOf("os.rename") < program.indexOf("display.clear()"));
+  assert(program.indexOf("display.update()") < program.indexOf("SWAMP_EXPLORER_DASHBOARD_PAGES_OK"));
+});
+
+Deno.test("dashboard pages renderer fits schema boundary content within 320 pixels", () => {
+  const program = buildDashboardPagesProgram({
+    pages: [{
+      kind: "metric",
+      title: "T".repeat(24),
+      subtitle: "S".repeat(24),
+      value: Number.MAX_SAFE_INTEGER,
+      secondaryLabel: "L".repeat(24),
+      secondaryValue: Number.MAX_SAFE_INTEGER,
+    }, {
+      kind: "status",
+      title: "T".repeat(24),
+      subtitle: "S".repeat(24),
+      lines: [{
+        label: "L".repeat(22),
+        state: "S".repeat(12),
+        severity: "critical",
+      }],
+    }],
+  });
+  assertStringIncludes(program, "9,007,199,254,740,991");
+  assertStringIncludes(program, 'fit_text(page["title"], 296, 2)');
+  assertStringIncludes(program, 'fit_text(line["label"], 176, 2)');
+  assertStringIncludes(program, 'fit_text(line["state"], 108, 2)');
+  assertStringIncludes(program, "right_edge - state_width");
+});
+
+Deno.test("updateDashboardPages records a separate stable resource after confirmation", async () => {
+  const { context, writes } = fakeContext();
+  await model.methods.updateDashboardPages.execute(
+    {
+      pages: [{
+        kind: "metric",
+        title: "SWAMP SCORE",
+        subtitle: "TOTAL",
+        value: 10_960_652,
+        secondaryLabel: "TODAY / 24H",
+        secondaryValue: 42_123,
+      }],
+      _runner: successfulRunner("SWAMP_EXPLORER_DASHBOARD_PAGES_OK\n"),
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+  assertEquals(writes[0].specName, "dashboardPages");
+  assertEquals(writes[0].name, "dashboard-pages-current");
+  assertEquals(writes[0].data.version, 2);
+  assert(model.resources.dashboardPages.schema.safeParse(writes[0].data).success);
+});
+
+Deno.test("updateDashboardPages does not write Swamp state without its distinct marker", async () => {
+  const { context, writes } = fakeContext();
+  await assertRejects(
+    () => model.methods.updateDashboardPages.execute(
+      {
+        pages: [{ kind: "metric", title: "SCORE", subtitle: "TOTAL", value: 1 }],
+        _runner: successfulRunner("SWAMP_EXPLORER_DASHBOARD_OK\n"),
+      },
+      // deno-lint-ignore no-explicit-any
+      context as any,
+    ),
+    Error,
+    "did not confirm",
+  );
+  assertEquals(writes.length, 0);
+});
+
+Deno.test("bundled dashboard retains v1 and honors factory import-launch contract", async () => {
+  const app = await Deno.readTextFile(new URL("./apps/swamp_dashboard.py.txt", import.meta.url));
+  assertStringIncludes(app, 'data.get("version") not in (1, 2)');
+  assertStringIncludes(app, 'value_text = str(data.get("valueText", data.get("value", 0)))');
+  assertStringIncludes(app, "def draw(data):");
+  assertStringIncludes(app, "PAGE_SECONDS = 8");
+  assertStringIncludes(app, "time.sleep(PAGE_SECONDS)");
+  assertStringIncludes(app, "# Factory main.py launches the selected filename with __import__");
+  assert(app.trimEnd().endsWith("main()"));
+  assert(!app.includes('if __name__ == "__main__":'));
+  assertStringIncludes(app, "display.measure_text(text, scale=scale)");
+  assertStringIncludes(app, "RIGHT_EDGE - state_width");
+  assertStringIncludes(app, 'pens = {"ok": GREEN, "warning": AMBER, "critical": RED, "unknown": GRAY}');
 });
 
 Deno.test("probe program imports the Explorer display", () => {

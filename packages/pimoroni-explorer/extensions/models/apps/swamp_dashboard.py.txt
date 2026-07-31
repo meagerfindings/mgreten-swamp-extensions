@@ -7,15 +7,42 @@ from explorer import BLACK, WHITE, display
 
 GREEN = display.create_pen(35, 210, 120)
 MUTED = display.create_pen(135, 150, 145)
+AMBER = display.create_pen(255, 180, 35)
+RED = display.create_pen(245, 70, 70)
+GRAY = display.create_pen(145, 145, 145)
 SNAPSHOT = "swamp_dashboard.json"
+PAGE_SECONDS = 8
+RIGHT_EDGE = 308
+
+
+def text_width(text, scale):
+    try:
+        return display.measure_text(text, scale=scale)
+    except (AttributeError, TypeError):
+        # bitmap8 glyphs occupy at most eight pixels per character at scale 1.
+        return len(text) * 8 * scale
+
+
+def fit_text(value, max_width, max_scale):
+    text = str(value)
+    for scale in range(max_scale, 0, -1):
+        if text_width(text, scale) <= max_width:
+            return text, scale, text_width(text, scale)
+    while text and text_width(text, 1) > max_width:
+        text = text[:-1]
+    return text, 1, text_width(text, 1)
 
 
 def load_snapshot():
     try:
         with open(SNAPSHOT, "r") as source:
             data = json.load(source)
-        if not isinstance(data, dict) or data.get("version") != 1:
+        if not isinstance(data, dict) or data.get("version") not in (1, 2):
             raise ValueError("unsupported snapshot")
+        if data.get("version") == 2:
+            pages = data.get("pages")
+            if not isinstance(pages, list) or not pages:
+                raise ValueError("missing pages")
         return data
     except (OSError, ValueError, TypeError, AttributeError):
         return {
@@ -53,8 +80,81 @@ def draw(data):
     display.update()
 
 
-draw(load_snapshot())
+def draw_metric(page):
+    display.set_font("bitmap8")
+    title, title_scale, _ = fit_text(page.get("title", "METRIC"), 296, 2)
+    subtitle, subtitle_scale, _ = fit_text(page.get("subtitle", ""), 296, 2)
+    value_text = str(page.get("valueText", page.get("value", 0)))
 
-# Keep the app active so the factory reset button remains the path back to menu.
-while True:
-    time.sleep(1)
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_pen(GREEN)
+    display.text(title, 12, 10, scale=title_scale)
+    display.set_pen(MUTED)
+    display.text(subtitle, 12, 38, scale=subtitle_scale)
+    display.set_pen(WHITE)
+    value_text, value_scale, _ = fit_text(value_text, 296, 5)
+    display.text(value_text, 12, 72, scale=value_scale)
+    if "secondaryValue" in page:
+        label, label_scale, _ = fit_text(page["secondaryLabel"], 292, 2)
+        secondary = str(page.get("secondaryValueText", page["secondaryValue"]))
+        display.set_pen(MUTED)
+        display.text(label, 14, 158, scale=label_scale)
+        display.set_pen(WHITE)
+        secondary, secondary_scale, _ = fit_text(secondary, 292, 3)
+        display.text(secondary, 14, 188, scale=secondary_scale)
+    display.update()
+
+
+def draw_status(page):
+    display.set_font("bitmap8")
+    title, title_scale, _ = fit_text(page.get("title", "STATUS"), 296, 2)
+    subtitle, subtitle_scale, _ = fit_text(page.get("subtitle", ""), 296, 2)
+    pens = {"ok": GREEN, "warning": AMBER, "critical": RED, "unknown": GRAY}
+
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_pen(GREEN)
+    display.text(title, 12, 10, scale=title_scale)
+    if subtitle:
+        display.set_pen(MUTED)
+        display.text(subtitle, 12, 36, scale=subtitle_scale)
+    y = 66 if subtitle else 42
+    for line in page.get("lines", [])[:6]:
+        label, label_scale, _ = fit_text(line.get("label", ""), 176, 2)
+        display.set_pen(WHITE)
+        display.text(label, 12, y, scale=label_scale)
+        severity = line.get("severity", "unknown")
+        display.set_pen(pens.get(severity, GRAY))
+        state, state_scale, state_width = fit_text(line.get("state", "UNKNOWN"), 108, 2)
+        display.text(state, RIGHT_EDGE - state_width, y, scale=state_scale)
+        y += 28
+    display.update()
+
+
+def draw_page(page):
+    if page.get("kind") == "metric":
+        draw_metric(page)
+    else:
+        draw_status(page)
+
+
+def main():
+    data = load_snapshot()
+    if data.get("version") == 2:
+        pages = data["pages"]
+        index = 0
+        while True:
+            draw_page(pages[index])
+            index = (index + 1) % len(pages)
+            time.sleep(PAGE_SECONDS)
+    else:
+        # Keep the established v1 path byte-for-byte equivalent in behavior.
+        draw(data)
+        while True:
+            time.sleep(1)
+
+
+# Factory main.py launches the selected filename with __import__, so an import is
+# the execution contract and must start the app rather than act like a library.
+main()

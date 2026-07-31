@@ -76,6 +76,55 @@ const DashboardSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+/** One numeric dashboard page with an optional labeled secondary metric. */
+export const DashboardMetricPageSchema = z.object({
+  kind: z.literal("metric"),
+  title: z.string().min(1).max(24),
+  subtitle: z.string().min(1).max(24),
+  value: z.number().int().nonnegative().safe(),
+  secondaryLabel: z.string().min(1).max(24).optional(),
+  secondaryValue: z.number().int().nonnegative().safe().optional(),
+}).strict().refine(
+  (page) =>
+    (page.secondaryLabel === undefined) === (page.secondaryValue === undefined),
+  { message: "secondaryLabel and secondaryValue must be provided together" },
+);
+
+/** One dashboard page containing color-coded status rows. */
+export const DashboardStatusPageSchema = z.object({
+  kind: z.literal("status"),
+  title: z.string().min(1).max(24),
+  subtitle: z.string().min(1).max(24).optional(),
+  lines: z.array(
+    z.object({
+      label: z.string().min(1).max(22),
+      state: z.string().min(1).max(12),
+      severity: z.enum(["ok", "warning", "critical", "unknown"]),
+    }).strict(),
+  ).min(1).max(6),
+}).strict();
+
+/** Validated input for a persistent version-2 rotating dashboard snapshot. */
+export const DashboardPagesArgumentsSchema = z.object({
+  pages: z.array(z.discriminatedUnion("kind", [
+    DashboardMetricPageSchema,
+    DashboardStatusPageSchema,
+  ])).min(1).max(6),
+  sourceUpdatedAt: z.string().optional(),
+});
+
+const DashboardPagesSchema = z.object({
+  device: z.string(),
+  version: z.literal(2),
+  pages: DashboardPagesArgumentsSchema.shape.pages,
+  sourceUpdatedAt: z.string().optional(),
+  updatedAt: z.iso.datetime(),
+});
+
+type DashboardPage = z.infer<
+  typeof DashboardPagesArgumentsSchema
+>["pages"][number];
+
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 type CommandResult = {
@@ -114,6 +163,7 @@ const PROBE_MARKER = "SWAMP_EXPLORER_PROBE=";
 const FILE_MARKER = "SWAMP_EXPLORER_FILE=";
 const SCORE_MARKER = "SWAMP_EXPLORER_SCORE_OK";
 const DASHBOARD_MARKER = "SWAMP_EXPLORER_DASHBOARD_OK";
+const DASHBOARD_PAGES_MARKER = "SWAMP_EXPLORER_DASHBOARD_PAGES_OK";
 const MAX_CAPTURE_LENGTH = 32_000;
 
 /** Run a bounded subprocess and capture a limited amount of output. */
@@ -295,6 +345,98 @@ ${
 print("${DASHBOARD_MARKER}")`;
 }
 
+/** Build a returning MicroPython program that replaces v2 pages and renders page one. */
+export function buildDashboardPagesProgram(args: {
+  pages: DashboardPage[];
+  sourceUpdatedAt?: string;
+}): string {
+  const snapshot = JSON.stringify({
+    version: 2,
+    pages: args.pages.map((page) =>
+      page.kind === "metric"
+        ? {
+          ...page,
+          valueText: page.value.toLocaleString("en-US"),
+          ...(page.secondaryValue === undefined ? {} : {
+            secondaryValueText: page.secondaryValue.toLocaleString("en-US"),
+          }),
+        }
+        : page
+    ),
+    sourceUpdatedAt: args.sourceUpdatedAt ?? null,
+  });
+  return `from explorer import BLACK, WHITE, display
+import json
+import os
+snapshot = ${pythonLiteral(snapshot)}
+data = json.loads(snapshot)
+page = data["pages"][0]
+green = display.create_pen(35, 210, 120)
+muted = display.create_pen(135, 150, 145)
+amber = display.create_pen(255, 180, 35)
+red = display.create_pen(245, 70, 70)
+gray = display.create_pen(145, 145, 145)
+right_edge = 308
+def text_width(text, scale):
+    try:
+        return display.measure_text(text, scale=scale)
+    except (AttributeError, TypeError):
+        return len(text) * 8 * scale
+def fit_text(value, max_width, max_scale):
+    text = str(value)
+    for scale in range(max_scale, 0, -1):
+        if text_width(text, scale) <= max_width:
+            return text, scale, text_width(text, scale)
+    while text and text_width(text, 1) > max_width:
+        text = text[:-1]
+    return text, 1, text_width(text, 1)
+with open("swamp_dashboard.tmp", "w") as f:
+    f.write(snapshot)
+try:
+    os.remove("swamp_dashboard.json")
+except OSError:
+    pass
+os.rename("swamp_dashboard.tmp", "swamp_dashboard.json")
+display.set_pen(BLACK)
+display.clear()
+display.set_font("bitmap8")
+display.set_pen(green)
+title, title_scale, _ = fit_text(page["title"], 296, 2)
+display.text(title, 12, 10, scale=title_scale)
+if page["kind"] == "metric":
+    display.set_pen(muted)
+    subtitle, subtitle_scale, _ = fit_text(page["subtitle"], 296, 2)
+    display.text(subtitle, 12, 38, scale=subtitle_scale)
+    value_text = str(page.get("valueText", page["value"]))
+    display.set_pen(WHITE)
+    value_text, value_scale, _ = fit_text(value_text, 296, 5)
+    display.text(value_text, 12, 72, scale=value_scale)
+    if "secondaryValue" in page:
+        display.set_pen(muted)
+        label, label_scale, _ = fit_text(page["secondaryLabel"], 292, 2)
+        display.text(label, 14, 158, scale=label_scale)
+        display.set_pen(WHITE)
+        secondary, secondary_scale, _ = fit_text(page.get("secondaryValueText", page["secondaryValue"]), 292, 3)
+        display.text(secondary, 14, 188, scale=secondary_scale)
+else:
+    if page.get("subtitle"):
+        display.set_pen(muted)
+        subtitle, subtitle_scale, _ = fit_text(page["subtitle"], 296, 2)
+        display.text(subtitle, 12, 36, scale=subtitle_scale)
+    y = 66 if page.get("subtitle") else 42
+    pens = {"ok": green, "warning": amber, "critical": red, "unknown": gray}
+    for line in page["lines"]:
+        label, label_scale, _ = fit_text(line["label"], 176, 2)
+        display.set_pen(WHITE)
+        display.text(label, 12, y, scale=label_scale)
+        display.set_pen(pens.get(line["severity"], gray))
+        state, state_scale, state_width = fit_text(line["state"], 108, 2)
+        display.text(state, right_edge - state_width, y, scale=state_scale)
+        y += 28
+display.update()
+print("${DASHBOARD_PAGES_MARKER}")`;
+}
+
 /** Validate a factory-menu app filename and protect lifecycle/library files. */
 export function validateTarget(target: string): void {
   if (!/^[a-z][a-z0-9_]*\.py$/.test(target)) {
@@ -408,7 +550,7 @@ async function installApp(
 /** Pimoroni Explorer model definition. */
 export const model = {
   type: "@mgreten/pimoroni-explorer",
-  version: "2026.07.31.2",
+  version: "2026.07.31.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -423,6 +565,14 @@ export const model = {
       toVersion: "2026.07.31.2",
       description:
         "Add a persistent factory-menu dashboard and snapshot updates; no global argument schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.07.31.3",
+      description:
+        "Add rotating version-2 dashboard pages; no global argument schema changes",
       upgradeAttributes: (
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,
@@ -457,6 +607,13 @@ export const model = {
       description:
         "Latest persistent dashboard snapshot written to the Explorer",
       schema: DashboardSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 50,
+    },
+    dashboardPages: {
+      description:
+        "Latest persistent rotating dashboard pages snapshot written to the Explorer",
+      schema: DashboardPagesSchema,
       lifetime: "infinite" as const,
       garbageCollection: 50,
     },
@@ -704,6 +861,50 @@ export const model = {
           },
         );
         context.logger.info("Updated persistent dashboard on {device}", {
+          device: context.globalArgs.device,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    updateDashboardPages: {
+      description:
+        "Persist 1-6 rotating metric or status pages and render the first page immediately",
+      arguments: DashboardPagesArgumentsSchema,
+      execute: async (
+        args: {
+          pages: DashboardPage[];
+          sourceUpdatedAt?: string;
+          _runner?: CommandRunner;
+        },
+        context: MethodContext,
+      ) => {
+        context.logger.info(
+          "Updating {count} persistent dashboard pages on {device}",
+          { count: args.pages.length, device: context.globalArgs.device },
+        );
+        const result = await runMpremote(
+          context.globalArgs,
+          ["exec", buildDashboardPagesProgram(args)],
+          "update persistent dashboard pages",
+          args._runner,
+        );
+        if (!result.stdout.includes(DASHBOARD_PAGES_MARKER)) {
+          throw new Error(
+            "Explorer did not confirm that the dashboard pages snapshot was saved and rendered",
+          );
+        }
+        const handle = await context.writeResource(
+          "dashboardPages",
+          "dashboard-pages-current",
+          {
+            device: context.globalArgs.device,
+            version: 2,
+            pages: args.pages,
+            sourceUpdatedAt: args.sourceUpdatedAt,
+            updatedAt: new Date().toISOString(),
+          },
+        );
+        context.logger.info("Updated persistent dashboard pages on {device}", {
           device: context.globalArgs.device,
         });
         return { dataHandles: [handle] };
