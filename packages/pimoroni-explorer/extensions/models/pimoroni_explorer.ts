@@ -90,6 +90,7 @@ type Logger = {
 type MethodContext = {
   globalArgs: GlobalArgs;
   logger: Logger;
+  extensionFile: (relativePath: string) => string;
   writeResource: (
     specName: string,
     instanceName: string,
@@ -207,6 +208,7 @@ export function buildScoreProgram(args: {
 }): string {
   const username = pythonLiteral(args.username);
   const subtitle = pythonLiteral(args.subtitle ?? "SWAMP CLUB");
+  const scoreText = pythonLiteral(args.score.toLocaleString("en-US"));
   const rank = args.rank == null ? "None" : String(args.rank);
   const streak = args.streakDays == null ? "None" : String(args.streakDays);
 
@@ -214,6 +216,7 @@ export function buildScoreProgram(args: {
 username = ${username}
 subtitle = ${subtitle}
 score = ${args.score}
+score_text = ${scoreText}
 rank = ${rank}
 streak = ${streak}
 green = display.create_pen(35, 210, 120)
@@ -224,7 +227,8 @@ display.set_font("bitmap8")
 display.set_pen(green)
 display.text(subtitle, 16, 16, scale=2)
 display.set_pen(WHITE)
-display.text(str(score), 16, 54, scale=7)
+score_scale = 5 if len(score_text) <= 6 else (4 if len(score_text) <= 8 else 3)
+display.text(score_text, 16, 54, scale=score_scale)
 display.set_pen(muted)
 display.text("@" + username, 18, 132, scale=2)
 y = 172
@@ -275,11 +279,93 @@ if exists:
 print("${FILE_MARKER}" + json.dumps({"exists": exists, "sha256": digest}))`;
 }
 
+type InstallArgs = {
+  appPath: string;
+  target: string;
+  force: boolean;
+  _runner?: CommandRunner;
+};
+
+async function installApp(
+  args: InstallArgs,
+  context: MethodContext,
+): Promise<{ dataHandles: Record<string, unknown>[] }> {
+  validateTarget(args.target);
+  const stat = await Deno.stat(args.appPath).catch(() => null);
+  if (!stat?.isFile) {
+    throw new Error(`Explorer app does not exist: ${args.appPath}`);
+  }
+  if (stat.size > 512_000) {
+    throw new Error(
+      `Explorer app is too large (${stat.size} bytes; maximum 512000)`,
+    );
+  }
+  const sha256 = await sha256File(args.appPath);
+  context.logger.info("Checking {target} on {device}", {
+    target: args.target,
+    device: context.globalArgs.device,
+  });
+  const remoteResult = await runMpremote(
+    context.globalArgs,
+    ["exec", buildFileProbeProgram(args.target)],
+    `inspect ${args.target}`,
+    args._runner,
+  );
+  const remote = FileProbeResponseSchema.parse(
+    parseMarkedJson<unknown>(remoteResult.stdout, FILE_MARKER),
+  );
+  const changed = remote.sha256 !== sha256;
+  if (remote.exists && changed && !args.force) {
+    throw new Error(
+      `${args.target} already exists with different content; rerun with force=true to replace it`,
+    );
+  }
+  if (changed) {
+    await runMpremote(
+      context.globalArgs,
+      ["fs", "cp", args.appPath, `:${args.target}`],
+      `install ${args.target}`,
+      args._runner,
+    );
+  }
+  const handle = await context.writeResource(
+    "installation",
+    `installation-${args.target.replace(/\.py$/, "")}`,
+    {
+      device: context.globalArgs.device,
+      appPath: args.appPath,
+      target: args.target,
+      sha256,
+      changed,
+      installedAt: new Date().toISOString(),
+    },
+  );
+  context.logger.info(
+    "Installed {target} on {device}; changed={changed}",
+    {
+      target: args.target,
+      device: context.globalArgs.device,
+      changed,
+    },
+  );
+  return { dataHandles: [handle] };
+}
+
 /** Pimoroni Explorer model definition. */
 export const model = {
   type: "@mgreten/pimoroni-explorer",
-  version: "2026.07.24.1",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.31.1",
+      description:
+        "Add bundled rickroll installation; no global argument schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+  ],
   resources: {
     device: {
       description: "Detected Pimoroni Explorer identity and filesystem summary",
@@ -451,75 +537,30 @@ export const model = {
         target: z.string().default("swamp_score.py"),
         force: z.boolean().default(false),
       }),
-      execute: async (
-        args: {
-          appPath: string;
-          target: string;
-          force: boolean;
-          _runner?: CommandRunner;
-        },
+      execute: (
+        args: InstallArgs,
         context: MethodContext,
-      ) => {
-        validateTarget(args.target);
-        const stat = await Deno.stat(args.appPath).catch(() => null);
-        if (!stat?.isFile) {
-          throw new Error(`Explorer app does not exist: ${args.appPath}`);
-        }
-        if (stat.size > 512_000) {
-          throw new Error(
-            `Explorer app is too large (${stat.size} bytes; maximum 512000)`,
-          );
-        }
-        const sha256 = await sha256File(args.appPath);
-        context.logger.info("Checking {target} on {device}", {
-          target: args.target,
-          device: context.globalArgs.device,
-        });
-        const remoteResult = await runMpremote(
-          context.globalArgs,
-          ["exec", buildFileProbeProgram(args.target)],
-          `inspect ${args.target}`,
-          args._runner,
-        );
-        const remote = FileProbeResponseSchema.parse(
-          parseMarkedJson<unknown>(remoteResult.stdout, FILE_MARKER),
-        );
-        const changed = remote.sha256 !== sha256;
-        if (remote.exists && changed && !args.force) {
-          throw new Error(
-            `${args.target} already exists with different content; rerun with force=true to replace it`,
-          );
-        }
-        if (changed) {
-          await runMpremote(
-            context.globalArgs,
-            ["fs", "cp", args.appPath, `:${args.target}`],
-            `install ${args.target}`,
-            args._runner,
-          );
-        }
-        const handle = await context.writeResource(
-          "installation",
-          `installation-${args.target.replace(/\.py$/, "")}`,
+      ) => installApp(args, context),
+    },
+    installRickRoll: {
+      description:
+        "Install the bundled rickroll app into the factory Explorer menu without replacing main.py",
+      arguments: z.object({
+        force: z.boolean().default(false),
+      }),
+      execute: (
+        args: { force: boolean; _runner?: CommandRunner },
+        context: MethodContext,
+      ) =>
+        installApp(
           {
-            device: context.globalArgs.device,
-            appPath: args.appPath,
-            target: args.target,
-            sha256,
-            changed,
-            installedAt: new Date().toISOString(),
+            appPath: context.extensionFile("apps/rick_roll.py.txt"),
+            target: "rick_roll.py",
+            force: args.force,
+            _runner: args._runner,
           },
-        );
-        context.logger.info(
-          "Installed {target} on {device}; changed={changed}",
-          {
-            target: args.target,
-            device: context.globalArgs.device,
-            changed,
-          },
-        );
-        return { dataHandles: [handle] };
-      },
+          context,
+        ),
     },
   },
 };

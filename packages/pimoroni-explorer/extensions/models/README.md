@@ -51,6 +51,12 @@ swamp model method run explorer install \
   --input target=swamp_score.py
 ```
 
+Install the bundled rickroll demo without locating or downloading a separate script:
+
+```sh
+swamp model method run explorer installRickRoll
+```
+
 `install` hashes both files. Identical content is a no-op. Different existing content is rejected unless `force=true` is explicitly supplied.
 
 ## Global arguments
@@ -64,9 +70,10 @@ swamp model method run explorer install \
 ## Methods
 
 - `probe` verifies Explorer identity before persisting a device observation.
-- `displayScore` renders username, score, optional rank, and optional streak.
+- `displayScore` renders username, a comma-formatted score with responsive sizing, optional rank, and optional streak. Set `subtitle=TOKENS BURNED` for a token-burn counter view.
 - `run` executes a local Python file from RAM and captures bounded output.
 - `install` safely places a lowercase Python module in the factory menu.
+- `installRickRoll` installs the bundled display-and-speaker demo as `rick_roll.py`.
 
 ## How it works
 

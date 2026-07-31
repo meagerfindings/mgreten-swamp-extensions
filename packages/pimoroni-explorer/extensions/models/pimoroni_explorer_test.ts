@@ -15,6 +15,8 @@ function fakeContext() {
     context: {
       globalArgs: { device: "auto", mpremoteCommand: "mpremote", timeoutMs: 30_000 },
       logger: { info: () => {}, error: () => {} },
+      extensionFile: (relativePath: string) =>
+        decodeURIComponent(new URL(relativePath, import.meta.url).pathname),
       writeResource: (
         specName: string,
         name: string,
@@ -247,14 +249,39 @@ Deno.test("install refuses to replace changed content without force", async () =
   }
 });
 
+Deno.test("installRickRoll resolves and installs the bundled menu app", async () => {
+  const { context, writes } = fakeContext();
+  const calls: string[][] = [];
+  const runner: CommandRunner = (_command, args) => {
+    calls.push(args);
+    const stdout = calls.length === 1
+      ? 'SWAMP_EXPLORER_FILE={"exists":false,"sha256":null}\n'
+      : "";
+    return Promise.resolve({ success: true, code: 0, stdout, stderr: "", timedOut: false });
+  };
+  await model.methods.installRickRoll.execute(
+    { force: false, _runner: runner },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+  assertEquals(calls.length, 2);
+  assertEquals(calls[1].slice(0, 5), ["connect", "auto", "fs", "cp", calls[1][4]]);
+  assert(calls[1][4].endsWith("/apps/rick_roll.py.txt"));
+  assertEquals(calls[1][5], ":rick_roll.py");
+  assertEquals(writes[0].specName, "installation");
+  assertEquals(writes[0].data.target, "rick_roll.py");
+});
+
 Deno.test("score program renders optional rank and streak", () => {
   const program = buildScoreProgram({
     username: "mgreten",
-    score: 42,
+    score: 10_960_652,
     rank: 3,
     streakDays: 9,
   });
-  assertStringIncludes(program, "score = 42");
+  assertStringIncludes(program, "score = 10960652");
+  assertStringIncludes(program, 'score_text = "10,960,652"');
+  assertStringIncludes(program, "scale=score_scale");
   assertStringIncludes(program, "rank = 3");
   assertStringIncludes(program, "streak = 9");
   assertStringIncludes(program, "display.update()");

@@ -1,0 +1,75 @@
+# Stored as .txt for registry safety; installRickRoll deploys it as rick_roll.py.
+import time
+
+from explorer import (
+    BLACK,
+    WHITE,
+    button_x,
+    display,
+    play_tone,
+    set_volume,
+    stop_playing,
+)
+
+
+GREEN = display.create_pen(35, 210, 120)
+PINK = display.create_pen(245, 70, 150)
+MUTED = display.create_pen(125, 145, 140)
+
+# A short, intentionally simple synthesized rickroll-style chorus riff.
+RIFF = (
+    (392, 0.14),
+    (440, 0.14),
+    (523, 0.18),
+    (440, 0.18),
+    (659, 0.32),
+    (659, 0.28),
+    (587, 0.48),
+    (392, 0.14),
+    (440, 0.14),
+    (523, 0.18),
+    (440, 0.18),
+    (587, 0.32),
+    (587, 0.28),
+    (523, 0.48),
+)
+
+
+def draw(title, accent, footer):
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_font("bitmap8")
+    display.set_pen(accent)
+    display.text("SWAMP PRESENTS", 18, 16, scale=2)
+    display.set_pen(WHITE)
+    display.text(title, 18, 65, scale=3)
+    display.set_pen(MUTED)
+    display.text(footer, 18, 205, scale=2)
+    display.update()
+
+
+def rickroll():
+    draw("NEVER GONNA", GREEN, "YOU KNOW THE RULES")
+    set_volume(0.25)
+    try:
+        for index, (frequency, duration) in enumerate(RIFF):
+            play_tone(frequency)
+            bar_height = int(frequency / 14)
+            display.set_pen(PINK if index % 2 else GREEN)
+            display.rectangle(18 + (index * 20), 155 - bar_height, 13, bar_height)
+            display.update()
+            time.sleep(duration)
+            stop_playing()
+            time.sleep(0.035)
+    finally:
+        stop_playing()
+    draw("GIVE YOU UP", PINK, "X: AGAIN   RESET: MENU")
+
+
+rickroll()
+
+while True:
+    if button_x.value() == 0:
+        time.sleep(0.2)
+        rickroll()
+    time.sleep(0.05)
