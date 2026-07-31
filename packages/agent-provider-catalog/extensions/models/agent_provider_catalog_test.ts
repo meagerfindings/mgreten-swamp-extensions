@@ -20,13 +20,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from "jsr:@std/assert@1";
 import {
   type AgentCandidate,
   type AgentCatalog,
   agentCatalogEntry,
   AgentCatalogSchema,
   AgentDispatchResolutionSchema,
+  type CatalogContext,
   catalogRoleFor,
   decideProviderFallback,
   findInvocation,
@@ -36,7 +42,9 @@ import {
   listAgentCatalog,
   model,
   ProviderFallbackDecisionSchema,
+  RecordProviderFallbackArgsSchema,
   resolveAgentDispatch,
+  ResolveAgentDispatchArgsSchema,
   type RoleMap,
 } from "./agent_provider_catalog.ts";
 
@@ -365,7 +373,7 @@ Deno.test("resolveAgentDispatch: a rate/session-limit signal advances a reviewer
     assertEquals(r.model, "opus", signal);
     assertEquals(r.parked, false, signal);
     assertEquals(r.instanceName, "review-agent-security", signal);
-    assertEquals(r.fallbackRef, "provider-fallback-WI-901-reviewer-1", signal);
+    assertEquals(r.fallbackRef, "provider-fallback-WI-901-security-1", signal);
   }
 });
 
@@ -660,5 +668,122 @@ Deno.test("model registration exposes resources and methods", () => {
   assertEquals(Object.keys(model.methods).sort(), [
     "recordProviderFallback",
     "resolveAgentDispatch",
+  ]);
+});
+
+Deno.test("model methods replay existing resources without writing new versions", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  let writes = 0;
+  const context = {
+    globalArgs: {
+      catalog: CATALOG,
+      roleMap: {},
+      signalTagKeys: { workItem: "workItem", phase: "phase" },
+    },
+    readResource: (name: string) =>
+      Promise.resolve(resources.get(name) ?? null),
+    writeResource: (
+      _specName: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
+      writes++;
+      resources.set(name, data);
+      return Promise.resolve({ name });
+    },
+  } as unknown as CatalogContext;
+
+  const dispatchArgs = ResolveAgentDispatchArgsSchema.parse({
+    workItem: "WI-REPLAY-DISPATCH",
+    role: "implementer",
+    instanceName: "implementer-agent",
+    attempt: 1,
+  });
+  const firstDispatch = await model.methods.resolveAgentDispatch.execute(
+    dispatchArgs,
+    context,
+  );
+  const replayedDispatch = await model.methods.resolveAgentDispatch.execute(
+    dispatchArgs,
+    context,
+  );
+  assertEquals(firstDispatch.dataHandles?.length, 1);
+  assertEquals(replayedDispatch.dataHandles, []);
+  assertEquals(writes, 1);
+  await assertRejects(
+    () =>
+      model.methods.resolveAgentDispatch.execute(
+        { ...dispatchArgs, instanceName: "different-agent" },
+        context,
+      ),
+    Error,
+    "conflicting agent dispatch replay",
+  );
+  assertEquals(writes, 1);
+
+  const fallbackArgs = RecordProviderFallbackArgsSchema.parse({
+    workItem: "WI-REPLAY-FALLBACK",
+    role: "implementer",
+    currentTier: 0,
+    signalClass: "rate-limit",
+    attempt: 1,
+  });
+  const firstFallback = await model.methods.recordProviderFallback.execute(
+    fallbackArgs,
+    context,
+  );
+  const replayedFallback = await model.methods.recordProviderFallback.execute(
+    fallbackArgs,
+    context,
+  );
+  assertEquals(firstFallback.dataHandles?.length, 1);
+  assertEquals(replayedFallback.dataHandles, []);
+  assertEquals(writes, 2);
+  await assertRejects(
+    () =>
+      model.methods.recordProviderFallback.execute(
+        { ...fallbackArgs, signalClass: "test-failure" },
+        context,
+      ),
+    Error,
+    "conflicting provider fallback replay",
+  );
+  assertEquals(writes, 2);
+});
+
+Deno.test("mapped concrete roles keep distinct fallback resource identities", async () => {
+  const names: string[] = [];
+  const context = {
+    globalArgs: {
+      catalog: CATALOG,
+      roleMap: { correctness: "reviewer", security: "reviewer" },
+      signalTagKeys: { workItem: "workItem", phase: "phase" },
+    },
+    readResource: () => Promise.resolve(null),
+    writeResource: (
+      _specName: string,
+      name: string,
+      _data: Record<string, unknown>,
+    ) => {
+      names.push(name);
+      return Promise.resolve({ name });
+    },
+  } as unknown as CatalogContext;
+
+  for (const role of ["correctness", "security"]) {
+    await model.methods.recordProviderFallback.execute(
+      RecordProviderFallbackArgsSchema.parse({
+        workItem: "WI-MAPPED-ROLES",
+        role,
+        signalClass: "rate-limit",
+        attempt: 1,
+      }),
+      context,
+    );
+  }
+
+  assertEquals(names, [
+    "provider-fallback-WI-MAPPED-ROLES-correctness-1",
+    "provider-fallback-WI-MAPPED-ROLES-security-1",
   ]);
 });

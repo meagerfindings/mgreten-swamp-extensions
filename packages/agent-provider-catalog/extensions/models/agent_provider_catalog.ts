@@ -653,7 +653,7 @@ export function resolveAgentDispatch(
     resolvedAt,
   );
   const fallbackRef =
-    `provider-fallback-${args.workItem}-${decision.role}-${decision.attempt}`;
+    `provider-fallback-${args.workItem}-${args.role}-${decision.attempt}`;
 
   if (decision.disposition === "advance") {
     return AgentDispatchResolutionSchema.parse({
@@ -909,8 +909,16 @@ async function readLatestFailureSignal(
  */
 export const model = {
   type: "@mgreten/agent-provider-catalog",
-  version: "2026.07.30.1",
+  version: "2026.07.31.1",
   globalArgs: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.31.1",
+      description:
+        "Make dispatch and fallback resource writes replay-safe without changing global arguments.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     providerFallbackDecision: {
       description:
@@ -953,9 +961,30 @@ export const model = {
           args.options,
           new Date().toISOString(),
         );
+        const resourceName =
+          `provider-fallback-${args.workItem}-${args.role}-${decision.attempt}`;
+        const stored = await context.readResource(resourceName);
+        if (stored !== null) {
+          const parsedStored = ProviderFallbackDecisionSchema.parse(stored);
+          const replay = decideProviderFallback(
+            context.globalArgs.catalog,
+            catalogRole,
+            args.currentTier,
+            args.signalClass,
+            args.attempt,
+            args.options,
+            parsedStored.decidedAt,
+          );
+          if (JSON.stringify(parsedStored) !== JSON.stringify(replay)) {
+            throw new Error(
+              `conflicting provider fallback replay for ${resourceName}`,
+            );
+          }
+          return { dataHandles: [] };
+        }
         const handle = await context.writeResource(
           "providerFallbackDecision",
-          `provider-fallback-${args.workItem}-${decision.role}-${decision.attempt}`,
+          resourceName,
           decision,
           {
             tags: {
@@ -1025,9 +1054,35 @@ export const model = {
           },
           new Date().toISOString(),
         );
+        const resourceName =
+          `agent-dispatch-${args.workItem}-${resolution.role}-${resolution.attempt}`;
+        const stored = await context.readResource(resourceName);
+        if (stored !== null) {
+          const parsedStored = AgentDispatchResolutionSchema.parse(stored);
+          const replay = resolveAgentDispatch(
+            context.globalArgs.catalog,
+            roleMap,
+            {
+              workItem: args.workItem,
+              role: args.role,
+              instanceName: args.instanceName,
+              attempt: args.attempt,
+              currentTier: args.currentTier,
+              signalClass,
+              options: args.options,
+            },
+            parsedStored.resolvedAt,
+          );
+          if (JSON.stringify(parsedStored) !== JSON.stringify(replay)) {
+            throw new Error(
+              `conflicting agent dispatch replay for ${resourceName}`,
+            );
+          }
+          return { dataHandles: [] };
+        }
         const handle = await context.writeResource(
           "agentDispatch",
-          `agent-dispatch-${args.workItem}-${resolution.role}-${resolution.attempt}`,
+          resourceName,
           resolution,
           {
             tags: {
