@@ -7,8 +7,9 @@ and downstream dashboards such as Home Assistant.
 
 ## What it captures
 
-- Current score / points
-- Rank and tier
+- Lifetime score / points and all-time rank
+- Rolling-last-24-hours score / points and Today rank
+- Tier
 - Active-day and streak metadata
 - Leaderboard rows from the public leaderboard lookup endpoint
 - Top visible score buckets from the public profile breakdown
@@ -44,6 +45,8 @@ sensor:
 
 - Read-only; does not require issue creation or mutation rights.
 - Uses the public profile page plus the public leaderboard lookup endpoint.
+- The public site's “Today” leaderboard is a rolling last 24 hours, not a
+  local calendar day.
 - The profile page also exposes per-day drilldowns in the browser after clicking
   a heatmap day; this model currently captures the summary fields and the
   highest-value visible categories.

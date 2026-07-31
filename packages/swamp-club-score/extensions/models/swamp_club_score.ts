@@ -52,6 +52,9 @@ type Snapshot = {
   score: number;
   scoreLabel: string;
   rank: number | null;
+  todayScore: number;
+  todayScoreLabel: string;
+  todayRank: number | null;
   tierName: string;
   tierScore: number;
   activeDays: number | null;
@@ -92,6 +95,9 @@ const SnapshotSchema = z.object({
   score: z.number(),
   scoreLabel: z.string(),
   rank: z.number().nullable(),
+  todayScore: z.number(),
+  todayScoreLabel: z.string(),
+  todayRank: z.number().nullable(),
   tierName: z.string(),
   tierScore: z.number(),
   activeDays: z.number().nullable(),
@@ -100,7 +106,7 @@ const SnapshotSchema = z.object({
   joinedText: z.string().nullable(),
   bio: z.string().nullable(),
   topBuckets: z.array(TopBucketSchema),
-  leaderboards: z.record(LeaderboardBoardSchema),
+  leaderboards: z.record(z.string(), LeaderboardBoardSchema),
 });
 
 function cleanText(text: string): string {
@@ -312,8 +318,16 @@ async function fetchJson(url: string): Promise<unknown> {
  */
 export const model = {
   type: "@mgreten/swamp-club-score",
-  version: "2026.07.16.1",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [{
+    toVersion: "2026.07.31.1",
+    description:
+      "Expose lifetime and rolling-24-hour leaderboard values; no global argument schema changes",
+    upgradeAttributes: (
+      old: Record<string, unknown>,
+    ): Record<string, unknown> => old,
+  }],
   resources: {
     snapshot: {
       description: "Latest normalized Swamp Club profile snapshot",
@@ -323,7 +337,7 @@ export const model = {
     },
     leaderboards: {
       description: "Leaderboard lookup payloads for the current user",
-      schema: z.record(LeaderboardBoardSchema),
+      schema: z.record(z.string(), LeaderboardBoardSchema),
       lifetime: "infinite" as const,
       garbageCollection: 5,
     },
@@ -363,13 +377,26 @@ export const model = {
 
         const [profileHtml, leaderboardData] = await Promise.all([
           fetchText(profileUrl),
-          fetchJson(lookupUrl).catch((err) => {
-            context.logger.warning("leaderboard lookup failed: {error}", {
-              error: String(err),
-            });
-            return null;
-          }),
+          fetchJson(lookupUrl),
         ]);
+
+        if (!leaderboardData || typeof leaderboardData !== "object") {
+          throw new Error(
+            "leaderboard lookup payload must contain a today board",
+          );
+        }
+        const rawLeaderboard = leaderboardData as Record<string, unknown>;
+        const rawBoards = rawLeaderboard.boards ?? rawLeaderboard.leaderboard;
+        if (
+          !rawBoards || typeof rawBoards !== "object" ||
+          !("today" in rawBoards) ||
+          !(rawBoards as Record<string, unknown>).today ||
+          typeof (rawBoards as Record<string, unknown>).today !== "object"
+        ) {
+          throw new Error(
+            "leaderboard lookup payload must contain a today board",
+          );
+        }
 
         const profile = parseProfileHtml(profileHtml);
         const snapshot: Snapshot = {
@@ -377,48 +404,67 @@ export const model = {
           profileUrl,
           fetchedAt: new Date().toISOString(),
           ...profile,
+          todayScore: 0,
+          todayScoreLabel: "0",
+          todayRank: null,
           leaderboards: {},
         };
 
         const leaderboards: Record<string, LeaderboardBoard> = {};
-        if (leaderboardData && typeof leaderboardData === "object") {
-          const raw = leaderboardData as Record<string, unknown>;
-          const boardNames = Object.keys(raw.boards ?? raw.leaderboard ?? {});
-          for (const boardName of boardNames) {
-            leaderboards[boardName] = extractLeaderboardBoard(
-              boardName,
-              leaderboardData,
-              username,
-            );
-          }
-          if (boardNames.length === 0) {
-            const maybeRow = extractLeaderboardRow(profileHtml, username);
-            if (maybeRow) {
-              leaderboards.profile = {
-                name: "profile",
-                found: true,
-                rows: [maybeRow],
-              };
-            }
+        const boardNames = Object.keys(rawBoards);
+        for (const boardName of boardNames) {
+          leaderboards[boardName] = extractLeaderboardBoard(
+            boardName,
+            leaderboardData,
+            username,
+          );
+        }
+        if (boardNames.length === 0) {
+          const maybeRow = extractLeaderboardRow(profileHtml, username);
+          if (maybeRow) {
+            leaderboards.profile = {
+              name: "profile",
+              found: true,
+              rows: [maybeRow],
+            };
           }
         }
 
         snapshot.leaderboards = leaderboards;
 
-        const targetRow = Object.values(leaderboards)
-          .flatMap((board) => board.rows)
-          .find((row) => row.isTargetUser);
-        if (targetRow) {
-          snapshot.score = targetRow.score;
-          snapshot.scoreLabel = targetRow.scoreLabel;
-          snapshot.rank = targetRow.rank;
-          snapshot.tierName = targetRow.tierName || snapshot.tierName;
-          snapshot.tierScore = targetRow.tierScore || snapshot.tierScore;
+        const alltimeTargetRow = leaderboards.alltime?.rows.find((row) =>
+          row.isTargetUser
+        );
+        const todayTargetRow = leaderboards.today?.rows.find((row) =>
+          row.isTargetUser
+        );
+        if (alltimeTargetRow) {
+          snapshot.score = alltimeTargetRow.score;
+          snapshot.scoreLabel = alltimeTargetRow.scoreLabel;
+          snapshot.rank = alltimeTargetRow.rank;
+          snapshot.tierName = alltimeTargetRow.tierName || snapshot.tierName;
+          snapshot.tierScore = alltimeTargetRow.tierScore || snapshot.tierScore;
+        }
+        if (todayTargetRow) {
+          snapshot.todayScore = todayTargetRow.score;
+          snapshot.todayScoreLabel = todayTargetRow.scoreLabel;
+          snapshot.todayRank = todayTargetRow.rank;
+        }
+
+        const validatedSnapshot = SnapshotSchema.safeParse(snapshot);
+        if (!validatedSnapshot.success) {
+          throw new Error(
+            `invalid snapshot: ${validatedSnapshot.error.message}`,
+          );
         }
 
         const handles = [];
         handles.push(
-          await context.writeResource("snapshot", "current-snapshot", snapshot),
+          await context.writeResource(
+            "snapshot",
+            "current-snapshot",
+            validatedSnapshot.data,
+          ),
         );
         handles.push(
           await context.writeResource(

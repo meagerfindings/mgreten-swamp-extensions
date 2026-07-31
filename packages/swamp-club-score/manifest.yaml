@@ -1,11 +1,11 @@
 manifestVersion: 1
 name: "@mgreten/swamp-club-score"
-version: "2026.07.16.1"
+version: "2026.07.31.1"
 description: |
   Fetch and normalize a Swamp Club profile snapshot for a user such as
-  `mgreten`, including the current score, leaderboard placement, streak and
-  activity metadata, and the highest-value visible score buckets from the
-  public profile page.
+  `mgreten`, including lifetime and rolling-24-hour scores and leaderboard
+  placements, streak and activity metadata, and the highest-value visible
+  score buckets from the public profile page.
 
   The model is intentionally read-only: it does not mutate the profile or
   require lab issue workflows. It is designed to be polled and then surfaced

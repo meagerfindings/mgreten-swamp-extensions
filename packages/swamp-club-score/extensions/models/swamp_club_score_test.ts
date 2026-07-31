@@ -1,4 +1,4 @@
-import { assertEquals, assert } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { model } from "./swamp_club_score.ts";
 
 const SAMPLE_HTML = `
@@ -50,6 +50,17 @@ Deno.test("sync fetches and stores the current snapshot", async () => {
     if (url.pathname === "/api/v1/leaderboard/locate") {
       return Response.json({
         boards: {
+          today: {
+            rows: [
+              {
+                rank: 3,
+                username: "mgreten",
+                score: 8642,
+                tierName: "GENESIS PASS",
+                tierScore: 999999,
+              },
+            ],
+          },
           alltime: {
             rows: [
               {
@@ -103,6 +114,9 @@ Deno.test("sync fetches and stores the current snapshot", async () => {
       username: string;
       score: number;
       rank: number | null;
+      todayScore: number;
+      todayScoreLabel: string;
+      todayRank: number | null;
       tierName: string;
       topBuckets: Array<{ name: string; score: number }>;
       leaderboards: Record<string, unknown>;
@@ -111,11 +125,139 @@ Deno.test("sync fetches and stores the current snapshot", async () => {
     assertEquals(snapshot.username, "mgreten");
     assertEquals(snapshot.score, 1964794);
     assertEquals(snapshot.rank, 7);
+    assertEquals(snapshot.todayScore, 8642);
+    assertEquals(snapshot.todayScoreLabel, "8642");
+    assertEquals(snapshot.todayRank, 3);
     assertEquals(snapshot.tierName, "BLACK WATER WRAITH");
     assert(snapshot.topBuckets.length >= 2);
     assertEquals(snapshot.topBuckets[0].name, "badges");
     assertEquals(snapshot.topBuckets[0].score, 1050000);
-    assertEquals(Object.keys(snapshot.leaderboards), ["alltime"]);
+    assertEquals(Object.keys(snapshot.leaderboards), ["today", "alltime"]);
+  } finally {
+    server.shutdown();
+  }
+});
+
+Deno.test("sync defaults today values when the target is absent", async () => {
+  const server = Deno.serve({ hostname: "127.0.0.1", port: 0 }, (req: Request) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/u/mgreten") return new Response(SAMPLE_HTML);
+    if (url.pathname === "/api/v1/leaderboard/locate") {
+      return Response.json({
+        boards: {
+          alltime: {
+            rows: [{ rank: 7, username: "mgreten", score: 1964794 }],
+          },
+          today: {
+            rows: [{ rank: 1, username: "someone", score: 5000 }],
+          },
+        },
+      });
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const port = (server.addr as Deno.NetAddr).port;
+  const writes: Array<{ specName: string; data: unknown }> = [];
+
+  try {
+    await model.methods.sync.execute({}, {
+      globalArgs: {
+        username: "mgreten",
+        swampClubUrl: `http://127.0.0.1:${port}`,
+      },
+      logger: { info: () => {}, warning: () => {} },
+      writeResource: async (specName, _instanceName, data) => {
+        writes.push({ specName, data });
+        return { name: specName };
+      },
+    });
+
+    const snapshot = writes[0].data as {
+      score: number;
+      rank: number | null;
+      todayScore: number;
+      todayScoreLabel: string;
+      todayRank: number | null;
+    };
+    assertEquals(snapshot.score, 1964794);
+    assertEquals(snapshot.rank, 7);
+    assertEquals(snapshot.todayScore, 0);
+    assertEquals(snapshot.todayScoreLabel, "0");
+    assertEquals(snapshot.todayRank, null);
+  } finally {
+    server.shutdown();
+  }
+});
+
+Deno.test("sync rejects a leaderboard HTTP failure without writes", async () => {
+  const server = Deno.serve({ hostname: "127.0.0.1", port: 0 }, (req: Request) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/u/mgreten") return new Response(SAMPLE_HTML);
+    if (url.pathname === "/api/v1/leaderboard/locate") {
+      return new Response("unavailable", { status: 500 });
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const port = (server.addr as Deno.NetAddr).port;
+  const writes: unknown[] = [];
+
+  try {
+    await assertRejects(
+      () => model.methods.sync.execute({}, {
+        globalArgs: {
+          username: "mgreten",
+          swampClubUrl: `http://127.0.0.1:${port}`,
+        },
+        logger: { info: () => {}, warning: () => {} },
+        writeResource: async (_specName, _instanceName, data) => {
+          writes.push(data);
+          return { name: "unexpected" };
+        },
+      }),
+      Error,
+      "500",
+    );
+    assertEquals(writes, []);
+  } finally {
+    server.shutdown();
+  }
+});
+
+Deno.test("sync rejects a missing today board without writes", async () => {
+  const server = Deno.serve({ hostname: "127.0.0.1", port: 0 }, (req: Request) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/u/mgreten") return new Response(SAMPLE_HTML);
+    if (url.pathname === "/api/v1/leaderboard/locate") {
+      return Response.json({
+        boards: {
+          alltime: {
+            rows: [{ rank: 7, username: "mgreten", score: 1964794 }],
+          },
+        },
+      });
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const port = (server.addr as Deno.NetAddr).port;
+  const writes: unknown[] = [];
+
+  try {
+    await assertRejects(
+      () => model.methods.sync.execute({}, {
+        globalArgs: {
+          username: "mgreten",
+          swampClubUrl: `http://127.0.0.1:${port}`,
+        },
+        logger: { info: () => {}, warning: () => {} },
+        writeResource: async (_specName, _instanceName, data) => {
+          writes.push(data);
+          return { name: "unexpected" };
+        },
+      }),
+      Error,
+      "must contain a today board",
+    );
+    assertEquals(writes, []);
   } finally {
     server.shutdown();
   }
