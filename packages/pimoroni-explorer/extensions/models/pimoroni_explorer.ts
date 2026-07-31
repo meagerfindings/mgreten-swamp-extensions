@@ -104,11 +104,26 @@ export const DashboardStatusPageSchema = z.object({
   ).min(1).max(6),
 }).strict();
 
+/** One dense token-usage page with a category bar and optional activity histogram. */
+export const DashboardUsagePageSchema = z.object({
+  kind: z.literal("usage"),
+  title: z.string().min(1).max(24),
+  totalTokens: z.number().int().nonnegative().safe(),
+  uncachedInputTokens: z.number().int().nonnegative().safe(),
+  outputTokens: z.number().int().nonnegative().safe(),
+  cacheReadTokens: z.number().int().nonnegative().safe(),
+  cacheWriteTokens: z.number().int().nonnegative().safe(),
+  requestCount: z.number().int().nonnegative().safe(),
+  model: z.string().min(1).max(16),
+  activity: z.array(z.number().int().nonnegative().safe()).max(24).optional(),
+}).strict();
+
 /** Validated input for a persistent version-2 rotating dashboard snapshot. */
 export const DashboardPagesArgumentsSchema = z.object({
   pages: z.array(z.discriminatedUnion("kind", [
     DashboardMetricPageSchema,
     DashboardStatusPageSchema,
+    DashboardUsagePageSchema,
   ])).min(1).max(6),
   sourceUpdatedAt: z.string().optional(),
 });
@@ -350,19 +365,44 @@ export function buildDashboardPagesProgram(args: {
   pages: DashboardPage[];
   sourceUpdatedAt?: string;
 }): string {
+  const compact = (value: number): string => {
+    const [divisor, suffix] = value >= 1_000_000_000
+      ? [1_000_000_000, "B"] as const
+      : value >= 1_000_000
+      ? [1_000_000, "M"] as const
+      : value >= 1_000
+      ? [1_000, "K"] as const
+      : [1, ""] as const;
+    if (divisor === 1) return String(value);
+    return `${
+      (value / divisor).toFixed(2).replace(/\.0+$|(?<=\.[0-9])0$/, "")
+    }${suffix}`;
+  };
   const snapshot = JSON.stringify({
     version: 2,
-    pages: args.pages.map((page) =>
-      page.kind === "metric"
-        ? {
+    pages: args.pages.map((page) => {
+      if (page.kind === "metric") {
+        return {
           ...page,
           valueText: page.value.toLocaleString("en-US"),
           ...(page.secondaryValue === undefined ? {} : {
             secondaryValueText: page.secondaryValue.toLocaleString("en-US"),
           }),
-        }
-        : page
-    ),
+        };
+      }
+      if (page.kind === "usage") {
+        return {
+          ...page,
+          totalText: page.totalTokens.toLocaleString("en-US"),
+          totalCompact: compact(page.totalTokens),
+          inputText: compact(page.uncachedInputTokens),
+          outputText: compact(page.outputTokens),
+          cacheReadText: compact(page.cacheReadTokens),
+          cacheWriteText: compact(page.cacheWriteTokens),
+        };
+      }
+      return page;
+    }),
     sourceUpdatedAt: args.sourceUpdatedAt ?? null,
   });
   return `from explorer import BLACK, WHITE, display
@@ -376,6 +416,9 @@ muted = display.create_pen(135, 150, 145)
 amber = display.create_pen(255, 180, 35)
 red = display.create_pen(245, 70, 70)
 gray = display.create_pen(145, 145, 145)
+cyan = display.create_pen(45, 205, 255)
+blue = display.create_pen(50, 110, 255)
+lime = display.create_pen(190, 255, 35)
 right_edge = 308
 def text_width(text, scale):
     try:
@@ -400,9 +443,14 @@ os.rename("swamp_dashboard.tmp", "swamp_dashboard.json")
 display.set_pen(BLACK)
 display.clear()
 display.set_font("bitmap8")
-display.set_pen(green)
 title, title_scale, _ = fit_text(page["title"], 296, 2)
-display.text(title, 12, 10, scale=title_scale)
+if page["kind"] == "usage":
+    title_width = text_width(title, title_scale)
+    display.set_pen(cyan)
+    display.text(title, (320 - title_width) // 2, 8, scale=title_scale)
+else:
+    display.set_pen(green)
+    display.text(title, 12, 10, scale=title_scale)
 if page["kind"] == "metric":
     display.set_pen(muted)
     subtitle, subtitle_scale, _ = fit_text(page["subtitle"], 296, 2)
@@ -418,7 +466,7 @@ if page["kind"] == "metric":
         display.set_pen(WHITE)
         secondary, secondary_scale, _ = fit_text(page.get("secondaryValueText", page["secondaryValue"]), 292, 3)
         display.text(secondary, 14, 188, scale=secondary_scale)
-else:
+elif page["kind"] == "status":
     if page.get("subtitle"):
         display.set_pen(muted)
         subtitle, subtitle_scale, _ = fit_text(page["subtitle"], 296, 2)
@@ -433,6 +481,48 @@ else:
         state, state_scale, state_width = fit_text(line["state"], 108, 2)
         display.text(state, right_edge - state_width, y, scale=state_scale)
         y += 28
+else:
+    total_compact, compact_scale, compact_width = fit_text(page["totalCompact"], 296, 4)
+    display.set_pen(amber)
+    display.text(total_compact, (320 - compact_width) // 2, 34, scale=compact_scale)
+    exact, exact_scale, exact_width = fit_text(page["totalText"] + " TOKENS", 296, 2)
+    display.set_pen(WHITE)
+    display.text(exact, (320 - exact_width) // 2, 76, scale=exact_scale)
+    values = [page["outputTokens"], page["uncachedInputTokens"], page["cacheWriteTokens"], page["cacheReadTokens"]]
+    colors = [amber, cyan, lime, blue]
+    bar_total = sum(values) or 1
+    x = 12
+    for index in range(4):
+        width = 296 - (x - 12) if index == 3 else values[index] * 296 // bar_total
+        if width > 0:
+            display.set_pen(colors[index])
+            display.rectangle(x, 106, width, 12)
+        x += width
+    labels = [("OUT", page["outputText"]), ("IN", page["inputText"]), ("C.W", page["cacheWriteText"]), ("C.R", page["cacheReadText"])]
+    for index in range(4):
+        column = index % 2
+        row = index // 2
+        x = 14 + column * 154
+        y = 128 + row * 22
+        display.set_pen(colors[index])
+        display.rectangle(x, y + 3, 8, 8)
+        display.set_pen(WHITE)
+        text, text_scale, _ = fit_text(labels[index][0] + " " + labels[index][1], 134, 2)
+        display.text(text, x + 13, y, scale=text_scale)
+    activity = page.get("activity", [])
+    if activity:
+        peak = max(activity) or 1
+        count = len(activity)
+        width = max(2, 120 // count)
+        start = 100 - (count * width) // 2
+        for index in range(count):
+            height = max(1, activity[index] * 28 // peak)
+            display.set_pen(cyan if index < count - 1 else amber)
+            display.rectangle(start + index * width, 207 - height, max(1, width - 1), height)
+    footer = str(page["requestCount"]) + " REQS  " + page["model"]
+    footer, footer_scale, footer_width = fit_text(footer, 192, 1)
+    display.set_pen(MUTED)
+    display.text(footer, 308 - footer_width, 215, scale=footer_scale)
 display.update()
 print("${DASHBOARD_PAGES_MARKER}")`;
 }
@@ -550,7 +640,7 @@ async function installApp(
 /** Pimoroni Explorer model definition. */
 export const model = {
   type: "@mgreten/pimoroni-explorer",
-  version: "2026.07.31.3",
+  version: "2026.07.31.4",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -573,6 +663,14 @@ export const model = {
       toVersion: "2026.07.31.3",
       description:
         "Add rotating version-2 dashboard pages; no global argument schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.07.31.4",
+      description:
+        "Add a dense token-usage dashboard page; no global argument schema changes",
       upgradeAttributes: (
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,

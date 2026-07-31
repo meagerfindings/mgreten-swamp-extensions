@@ -10,6 +10,9 @@ MUTED = display.create_pen(135, 150, 145)
 AMBER = display.create_pen(255, 180, 35)
 RED = display.create_pen(245, 70, 70)
 GRAY = display.create_pen(145, 145, 145)
+CYAN = display.create_pen(45, 205, 255)
+BLUE = display.create_pen(50, 110, 255)
+LIME = display.create_pen(190, 255, 35)
 SNAPSHOT = "swamp_dashboard.json"
 PAGE_SECONDS = 8
 RIGHT_EDGE = 308
@@ -132,11 +135,65 @@ def draw_status(page):
     display.update()
 
 
+def draw_usage(page):
+    display.set_font("bitmap8")
+    title, title_scale, title_width = fit_text(page.get("title", "TOKENS TODAY"), 296, 2)
+    total, total_scale, total_width = fit_text(page.get("totalCompact", "0"), 296, 4)
+    exact, exact_scale, exact_width = fit_text(str(page.get("totalText", "0")) + " TOKENS", 296, 2)
+    colors = [AMBER, CYAN, LIME, BLUE]
+    values = [page.get("outputTokens", 0), page.get("uncachedInputTokens", 0), page.get("cacheWriteTokens", 0), page.get("cacheReadTokens", 0)]
+    labels = [("OUT", page.get("outputText", "0")), ("IN", page.get("inputText", "0")), ("C.W", page.get("cacheWriteText", "0")), ("C.R", page.get("cacheReadText", "0"))]
+
+    display.set_pen(BLACK)
+    display.clear()
+    display.set_pen(CYAN)
+    display.text(title, (320 - title_width) // 2, 8, scale=title_scale)
+    display.set_pen(AMBER)
+    display.text(total, (320 - total_width) // 2, 34, scale=total_scale)
+    display.set_pen(WHITE)
+    display.text(exact, (320 - exact_width) // 2, 76, scale=exact_scale)
+    bar_total = sum(values) or 1
+    x = 12
+    for index in range(4):
+        width = 296 - (x - 12) if index == 3 else values[index] * 296 // bar_total
+        if width > 0:
+            display.set_pen(colors[index])
+            display.rectangle(x, 106, width, 12)
+        x += width
+    for index in range(4):
+        column = index % 2
+        row = index // 2
+        x = 14 + column * 154
+        y = 128 + row * 22
+        display.set_pen(colors[index])
+        display.rectangle(x, y + 3, 8, 8)
+        display.set_pen(WHITE)
+        text, text_scale, _ = fit_text(labels[index][0] + " " + str(labels[index][1]), 134, 2)
+        display.text(text, x + 13, y, scale=text_scale)
+    activity = page.get("activity", [])
+    if activity:
+        peak = max(activity) or 1
+        count = len(activity)
+        width = max(2, 120 // count)
+        start = 100 - (count * width) // 2
+        for index in range(count):
+            height = max(1, activity[index] * 28 // peak)
+            display.set_pen(CYAN if index < count - 1 else AMBER)
+            display.rectangle(start + index * width, 207 - height, max(1, width - 1), height)
+    footer = str(page.get("requestCount", 0)) + " REQS  " + str(page.get("model", "ALL"))
+    footer, footer_scale, footer_width = fit_text(footer, 192, 1)
+    display.set_pen(MUTED)
+    display.text(footer, 308 - footer_width, 215, scale=footer_scale)
+    display.update()
+
+
 def draw_page(page):
     if page.get("kind") == "metric":
         draw_metric(page)
-    else:
+    elif page.get("kind") == "status":
         draw_status(page)
+    else:
+        draw_usage(page)
 
 
 def main():

@@ -86,7 +86,20 @@ swamp model method run explorer updateDashboardPages \
   ]'
 ```
 
-The menu app displays the first page immediately, advances every eight seconds, and loops while open. Metric values are comma-formatted; status states are color-coded (`ok`, `warning`, `critical`, or `unknown`) so open or unhealthy entries stand out. The snapshot persists across resets and independent power. Reconnect over USB and run either update method to refresh it; the Explorer does not fetch Swamp, homelab, or Home Assistant data itself. Keep credentials and private entity IDs in the upstream model or workflow—not in this public extension or its snapshot examples.
+A dense usage page can show the exact and compact token total, a proportional input/output/cache bar, request count, model label, and up to 24 activity buckets:
+
+```sh
+swamp model method run explorer updateDashboardPages \
+  --input pages='[{
+    "kind":"usage","title":"ALL AGENT TOKENS TODAY",
+    "totalTokens":33407722,"uncachedInputTokens":1900,"outputTokens":143000,
+    "cacheReadTokens":32630000,"cacheWriteTokens":637000,
+    "requestCount":161,"model":"MIXED",
+    "activity":[0,0,0,0,1200,65000,540000,1200000]
+  }]'
+```
+
+`uncachedInputTokens` is intentionally separate from cache reads and writes so the stacked categories do not double-count cached input. The menu app displays the first page immediately, advances every eight seconds, and loops while open. Metric and usage values are comma- or compact-formatted; usage category colors match the stacked bar and optional activity histogram. Status states are color-coded (`ok`, `warning`, `critical`, or `unknown`) so open or unhealthy entries stand out. The snapshot persists across resets and independent power. Reconnect over USB and run either update method to refresh it; the Explorer does not fetch Swamp, homelab, Home Assistant, or token data itself. Keep credentials and private entity IDs in the upstream model or workflow—not in this public extension or its snapshot examples.
 
 When upgrading an existing beta installation to version 2 pages, run `installDashboard --input force=true` once before the first `updateDashboardPages` call. The bundled app must be replaced because the factory `main.py` launches menu apps with `__import__(application_file_to_launch)`; accordingly, `swamp_dashboard.py` starts unconditionally when imported.
 
@@ -109,7 +122,7 @@ When upgrading an existing beta installation to version 2 pages, run `installDas
 - `installRickRoll` installs the bundled display-and-speaker demo as `rick_roll.py`.
 - `installDashboard` installs the bundled persistent dashboard as `swamp_dashboard.py`.
 - `updateDashboard` stages and saves `swamp_dashboard.json`, then renders the snapshot immediately. The saved snapshot survives resets and independent power.
-- `updateDashboardPages` stages and saves a separate version-2 state record containing 1–6 rotating metric/status pages, renders page one, and returns only after the Explorer confirms both operations. Existing version-1 snapshots and `updateDashboard` remain supported unchanged.
+- `updateDashboardPages` stages and saves a separate version-2 state record containing 1–6 rotating metric, status, or token-usage pages, renders page one, and returns only after the Explorer confirms both operations. Existing version-1 snapshots and `updateDashboard` remain supported unchanged.
 
 ## How it works
 

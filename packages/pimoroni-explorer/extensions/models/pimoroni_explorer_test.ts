@@ -7,6 +7,7 @@ import {
   buildScoreProgram,
   type CommandRunner,
   DashboardPagesArgumentsSchema,
+  DashboardUsagePageSchema,
   model,
   validateTarget,
 } from "./pimoroni_explorer.ts";
@@ -445,6 +446,52 @@ Deno.test("dashboard pages schema enforces bounds and discriminated page shapes"
   }).success);
 });
 
+Deno.test("usage page schema requires bounded nonnegative breakdown values", () => {
+  const usage = {
+    kind: "usage" as const,
+    title: "ALL AGENT TOKENS TODAY",
+    totalTokens: 33_407_722,
+    uncachedInputTokens: 1_900,
+    outputTokens: 143_000,
+    cacheReadTokens: 32_630_000,
+    cacheWriteTokens: 637_000,
+    requestCount: 161,
+    model: "MIXED",
+    activity: [0, 1_200, 65_000, 540_000],
+  };
+  assert(DashboardUsagePageSchema.safeParse(usage).success);
+  assert(DashboardPagesArgumentsSchema.safeParse({ pages: [usage] }).success);
+  assert(!DashboardUsagePageSchema.safeParse({ ...usage, totalTokens: -1 }).success);
+  assert(!DashboardUsagePageSchema.safeParse({ ...usage, model: "x".repeat(17) }).success);
+  assert(!DashboardUsagePageSchema.safeParse({ ...usage, activity: Array(25).fill(0) }).success);
+  assert(!DashboardUsagePageSchema.safeParse({ ...usage, unknown: true }).success);
+});
+
+Deno.test("usage page program formats totals and renders breakdown, activity, and footer", () => {
+  const program = buildDashboardPagesProgram({
+    pages: [{
+      kind: "usage",
+      title: "ALL AGENT TOKENS TODAY",
+      totalTokens: 33_407_722,
+      uncachedInputTokens: 1_900,
+      outputTokens: 143_000,
+      cacheReadTokens: 32_630_000,
+      cacheWriteTokens: 637_000,
+      requestCount: 161,
+      model: "MIXED",
+      activity: [0, 1_200, 65_000, 540_000],
+    }],
+  });
+  assertStringIncludes(program, '\\"totalText\\":\\"33,407,722\\"');
+  assertStringIncludes(program, '\\"totalCompact\\":\\"33.41M\\"');
+  assertStringIncludes(program, '\\"outputText\\":\\"143K\\"');
+  assertStringIncludes(program, '\\"cacheReadText\\":\\"32.63M\\"');
+  assertStringIncludes(program, 'values = [page["outputTokens"], page["uncachedInputTokens"]');
+  assertStringIncludes(program, 'display.rectangle(x, 106, width, 12)');
+  assertStringIncludes(program, 'footer = str(page["requestCount"]) + " REQS  " + page["model"]');
+  assertStringIncludes(program, 'activity = page.get("activity", [])');
+});
+
 Deno.test("dashboard pages program safely encodes hostile strings and stages before render", () => {
   const program = buildDashboardPagesProgram({
     pages: [{
@@ -545,6 +592,9 @@ Deno.test("bundled dashboard retains v1 and honors factory import-launch contrac
   assertStringIncludes(app, "display.measure_text(text, scale=scale)");
   assertStringIncludes(app, "RIGHT_EDGE - state_width");
   assertStringIncludes(app, 'pens = {"ok": GREEN, "warning": AMBER, "critical": RED, "unknown": GRAY}');
+  assertStringIncludes(app, "def draw_usage(page):");
+  assertStringIncludes(app, 'display.rectangle(x, 106, width, 12)');
+  assertStringIncludes(app, 'footer = str(page.get("requestCount", 0))');
 });
 
 Deno.test("probe program imports the Explorer display", () => {
