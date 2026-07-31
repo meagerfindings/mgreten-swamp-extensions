@@ -521,7 +521,7 @@ else:
             display.rectangle(start + index * width, 207 - height, max(1, width - 1), height)
     footer = str(page["requestCount"]) + " REQS  " + page["model"]
     footer, footer_scale, footer_width = fit_text(footer, 192, 1)
-    display.set_pen(MUTED)
+    display.set_pen(muted)
     display.text(footer, 308 - footer_width, 215, scale=footer_scale)
 display.update()
 print("${DASHBOARD_PAGES_MARKER}")`;
@@ -640,7 +640,7 @@ async function installApp(
 /** Pimoroni Explorer model definition. */
 export const model = {
   type: "@mgreten/pimoroni-explorer",
-  version: "2026.07.31.4",
+  version: "2026.07.31.5",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -671,6 +671,14 @@ export const model = {
       toVersion: "2026.07.31.4",
       description:
         "Add a dense token-usage dashboard page; no global argument schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.07.31.5",
+      description:
+        "Fix immediate usage-page rendering on physical Explorer hardware; no schema changes",
       upgradeAttributes: (
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,

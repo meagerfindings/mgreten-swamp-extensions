@@ -490,6 +490,7 @@ Deno.test("usage page program formats totals and renders breakdown, activity, an
   assertStringIncludes(program, 'display.rectangle(x, 106, width, 12)');
   assertStringIncludes(program, 'footer = str(page["requestCount"]) + " REQS  " + page["model"]');
   assertStringIncludes(program, 'activity = page.get("activity", [])');
+  assert(!program.includes("display.set_pen(MUTED)"));
 });
 
 Deno.test("dashboard pages program safely encodes hostile strings and stages before render", () => {
