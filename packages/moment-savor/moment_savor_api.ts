@@ -14,6 +14,7 @@
 
 // Controllers covered by this extension (update when new endpoints are added):
 //   app/controllers/api/v1/memories_controller.rb
+//   app/controllers/api/v1/photos_controller.rb
 //   app/controllers/api/v1/tokens_controller.rb
 //   app/controllers/api/v1/family_members_controller.rb
 //   app/controllers/api/v1/family_invitations_controller.rb
@@ -32,6 +33,21 @@ const GlobalArgsSchema = z.object({
     .url()
     .default("https://momentsavor.app")
     .describe("Base URL of the Moment Savor app (override for local dev)"),
+});
+
+/** Safe photo metadata embedded in a V1 memory response. */
+const PhotoSchema = z.object({
+  id: z.string().uuid(),
+  caption: z.string().nullable(),
+  taken_at: z.string().nullable(),
+  position: z.number().int(),
+  ai_description: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  filename: z.string(),
+  content_type: z.string(),
+  byte_size: z.number().int().nonnegative(),
+  content_url: z.string(),
 });
 
 /** Shape of a memory as returned by the V1 API. */
@@ -54,6 +70,7 @@ const MemorySchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   first_memory: z.boolean(),
+  photos: z.array(PhotoSchema).default([]),
 });
 
 /** Shape of an API token as returned by the V1 API. */
@@ -245,7 +262,7 @@ async function fetchAllMemories(
  */
 export const model = {
   type: "@mgreten/moment-savor",
-  version: "2026.07.16.1",
+  version: "2026.08.08.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     "memories": {

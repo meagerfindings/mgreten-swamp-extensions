@@ -53,6 +53,11 @@ optional `query` argument for a filtered memories snapshot:
 swamp model method run moment-savor sync '{"query": "birthday"}'
 ```
 
+Each synced memory includes a `photos` array with captions, timestamps, file
+metadata, and a relative `content_url`. Fetch photo content from
+`<baseUrl><content_url>` using the same Bearer token. Direct object-storage URLs
+and keys are not stored in swamp resources.
+
 ### Query with CEL
 
 After syncing, reference data in workflows:
@@ -60,6 +65,13 @@ After syncing, reference data in workflows:
 ```
 data.latest("moment-savor", "memories").attributes.memories
   .filter(m, m.tags.exists(t, t == "birthday"))
+```
+
+Find memories that have photos:
+
+```
+data.latest("moment-savor", "memories").attributes.memories
+  .filter(m, m.photos.size() > 0)
 ```
 
 ### Create a memory
@@ -99,7 +111,7 @@ swamp model method run moment-savor sendInvitation '{"email": "someone@example.c
 
 | Resource | Description |
 |----------|-------------|
-| `memories` | Snapshot of all (or filtered) memories for the family |
+| `memories` | Snapshot of all (or filtered) memories and their photo metadata for the family |
 | `tokens` | Snapshot of active API tokens for the authenticated user |
 | `family-members` | Snapshot of current family membership |
 | `issued-token` | Most recently created or rotated token, including the raw secret |
