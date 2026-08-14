@@ -580,12 +580,15 @@ Deno.test("updateDashboardPages does not write Swamp state without its distinct 
   assertEquals(writes.length, 0);
 });
 
-Deno.test("bundled dashboard retains v1 and honors factory import-launch contract", async () => {
+Deno.test("bundled dashboard reloads rotating pages, retains v1, and honors factory import-launch contract", async () => {
   const app = await Deno.readTextFile(new URL("./apps/swamp_dashboard.py.txt", import.meta.url));
   assertStringIncludes(app, 'data.get("version") not in (1, 2)');
   assertStringIncludes(app, 'value_text = str(data.get("valueText", data.get("value", 0)))');
   assertStringIncludes(app, "def draw(data):");
   assertStringIncludes(app, "PAGE_SECONDS = 8");
+  assertStringIncludes(app, "while True:\n            latest = load_snapshot()");
+  assertStringIncludes(app, 'if latest.get("version") == 2:\n                pages = latest["pages"]');
+  assertStringIncludes(app, "index %= len(pages)");
   assertStringIncludes(app, "time.sleep(PAGE_SECONDS)");
   assertStringIncludes(app, "# Factory main.py launches the selected filename with __import__");
   assert(app.trimEnd().endsWith("main()"));

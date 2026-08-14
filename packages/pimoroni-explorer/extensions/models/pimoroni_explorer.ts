@@ -640,7 +640,7 @@ async function installApp(
 /** Pimoroni Explorer model definition. */
 export const model = {
   type: "@mgreten/pimoroni-explorer",
-  version: "2026.07.31.5",
+  version: "2026.08.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -679,6 +679,14 @@ export const model = {
       toVersion: "2026.07.31.5",
       description:
         "Fix immediate usage-page rendering on physical Explorer hardware; no schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.08.14.1",
+      description:
+        "Reload rotating dashboard snapshots so running apps display updates; no schema changes",
       upgradeAttributes: (
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,

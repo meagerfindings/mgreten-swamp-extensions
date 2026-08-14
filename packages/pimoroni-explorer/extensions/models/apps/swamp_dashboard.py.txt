@@ -202,6 +202,10 @@ def main():
         pages = data["pages"]
         index = 0
         while True:
+            latest = load_snapshot()
+            if latest.get("version") == 2:
+                pages = latest["pages"]
+                index %= len(pages)
             draw_page(pages[index])
             index = (index + 1) % len(pages)
             time.sleep(PAGE_SECONDS)
