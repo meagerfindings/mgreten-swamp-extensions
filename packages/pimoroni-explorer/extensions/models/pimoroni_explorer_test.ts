@@ -327,6 +327,7 @@ Deno.test("updateDashboard persists encoded values and records device confirmati
   assertStringIncludes(commandArgs[3], "swamp_dashboard.json");
   assertStringIncludes(commandArgs[3], "143,862,958");
   assertStringIncludes(commandArgs[3], 'CLAUDE \\\"AMP\\\"');
+  assertEquals(commandArgs.slice(-3), ["exec", "--no-follow", "import swamp_dashboard"]);
   assertEquals(writes[0].specName, "dashboard");
   assertEquals(writes[0].name, "dashboard-current");
   assertEquals(writes[0].data.value, 143_862_958);
@@ -542,6 +543,17 @@ Deno.test("dashboard pages renderer fits schema boundary content within 320 pixe
 
 Deno.test("updateDashboardPages records a separate stable resource after confirmation", async () => {
   const { context, writes } = fakeContext();
+  let commandArgs: string[] = [];
+  const runner: CommandRunner = (_command, args) => {
+    commandArgs = args;
+    return Promise.resolve({
+      success: true,
+      code: 0,
+      stdout: "SWAMP_EXPLORER_DASHBOARD_PAGES_OK\n",
+      stderr: "",
+      timedOut: false,
+    });
+  };
   await model.methods.updateDashboardPages.execute(
     {
       pages: [{
@@ -552,7 +564,7 @@ Deno.test("updateDashboardPages records a separate stable resource after confirm
         secondaryLabel: "TODAY / 24H",
         secondaryValue: 42_123,
       }],
-      _runner: successfulRunner("SWAMP_EXPLORER_DASHBOARD_PAGES_OK\n"),
+      _runner: runner,
     },
     // deno-lint-ignore no-explicit-any
     context as any,
@@ -561,6 +573,7 @@ Deno.test("updateDashboardPages records a separate stable resource after confirm
   assertEquals(writes[0].name, "dashboard-pages-current");
   assertEquals(writes[0].data.version, 2);
   assert(model.resources.dashboardPages.schema.safeParse(writes[0].data).success);
+  assertEquals(commandArgs.slice(-3), ["exec", "--no-follow", "import swamp_dashboard"]);
 });
 
 Deno.test("updateDashboardPages does not write Swamp state without its distinct marker", async () => {

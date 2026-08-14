@@ -216,6 +216,16 @@ function mpremoteArgs(device: string, args: string[]): string[] {
   return ["connect", device, ...args];
 }
 
+function dashboardUpdateArgs(program: string): string[] {
+  return [
+    "exec",
+    program,
+    "exec",
+    "--no-follow",
+    "import swamp_dashboard",
+  ];
+}
+
 async function runMpremote(
   globals: GlobalArgs,
   args: string[],
@@ -640,7 +650,7 @@ async function installApp(
 /** Pimoroni Explorer model definition. */
 export const model = {
   type: "@mgreten/pimoroni-explorer",
-  version: "2026.08.14.1",
+  version: "2026.08.14.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -687,6 +697,14 @@ export const model = {
       toVersion: "2026.08.14.1",
       description:
         "Reload rotating dashboard snapshots so running apps display updates; no schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+    {
+      toVersion: "2026.08.14.2",
+      description:
+        "Restart the persistent dashboard after USB snapshot updates; no schema changes",
       upgradeAttributes: (
         old: Record<string, unknown>,
       ): Record<string, unknown> => old,
@@ -951,7 +969,7 @@ export const model = {
         );
         const result = await runMpremote(
           context.globalArgs,
-          ["exec", buildDashboardProgram(args)],
+          dashboardUpdateArgs(buildDashboardProgram(args)),
           "update persistent dashboard",
           args._runner,
         );
@@ -998,13 +1016,13 @@ export const model = {
         );
         const result = await runMpremote(
           context.globalArgs,
-          ["exec", buildDashboardPagesProgram(args)],
+          dashboardUpdateArgs(buildDashboardPagesProgram(args)),
           "update persistent dashboard pages",
           args._runner,
         );
         if (!result.stdout.includes(DASHBOARD_PAGES_MARKER)) {
           throw new Error(
-            "Explorer did not confirm that the dashboard pages snapshot was saved and rendered",
+            "Explorer did not confirm that the dashboard pages snapshot was saved",
           );
         }
         const handle = await context.writeResource(
