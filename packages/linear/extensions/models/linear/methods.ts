@@ -164,7 +164,16 @@ export async function createMyIssue(
   return { dataHandles: [handle] };
 }
 
-/** Fetch a single issue by identifier or UUID. */
+/**
+ * Fetch a single issue by identifier or UUID.
+ *
+ * The resource is keyed by `issue-<identifier>` (e.g. `issue-RIF-742`), not by
+ * the issue UUID, so consumers can address it deterministically from the
+ * human-facing identifier via `data.latest(model, "issue-" + identifier)`.
+ * Keying by identifier also keeps this resource distinct from the
+ * `commentThread` resource for the same issue (see {@link listComments}), which
+ * previously collided when both were keyed by `issue.id`.
+ */
 export async function getIssue(
   client: LinearClient,
   context: MethodContext,
@@ -174,7 +183,7 @@ export async function getIssue(
   const issue = await client.getIssue(args.identifier);
   const handle = await context.writeResource(
     "issue",
-    issue.id,
+    `issue-${issue.identifier}`,
     issueResourceData(issue),
   );
   return { dataHandles: [handle] };
@@ -542,7 +551,13 @@ export async function listStates(
   return { dataHandles: handles };
 }
 
-/** Fetch all comments on an issue as a single thread resource. */
+/**
+ * Fetch all comments on an issue as a single thread resource.
+ *
+ * Keyed by `thread-<identifier>` (e.g. `thread-RIF-742`) so it is addressable
+ * from the human-facing identifier and stays distinct from the `issue-`
+ * resource — both used to collide when keyed by `issue.id`.
+ */
 export async function listComments(
   client: LinearClient,
   context: MethodContext,
@@ -555,7 +570,7 @@ export async function listComments(
 
   const handle = await context.writeResource(
     "commentThread",
-    issue.id,
+    `thread-${issue.identifier}`,
     commentThreadResourceData(issue.id, issue.identifier, comments),
   );
   return { dataHandles: [handle] };
@@ -576,7 +591,7 @@ export async function createComment(
   const comments = await client.listComments(issue.id);
   const handle = await context.writeResource(
     "commentThread",
-    issue.id,
+    `thread-${issue.identifier}`,
     commentThreadResourceData(issue.id, issue.identifier, comments),
   );
   return { dataHandles: [handle] };

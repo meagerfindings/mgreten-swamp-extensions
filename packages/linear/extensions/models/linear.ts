@@ -172,8 +172,19 @@ function getClient(
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.07.24.2",
+  version: "2026.08.19.2",
   globalArguments: GlobalArgsSchema,
+  // No-op: the 2026.08.19.1 change only altered resource NAMING (issue/comment
+  // threads keyed by identifier, not issue.id) — globalArguments are unchanged,
+  // so existing instances migrate with their config untouched.
+  upgrades: [
+    {
+      toVersion: "2026.08.19.2",
+      description:
+        "Resource naming fix (issue-/thread-<identifier>); config unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
+    },
+  ],
   resources: {
     issue: {
       description: "A Linear issue with resolved relations",

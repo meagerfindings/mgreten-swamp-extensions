@@ -172,6 +172,45 @@ Deno.test("client creates a parent then links each child via parentId", async ()
   assertEquals(written.length, 3);
 });
 
+Deno.test("getIssue and listComments key resources by identifier, not by issue.id", async () => {
+  // Regression: both used to writeResource(..., issue.id, ...), producing the
+  // SAME data name ("<uuid>") for the issue and its comment thread, so the
+  // thread write clobbered the issue. Consumers (the linear-intake
+  // workflow) also address them as issue-<identifier> / thread-<identifier>.
+  // Assert the resource NAMES are identifier-based and distinct.
+  const written: Array<{ spec: string; instance: string }> = [];
+  const context = {
+    globalArgs: { apiKey: "k" },
+    logger: { info: () => {} },
+    writeResource: (spec: string, instance: string) => {
+      written.push({ spec, instance });
+      return Promise.resolve({ spec, instance, data: {} });
+    },
+  };
+  const node = {
+    ...issueNode(),
+    comments: () =>
+      Promise.resolve({
+        nodes: [],
+        pageInfo: { hasNextPage: false, endCursor: "" },
+        fetchNext: () => Promise.reject(new Error("unexpected next page")),
+      }),
+  };
+  const client = buildLinearClient(sdk({ issue: () => Promise.resolve(node) }));
+  const { getIssue, listComments } = await import("./linear/methods.ts");
+
+  await getIssue(client, context, { identifier: "ENG-42" });
+  await listComments(client, context, { identifier: "ENG-42" });
+
+  // The issue's UUID is "issue-1"; its human identifier is "ENG-42".
+  assertEquals(written[0], { spec: "issue", instance: "issue-ENG-42" });
+  assertEquals(written[1], { spec: "commentThread", instance: "thread-ENG-42" });
+  // Distinct names — no collision.
+  assertEquals(written[0].instance === written[1].instance, false);
+  // Never keyed by the raw UUID.
+  assertEquals(written.some((w) => w.instance === "issue-1"), false);
+});
+
 Deno.test("client reports how many children were created before a failure", async () => {
   let counter = 0;
   const client = buildLinearClient(sdk({
