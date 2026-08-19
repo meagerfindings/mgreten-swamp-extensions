@@ -18,6 +18,8 @@ const DEFAULT_MAX_PACKET_BYTES = 32 * 1024;
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
 const DEFAULT_MAX_CHANGED_LINES = 150;
 const PACKET_VERSION = "implementer-packet-v2";
+const EXECUTION_MODES = ["response", "actor"] as const;
+type ExecutionMode = typeof EXECUTION_MODES[number];
 
 const CandidateSchema = z.object({
   id: z.string().regex(SAFE_SLUG),
@@ -103,6 +105,7 @@ const CaseResultSchema = z.object({
   suiteId: z.string(),
   candidateId: z.string(),
   effortLevel: z.string(),
+  executionMode: z.enum(EXECUTION_MODES).default("response"),
   taskId: z.enum(TASK_IDS),
   status: z.enum(CASE_STATUSES),
   requiresIndependentReview: z.literal(true),
@@ -128,6 +131,8 @@ const CaseResultSchema = z.object({
   disallowedPaths: z.array(z.string()),
   visibleTestsPassed: z.boolean(),
   hiddenTestsPassed: z.boolean(),
+  contractPassed: z.boolean().default(false),
+  hardeningPassed: z.boolean().default(false),
   evidenceRef: z.string(),
   failureMessage: z.string().nullable(),
 });
@@ -136,9 +141,13 @@ export type CaseResult = z.infer<typeof CaseResultSchema>;
 
 const SummarySchema = z.object({
   suiteId: z.string(),
+  executionMode: z.enum(EXECUTION_MODES).default("response"),
   completedAt: z.string(),
   totalCases: z.number(),
   counts: z.record(z.string(), z.number()),
+  contractPassedCases: z.number().default(0),
+  hardeningPassedCases: z.number().default(0),
+  certifiedPassedCases: z.number().default(0),
   totalDurationMs: z.number(),
   totalTokens: z.number(),
   totalReportedCostUsd: z.number(),
@@ -716,6 +725,7 @@ async function runCase(
     maxPacketBytes: number;
     maxOutputBytes: number;
     maxChangedLines: number;
+    executionMode: ExecutionMode;
     signal?: AbortSignal;
     runner: CommandRunner;
   },
@@ -734,6 +744,7 @@ async function runCase(
     maxPacketBytes,
     maxOutputBytes,
     maxChangedLines,
+    executionMode,
     signal,
     runner,
   } = options;
@@ -748,7 +759,7 @@ async function runCase(
   let packetBytes = 0;
   let outputBytes = 0;
   let changedLines = 0;
-  let responseValid = false;
+  let responseValid = executionMode === "actor";
   let budgetExceeded = false;
   let changedPaths: string[] = [];
   let disallowedPaths: string[] = [];
@@ -788,11 +799,17 @@ async function runCase(
         `packet budget exceeded: ${packetBytes} > ${maxPacketBytes}`,
       );
     }
-    const agentDir = `${suiteDir}/agents/${candidate.id}/${taskId}`;
-    await Deno.mkdir(agentDir, { recursive: true });
+    const actorMode = executionMode === "actor";
+    const agentDir = actorMode
+      ? caseDir
+      : `${suiteDir}/agents/${candidate.id}/${taskId}`;
+    if (!actorMode) await Deno.mkdir(agentDir, { recursive: true });
     const input = {
-      prompt:
-        `Implement the exact task packet below. Use no tools and do not inspect the filesystem. Return only one JSON object matching outputContract, with complete file contents and no markdown.\n\n${packet}`,
+      prompt: actorMode
+        ? `Implement the bounded task in PROMPT.md. Inspect only this fixture repository, change only these allowed paths: ${
+          fixture.allowedPaths.join(", ")
+        }, and run node --test. Do not commit. Keep the implementation minimal and finish within this one invocation.`
+        : `Implement the exact task packet below. Use no tools and do not inspect the filesystem. Return only one JSON object matching outputContract, with complete file contents and no markdown.\n\n${packet}`,
       provider: candidate.provider,
       model: candidate.model,
       cwd: agentDir,
@@ -802,12 +819,14 @@ async function runCase(
         task: taskId,
         candidate: candidate.id,
         effortLevel: candidate.effortLevel,
+        executionMode,
         packetHash,
       },
       wallTimeoutMs,
-      toolProfile: "readonly",
+      toolProfile: actorMode ? "actor" : "readonly",
       sandboxMode: "auto",
       sandboxRequired: true,
+      ...(actorMode ? { sandboxNetwork: "allow" } : {}),
     };
     invocationResult = await runner({
       command: swampPath,
@@ -816,7 +835,7 @@ async function runCase(
         "method",
         "run",
         agentModelName,
-        "invokeAndParse",
+        actorMode ? "invoke" : "invokeAndParse",
         "--input",
         JSON.stringify(input),
         "--json",
@@ -836,17 +855,19 @@ async function runCase(
     invocation = invocationFromEnvelope(envelope);
     outputBytes = number(invocation?.outputBytes);
     if (outputBytes > maxOutputBytes) budgetExceeded = true;
-    const replacements = parseFileResponse(
-      invocation?.parsedResponse,
-      fixture.allowedPaths,
-    );
-    responseValid = replacements !== null;
-    if (
-      invocationResult.success && invocation?.success && !budgetExceeded &&
-      replacements
-    ) {
-      for (const [relative, content] of Object.entries(replacements)) {
-        await Deno.writeTextFile(`${caseDir}/${relative}`, content);
+    if (!actorMode) {
+      const replacements = parseFileResponse(
+        invocation?.parsedResponse,
+        fixture.allowedPaths,
+      );
+      responseValid = replacements !== null;
+      if (
+        invocationResult.success && invocation?.success && !budgetExceeded &&
+        replacements
+      ) {
+        for (const [relative, content] of Object.entries(replacements)) {
+          await Deno.writeTextFile(`${caseDir}/${relative}`, content);
+        }
       }
     }
     if (signal?.aborted) {
@@ -996,6 +1017,11 @@ async function runCase(
     visiblePassed,
     hiddenPassed,
   });
+  const scoringEligible = !infrastructureError && !cancelled && !timedOut &&
+    invocationSuccess && responseValid && !budgetExceeded &&
+    changedPaths.length > 0 && disallowedPaths.length === 0;
+  const contractPassed = scoringEligible && visiblePassed;
+  const hardeningPassed = scoringEligible && hiddenPassed;
   const tokens = invocation?.tokens && typeof invocation.tokens === "object"
     ? invocation.tokens
     : {};
@@ -1004,6 +1030,7 @@ async function runCase(
       suiteId,
       candidateId: candidate.id,
       effortLevel: candidate.effortLevel,
+      executionMode,
       taskId,
       status,
       packetHash,
@@ -1015,6 +1042,8 @@ async function runCase(
       invocationStderr: bounded(invocationResult?.stderr ?? ""),
       changedPaths,
       disallowedPaths,
+      contractPassed,
+      hardeningPassed,
       gitStatus: bounded(statusText),
       diff: bounded(diff),
       visibleTests: bounded(visible),
@@ -1028,6 +1057,7 @@ async function runCase(
       suiteId,
       candidateId: candidate.id,
       effortLevel: candidate.effortLevel,
+      executionMode,
       taskId,
       status,
       requiresIndependentReview: true,
@@ -1061,6 +1091,8 @@ async function runCase(
       disallowedPaths,
       visibleTestsPassed: visiblePassed,
       hiddenTestsPassed: hiddenPassed,
+      contractPassed,
+      hardeningPassed,
       evidenceRef: `evidence-${suiteId}-${candidate.id}-${taskId}`,
       failureMessage,
     },
@@ -1096,9 +1128,16 @@ export function aggregateSummary(
     });
   return {
     suiteId,
+    executionMode: results[0]?.executionMode ?? "response",
     completedAt,
     totalCases: results.length,
     counts,
+    contractPassedCases: results.filter((result) => result.contractPassed)
+      .length,
+    hardeningPassedCases: results.filter((result) => result.hardeningPassed)
+      .length,
+    certifiedPassedCases: results.filter((result) => result.status === "pass")
+      .length,
     totalDurationMs: results.reduce(
       (sum, result) => sum + result.durationMs,
       0,
@@ -1136,6 +1175,7 @@ export async function runBenchmarkSuite(
   rawInputs: z.input<typeof RunInputsSchema>,
   context: any,
   runner: CommandRunner = denoCommandRunner,
+  executionMode: ExecutionMode = "response",
 ): Promise<{ dataHandles: any[] }> {
   const inputs = RunInputsSchema.parse(rawInputs);
   if (context.signal?.aborted) {
@@ -1176,6 +1216,7 @@ export async function runBenchmarkSuite(
   });
   context.logger.info("Benchmark suite starting", {
     suiteId,
+    executionMode,
     candidates: inputs.candidates.length,
     tasks: inputs.taskIds.length,
   });
@@ -1200,6 +1241,7 @@ export async function runBenchmarkSuite(
         maxPacketBytes: inputs.maxPacketBytes,
         maxOutputBytes: inputs.maxOutputBytes,
         maxChangedLines: inputs.maxChangedLines,
+        executionMode,
         signal: context.signal,
         runner,
       });
@@ -1207,6 +1249,7 @@ export async function runBenchmarkSuite(
         suite: suiteId,
         candidate: candidate.id,
         effortLevel: candidate.effortLevel,
+        executionMode,
         task: taskId,
         status: result.status,
       };
@@ -1235,7 +1278,7 @@ export async function runBenchmarkSuite(
   const summary = aggregateSummary(suiteId, results);
   handles.push(
     await context.writeResource("suiteSummary", `summary-${suiteId}`, summary, {
-      tags: { suite: suiteId },
+      tags: { suite: suiteId, executionMode },
     }),
   );
   context.logger.info("Benchmark suite completed", {
@@ -1248,8 +1291,14 @@ export async function runBenchmarkSuite(
 /** Swamp model definition for the standalone implementer benchmark. */
 export const model = {
   type: "@mgreten/implementer-benchmark",
-  version: "2026.08.19.1",
+  version: "2026.08.19.2",
   globalArguments: GlobalArgsSchema,
+  upgrades: [{
+    toVersion: "2026.08.19.2",
+    description:
+      "Add the bounded actor suite and additive execution-mode and tiered-score metadata; existing one-shot results default to response mode",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
   resources: {
     caseResult: {
       description: "Deterministic result for one candidate and synthetic task",
@@ -1279,6 +1328,13 @@ export const model = {
       arguments: RunInputsSchema,
       execute: (args: z.input<typeof RunInputsSchema>, context: any) =>
         runBenchmarkSuite(args, context),
+    },
+    runActorSuite: {
+      description:
+        "Serially run bounded atomic tasks through tool-using implementation agents, then score contract, hardening, and certified outcomes",
+      arguments: RunInputsSchema,
+      execute: (args: z.input<typeof RunInputsSchema>, context: any) =>
+        runBenchmarkSuite(args, context, denoCommandRunner, "actor"),
     },
   },
 };

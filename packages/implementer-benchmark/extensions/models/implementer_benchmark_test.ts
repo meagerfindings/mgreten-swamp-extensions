@@ -170,6 +170,7 @@ Deno.test("aggregate summary totals statuses, timing, tokens, and cost", () => {
     suiteId: "s",
     candidateId: status,
     effortLevel: "medium",
+    executionMode: "response",
     taskId: "task-01",
     status,
     requiresIndependentReview: true,
@@ -193,8 +194,10 @@ Deno.test("aggregate summary totals statuses, timing, tokens, and cost", () => {
     changedLines: 3,
     changedPaths: [],
     disallowedPaths: [],
-    visibleTestsPassed: false,
-    hiddenTestsPassed: false,
+    visibleTestsPassed: status === "pass",
+    hiddenTestsPassed: status === "pass",
+    contractPassed: status === "pass",
+    hardeningPassed: status === "pass",
     evidenceRef: `e-${status}`,
     failureMessage: null,
   });
@@ -203,8 +206,12 @@ Deno.test("aggregate summary totals statuses, timing, tokens, and cost", () => {
     result("test_failure", 30, 40, 1.25),
   ], "done");
   assertEquals(summary.totalCases, 2);
+  assertEquals(summary.executionMode, "response");
   assertEquals(summary.counts.pass, 1);
   assertEquals(summary.counts.test_failure, 1);
+  assertEquals(summary.contractPassedCases, 1);
+  assertEquals(summary.hardeningPassedCases, 1);
+  assertEquals(summary.certifiedPassedCases, 1);
   assertEquals(summary.totalDurationMs, 40);
   assertEquals(summary.totalTokens, 60);
   assertEquals(summary.totalReportedCostUsd, 1.75);
@@ -248,6 +255,7 @@ type Scenario =
   | "no-change"
   | "response-error"
   | "hidden-fail"
+  | "actor-scope"
   | "no-artifact";
 
 async function withSuite(
@@ -258,6 +266,7 @@ async function withSuite(
     >,
     suiteDir: string,
   ) => Promise<void> | void,
+  executionMode: "response" | "actor" = "response",
 ) {
   const temp = await Deno.makeTempDir({
     prefix: "implementer-benchmark-test-",
@@ -285,11 +294,29 @@ async function withSuite(
         const input = JSON.parse(
           request.args[request.args.indexOf("--input") + 1],
         );
-        assertEquals(input.toolProfile, "readonly");
-        assert(input.cwd.includes("/agents/"));
-        assert(
-          input.prompt.includes('"packetVersion":"implementer-packet-v2"'),
-        );
+        const actorMode = executionMode === "actor";
+        assertEquals(request.args[4], actorMode ? "invoke" : "invokeAndParse");
+        assertEquals(input.toolProfile, actorMode ? "actor" : "readonly");
+        if (actorMode) {
+          assert(input.cwd.includes("/cases/"));
+          assertEquals(input.sandboxNetwork, "allow");
+          assert(input.prompt.includes("bounded task in PROMPT.md"));
+          await Deno.writeTextFile(
+            `${input.cwd}/src/labels.js`,
+            "export function normalizeLabels() { return ['actor-edit']; }\n",
+          );
+          if (scenario === "actor-scope") {
+            await Deno.writeTextFile(
+              `${input.cwd}/test/labels.test.js`,
+              "// actor modified a disallowed visible test\n",
+            );
+          }
+        } else {
+          assert(input.cwd.includes("/agents/"));
+          assert(
+            input.prompt.includes('"packetVersion":"implementer-packet-v2"'),
+          );
+        }
         if (scenario === "timeout") {
           return {
             code: 143,
@@ -326,7 +353,9 @@ async function withSuite(
                 tokens: { total: 7 },
                 costUsd: 0,
                 outputBytes: 80,
-                parsedResponse: scenario === "response-error"
+                parsedResponse: actorMode
+                  ? undefined
+                  : scenario === "response-error"
                   ? { files: { "../outside": "violation" } }
                   : scenario === "no-change"
                   ? {
@@ -413,6 +442,7 @@ async function withSuite(
       },
       context,
       runner,
+      executionMode,
     );
     await assertion(written, `${temp}/suite-${scenario}`);
   } finally {
@@ -441,6 +471,48 @@ Deno.test("integration: injected agent edit is materialized, git-inspected, veri
     assert(await Deno.stat(`${suiteDir}/cases/fake/task-01/PROMPT.md`));
     await assertRejects(() => Deno.stat(`${suiteDir}/.hidden/fake-task-01`));
   });
+});
+
+Deno.test("actor suite permits bounded edit-and-test tools and records contract scoring", async () => {
+  await withSuite(
+    "success",
+    (written) => {
+      const result = written.find((entry) => entry.spec === "caseResult")
+        ?.data as CaseResult;
+      assertEquals(result.executionMode, "actor");
+      assertEquals(result.status, "pass");
+      assertEquals(result.changedPaths, ["src/labels.js"]);
+      assert(result.contractPassed);
+      assert(result.hardeningPassed);
+      const summary = written.find((entry) => entry.spec === "suiteSummary")
+        ?.data as ReturnType<typeof aggregateSummary>;
+      assertEquals(summary.executionMode, "actor");
+      assertEquals(summary.contractPassedCases, 1);
+      assertEquals(summary.hardeningPassedCases, 1);
+      assertEquals(summary.certifiedPassedCases, 1);
+    },
+    "actor",
+  );
+});
+
+Deno.test("actor suite does not award contract credit for an out-of-scope edit", async () => {
+  await withSuite(
+    "actor-scope",
+    (written) => {
+      const result = written.find((entry) => entry.spec === "caseResult")
+        ?.data as CaseResult;
+      assertEquals(result.status, "scope_violation");
+      assertEquals(result.visibleTestsPassed, true);
+      assertEquals(result.contractPassed, false);
+      assertEquals(result.hardeningPassed, false);
+      const summary = written.find((entry) => entry.spec === "suiteSummary")
+        ?.data as ReturnType<typeof aggregateSummary>;
+      assertEquals(summary.contractPassedCases, 0);
+      assertEquals(summary.hardeningPassedCases, 0);
+      assertEquals(summary.certifiedPassedCases, 0);
+    },
+    "actor",
+  );
 });
 
 for (

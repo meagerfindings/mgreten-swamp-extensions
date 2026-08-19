@@ -21,10 +21,18 @@ Linux hosts need `git`, Node.js, and Bubblewrap. Command locations remain config
 
 ## Usage
 
-Run all five tasks with a candidate. `effortLevel` is optional and defaults to `default` for backward compatibility.
+Run all five one-shot response tasks with a candidate. `effortLevel` is optional and defaults to `default` for backward compatibility.
 
 ```bash
 swamp model method run benchmark runSuite --input candidates='[{"id":"candidate-a","provider":"codex","model":"gpt-5","effortLevel":"medium"}]'
+```
+
+Use the actor lane to measure bounded implementation work more like an atomic user story. The agent may inspect the tiny fixture, edit only allowed files, and run visible tests inside an isolated sandbox. Results separately count visible contract passes, hidden hardening passes, and cases that pass both.
+
+```bash
+swamp model method run benchmark runActorSuite \
+  --input candidates='[{"id":"sonnet","provider":"claude","model":"sonnet","effortLevel":"medium"}]' \
+  --input wallTimeoutMs=180000
 ```
 
 Run a subset with explicit budgets:
@@ -59,9 +67,15 @@ swamp model method run benchmark runSuite \
 | `maxOutputBytes` | integer | `65536` |
 | `maxChangedLines` | integer | `150` |
 
+## Method: runActorSuite
+
+`runActorSuite` accepts the same arguments and budgets as `runSuite`. Unlike the one-shot response lane, it invokes the configured CLI agent with the `actor` tool profile in the fixture repository. The repository starts from a trusted git baseline, commits and out-of-scope changes fail closed, and Swamp independently runs visible and hidden tests afterward. Provider network access remains available because hosted CLIs and remote Ollama endpoints require it; use only the bundled trusted fixtures.
+
+The actor lane has a portable wall-time bound but no portable provider-neutral turn or tool-call ceiling. Use `wallTimeoutMs` to match the implementation budget you actually permit in practice.
+
 ## How It Works
 
-The harness materializes a fresh git fixture, hashes a deterministic context packet, invokes each candidate without tool access, validates complete replacement files, and enforces packet, output, and changed-line budgets. Visible and hidden Node tests run with networking and host access unshared. Hidden verifier files are mounted read-only and removed after each case. Candidate execution is deliberately serial to avoid contention and make evidence ordering stable. Results include provider, model, effort level, token and cost metadata, changed paths, test status, and references to bounded JSON evidence.
+The harness materializes a fresh git fixture, hashes a deterministic context packet, and enforces packet, output, and changed-line budgets. `runSuite` invokes each candidate without tools and validates complete replacement files. `runActorSuite` instead permits a bounded edit-and-test session in that fixture. Visible and hidden Node tests run with networking and host access unshared. Hidden verifier files are mounted read-only and removed after each case. Candidate execution is deliberately serial to avoid contention and make evidence ordering stable. Results include provider, model, effort level, execution mode, contract and hardening scores, token and cost metadata, changed paths, test status, and references to bounded JSON evidence.
 
 ## License
 
