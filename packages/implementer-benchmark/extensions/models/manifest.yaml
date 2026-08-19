@@ -1,0 +1,17 @@
+manifestVersion: 1
+name: "@mgreten/implementer-benchmark"
+version: "2026.08.19.1"
+description: >
+  Runs five deterministic, bounded synthetic JavaScript tasks to compare coding
+  implementers with isolated hidden verification and durable evidence.
+repository: https://github.com/meagerfindings/swamp-implementer-benchmark
+models:
+  - implementer_benchmark.ts
+additionalFiles:
+  - implementer_benchmark_fixtures.ts
+  - implementer_benchmark_test.ts
+  - README.md
+  - LICENSE.txt
+platforms:
+  - linux-x86_64
+  - linux-aarch64
