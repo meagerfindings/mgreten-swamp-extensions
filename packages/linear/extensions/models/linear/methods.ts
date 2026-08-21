@@ -27,6 +27,9 @@ export interface DataHandle {
 export interface MethodContext {
   globalArgs: GlobalArgs;
   logger: { info: (msg: string) => void };
+  readResource?: (
+    instance: string,
+  ) => Promise<Record<string, unknown> | null>;
   writeResource: (
     spec: string,
     instance: string,
@@ -167,7 +170,7 @@ export async function createMyIssue(
 /**
  * Fetch a single issue by identifier or UUID.
  *
- * The resource is keyed by `issue-<identifier>` (e.g. `issue-RIF-742`), not by
+ * The resource is keyed by `issue-<identifier>` (e.g. `issue-ENG-742`), not by
  * the issue UUID, so consumers can address it deterministically from the
  * human-facing identifier via `data.latest(model, "issue-" + identifier)`.
  * Keying by identifier also keeps this resource distinct from the
@@ -221,6 +224,73 @@ export async function updateIssue(
     updated.id,
     issueResourceData(updated),
   );
+  return { dataHandles: [handle] };
+}
+
+/**
+ * Permanently delete an issue after verifying its live identifier and team.
+ */
+export async function deleteIssue(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    identifier: string;
+    expectedTeamKey: string;
+    confirm: "delete";
+  },
+): Promise<MethodResult> {
+  const evidenceName = `deletion-${args.identifier}`;
+  const existing = await context.readResource?.(evidenceName);
+  if (existing) {
+    if (
+      existing.identifier !== args.identifier ||
+      existing.teamKey !== args.expectedTeamKey ||
+      existing.deleted !== true ||
+      typeof existing.id !== "string" ||
+      typeof existing.title !== "string" ||
+      typeof existing.deletedAt !== "string"
+    ) {
+      throw new Error(
+        `Refusing deletion replay for ${args.identifier}: stored evidence does not match the requested issue and team`,
+      );
+    }
+    context.logger.info(`Issue ${args.identifier} was already deleted`);
+    const handle = await context.writeResource(
+      "issueDeletion",
+      evidenceName,
+      existing,
+    );
+    return { dataHandles: [handle] };
+  }
+
+  context.logger.info(`Verifying issue ${args.identifier} for deletion`);
+  const issue = await client.getIssue(args.identifier);
+  if (issue.identifier !== args.identifier) {
+    throw new Error(
+      `Refusing deletion: requested ${args.identifier}, resolved ${issue.identifier}`,
+    );
+  }
+  if (issue.team.key !== args.expectedTeamKey) {
+    throw new Error(
+      `Refusing deletion of ${args.identifier}: expected team ${args.expectedTeamKey}, found ${issue.team.key}`,
+    );
+  }
+
+  await client.deleteIssue(issue.id);
+  const deletedAt = new Date().toISOString();
+  const handle = await context.writeResource(
+    "issueDeletion",
+    evidenceName,
+    {
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      teamKey: issue.team.key,
+      deleted: true,
+      deletedAt,
+    },
+  );
+  context.logger.info(`Deleted issue ${issue.identifier}`);
   return { dataHandles: [handle] };
 }
 
@@ -554,7 +624,7 @@ export async function listStates(
 /**
  * Fetch all comments on an issue as a single thread resource.
  *
- * Keyed by `thread-<identifier>` (e.g. `thread-RIF-742`) so it is addressable
+ * Keyed by `thread-<identifier>` (e.g. `thread-ENG-742`) so it is addressable
  * from the human-facing identifier and stays distinct from the `issue-`
  * resource — both used to collide when keyed by `issue.id`.
  */

@@ -153,6 +153,7 @@ export interface LinearSDKLike {
     success: boolean;
     issue: Promise<SDKIssueNode | undefined>;
   }>;
+  deleteIssue(id: string): Promise<{ success: boolean }>;
   issues(opts: {
     filter: Record<string, unknown>;
     first?: number;
@@ -254,6 +255,8 @@ export interface LinearClient {
   getIssue(id: string): Promise<IssueData>;
   /** Update fields on an existing issue. */
   updateIssue(id: string, input: UpdateIssueInput): Promise<IssueData>;
+  /** Permanently delete an issue. */
+  deleteIssue(id: string): Promise<void>;
   /** Query issues with filters and pagination. */
   listIssues(
     filter: IssueFilter,
@@ -315,6 +318,13 @@ export function buildLinearClient(sdk: LinearSDKLike): LinearClient {
         throw new Error("Linear issueUpdate returned no issue");
       }
       return resolveIssue(issue);
+    },
+
+    async deleteIssue(id: string): Promise<void> {
+      const payload = await sdk.deleteIssue(id);
+      if (!payload.success) {
+        throw new Error("Linear issueDelete returned success=false");
+      }
     },
 
     async listIssues(

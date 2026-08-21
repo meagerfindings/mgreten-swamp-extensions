@@ -17,6 +17,7 @@ function sdk(overrides: Partial<LinearSDKLike> = {}): LinearSDKLike {
     createIssue: unsupported,
     issue: unsupported,
     updateIssue: unsupported,
+    deleteIssue: unsupported,
     issues: unsupported,
     teams: unsupported,
     team: unsupported,
@@ -68,6 +69,29 @@ Deno.test("issue method schemas enforce required identifiers and priority bounds
   );
   assertThrows(() =>
     model.methods.updateIssue.arguments.parse({ identifier: "ENG-42", priority: 5 })
+  );
+});
+
+Deno.test("deleteIssue schema requires exact identity, team, and confirmation", () => {
+  const input = {
+    identifier: "ENG-42",
+    expectedTeamKey: "ENG",
+    confirm: "delete" as const,
+  };
+  assertEquals(model.methods.deleteIssue.arguments.parse(input), input);
+  assertThrows(() =>
+    model.methods.deleteIssue.arguments.parse({
+      identifier: "ENG-42",
+      expectedTeamKey: "ENG",
+      confirm: "yes",
+    })
+  );
+  assertThrows(() =>
+    model.methods.deleteIssue.arguments.parse({
+      identifier: "issue-uuid",
+      expectedTeamKey: "ENG",
+      confirm: "delete",
+    })
   );
 });
 
@@ -404,6 +428,121 @@ Deno.test("client adapter reports create and update response failures", async ()
     () => client.updateIssue("issue-1", { title: "Renamed" }),
     Error,
     "issueUpdate returned no issue",
+  );
+});
+
+Deno.test("deleteIssue verifies the live team before deleting and recording", async () => {
+  let deletedId = "";
+  const client = buildLinearClient(sdk({
+    issue: () => Promise.resolve(issueNode()),
+    deleteIssue: (id) => {
+      deletedId = id;
+      return Promise.resolve({ success: true });
+    },
+  }));
+  const written: Array<{
+    spec: string;
+    instance: string;
+    data: Record<string, unknown>;
+  }> = [];
+  const context = {
+    globalArgs: { apiKey: "k" },
+    logger: { info: () => {} },
+    writeResource: (
+      spec: string,
+      instance: string,
+      data: Record<string, unknown>,
+    ) => {
+      written.push({ spec, instance, data });
+      return Promise.resolve({ spec, instance, data });
+    },
+  };
+  const { deleteIssue } = await import("./linear/methods.ts");
+
+  await assertRejects(
+    () =>
+      deleteIssue(client, context, {
+        identifier: "ENG-42",
+        expectedTeamKey: "OTHER",
+        confirm: "delete",
+      }),
+    Error,
+    "expected team OTHER, found ENG",
+  );
+  assertEquals(deletedId, "");
+  assertEquals(written, []);
+
+  const result = await deleteIssue(client, context, {
+    identifier: "ENG-42",
+    expectedTeamKey: "ENG",
+    confirm: "delete",
+  });
+  assertEquals(deletedId, "issue-1");
+  assertEquals(result.dataHandles.length, 1);
+  assertEquals(written[0].spec, "issueDeletion");
+  assertEquals(written[0].instance, "deletion-ENG-42");
+  assertEquals(written[0].data.identifier, "ENG-42");
+  assertEquals(written[0].data.teamKey, "ENG");
+  assertEquals(written[0].data.deleted, true);
+});
+
+Deno.test("client adapter rejects an unsuccessful issue deletion", async () => {
+  const client = buildLinearClient(sdk({
+    deleteIssue: () => Promise.resolve({ success: false }),
+  }));
+  await assertRejects(
+    () => client.deleteIssue("issue-1"),
+    Error,
+    "issueDelete returned success=false",
+  );
+});
+
+Deno.test("deleteIssue replays matching evidence without another API mutation", async () => {
+  const client = buildLinearClient(sdk());
+  const evidence = {
+    id: "issue-1",
+    identifier: "ENG-42",
+    title: "Ship it",
+    teamKey: "ENG",
+    deleted: true,
+    deletedAt: "2026-08-21T12:00:00.000Z",
+  };
+  const written: Array<Record<string, unknown>> = [];
+  const context = {
+    globalArgs: { apiKey: "k" },
+    logger: { info: () => {} },
+    readResource: () => Promise.resolve(evidence),
+    writeResource: (
+      spec: string,
+      instance: string,
+      data: Record<string, unknown>,
+    ) => {
+      written.push(data);
+      return Promise.resolve({ spec, instance, data });
+    },
+  };
+  const { deleteIssue } = await import("./linear/methods.ts");
+
+  const result = await deleteIssue(client, context, {
+    identifier: "ENG-42",
+    expectedTeamKey: "ENG",
+    confirm: "delete",
+  });
+
+  assertEquals(result.dataHandles.length, 1);
+  assertEquals(written, [evidence]);
+  await assertRejects(
+    () =>
+      deleteIssue(client, {
+        ...context,
+        readResource: () => Promise.resolve({ ...evidence, teamKey: "OTHER" }),
+      }, {
+        identifier: "ENG-42",
+        expectedTeamKey: "ENG",
+        confirm: "delete",
+      }),
+    Error,
+    "stored evidence does not match",
   );
 });
 

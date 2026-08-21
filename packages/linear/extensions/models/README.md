@@ -1,6 +1,6 @@
 # @mgreten/linear
 
-Linear project management integration for swamp. Provides issue CRUD, viewer
+Linear project management integration for swamp. Provides verified issue CRUD, viewer
 auto-assignment, label management by name, comment threads, and
 team/project/state listing — all backed by the official `@linear/sdk`. Every
 API response is written as a swamp resource, making it available for CEL
@@ -49,6 +49,12 @@ swamp model method run my-linear getIssue --input identifier="ENG-123"
 swamp model method run my-linear updateIssue \
   --input identifier="ENG-123" \
   --input priority=4
+
+# Permanently delete an issue after verifying its identifier and team
+swamp model method run my-linear deleteIssue \
+  --input identifier="ENG-123" \
+  --input expectedTeamKey="ENG" \
+  --input confirm="delete"
 
 # List your in-progress issues
 swamp model method run my-linear listIssues \
@@ -108,6 +114,16 @@ resource with full details including state, assignee, labels, and project.
 Update fields on an existing issue. Only sends fields that are provided — pass
 any combination of `title`, `description`, `stateId`, `priority`, `assigneeId`,
 `projectId`.
+
+### deleteIssue
+
+Permanently delete one issue with a fail-closed identity check. The method
+requires the exact human-readable `identifier`, the `expectedTeamKey`, and the
+literal confirmation `delete`. It resolves the issue first, refuses to mutate
+when either live value differs, checks Linear's deletion result, and writes an
+`issueDeletion` audit resource only after success. Replaying the same deletion
+returns the matching stored evidence without issuing another Linear mutation;
+mismatched or malformed evidence fails closed.
 
 ### listIssues
 
@@ -195,6 +211,7 @@ refreshed `commentThread` resource so consumers always read from one spec.
 | `viewer`        | Authenticated Linear user       | infinite | 5   |
 | `label`         | Issue label                     | infinite | 100 |
 | `commentThread` | Full comment thread on an issue | infinite | 200 |
+| `issueDeletion` | Verified issue deletion audit    | infinite | 50  |
 
 ## How It Works
 

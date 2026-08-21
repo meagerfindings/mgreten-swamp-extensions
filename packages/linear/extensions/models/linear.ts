@@ -20,6 +20,7 @@ import {
   createEpic,
   createIssue,
   createMyIssue,
+  deleteIssue,
   getIssue,
   getViewer,
   listComments,
@@ -154,6 +155,15 @@ const CommentThreadSchema = z.object({
   count: z.number(),
 });
 
+const IssueDeletionSchema = z.object({
+  id: z.string().min(1),
+  identifier: z.string().min(1),
+  title: z.string().min(1),
+  teamKey: z.string().min(1),
+  deleted: z.literal(true),
+  deletedAt: z.string().min(1),
+});
+
 function getClient(
   context: MethodContext,
 ): ReturnType<typeof buildLinearClient> {
@@ -166,22 +176,27 @@ function getClient(
 /**
  * Linear project management model for swamp.
  *
- * Provides 13 methods for managing Linear issues, teams, projects, labels,
+ * Provides 15 methods for managing Linear issues, teams, projects, labels,
  * comments, and workflow states. Supports auto-assignment via viewer
  * resolution, label attachment by name, and full comment-thread sync.
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.08.19.2",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
-  // No-op: the 2026.08.19.1 change only altered resource NAMING (issue/comment
-  // threads keyed by identifier, not issue.id) — globalArguments are unchanged,
-  // so existing instances migrate with their config untouched.
+  // Additive releases leave globalArguments unchanged, so existing instances
+  // migrate with their configuration untouched.
   upgrades: [
     {
       toVersion: "2026.08.19.2",
       description:
         "Resource naming fix (issue-/thread-<identifier>); config unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Add verified issue deletion and immutable deletion evidence; config unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
     },
   ],
@@ -227,6 +242,12 @@ export const model = {
       schema: CommentThreadSchema,
       lifetime: "infinite" as const,
       garbageCollection: 200,
+    },
+    issueDeletion: {
+      description: "Audit record for a verified Linear issue deletion",
+      schema: IssueDeletionSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 50,
     },
   },
   methods: {
@@ -323,6 +344,34 @@ export const model = {
             priority?: number;
             assigneeId?: string;
             projectId?: string;
+          },
+        ),
+    },
+
+    deleteIssue: {
+      description:
+        "Permanently delete one issue only after its live identifier and team match the caller's expectations",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .regex(/^[A-Z][A-Z0-9]*-[1-9][0-9]*$/)
+          .describe("Exact issue identifier, such as ENG-123"),
+        expectedTeamKey: z
+          .string()
+          .regex(/^[A-Z][A-Z0-9]*$/)
+          .describe("Team key that the live issue must belong to"),
+        confirm: z.literal("delete").describe(
+          'Explicit destructive-action confirmation; must be "delete"',
+        ),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        deleteIssue(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            identifier: string;
+            expectedTeamKey: string;
+            confirm: "delete";
           },
         ),
     },

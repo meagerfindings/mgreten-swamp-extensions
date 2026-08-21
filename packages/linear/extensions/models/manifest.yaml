@@ -1,8 +1,9 @@
 manifestVersion: 1
 name: "@mgreten/linear"
-version: "2026.08.19.2"
+version: "2026.08.21.1"
 description: >
   Linear project management integration for swamp — issue CRUD with
+  fail-closed verified deletion,
   sub-issue (parent) and estimate support, single-call epic creation
   (parent + child sub-issues), viewer auto-assignment, label management by
   name, comment threads, and team/project/state listing via the official
