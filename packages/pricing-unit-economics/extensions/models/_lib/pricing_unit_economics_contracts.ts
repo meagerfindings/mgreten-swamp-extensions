@@ -13,7 +13,7 @@ const MAX_TEXT_LENGTH = 500;
 const MAX_ITEMS = 100;
 const text = z.string().trim().min(1).max(MAX_TEXT_LENGTH);
 const timestamp = z.iso.datetime({ offset: true });
-const amount = z.number().finite().nonnegative();
+const amount = z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const currency = z.string().regex(
   /^[A-Z]{3}$/,
   "currency must be an ISO-style three-letter code",
@@ -36,6 +36,16 @@ const monetaryMeasureSchema = z.strictObject({
   currency,
   unit: z.enum(["currency_minor", "currency_major"]),
   denominator: text,
+}).superRefine((measure, context) => {
+  if (
+    measure.unit === "currency_minor" && !Number.isSafeInteger(measure.amount)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["amount"],
+      message: "currency_minor amount must be a non-negative safe integer",
+    });
+  }
 });
 const observedCostProxySchema = z.strictObject({
   kind: z.literal("observed_cost_proxy"),
@@ -200,7 +210,7 @@ export const pricingUnitEconomicsInputSchema = z.strictObject({
 });
 
 const persistedRevenueScenarioSchema = revenueScenarioSchema.extend({
-  projectedRevenue: monetaryMeasureSchema.extend({
+  projectedRevenue: monetaryMeasureSchema.safeExtend({
     denominator: z.literal("scenario_total"),
   }),
   claimStatus: z.literal("hypothetical_not_realized"),
@@ -289,9 +299,24 @@ export function evaluatePricingUnitEconomics(
 ): PricingUnitEconomicsValidation {
   const result = pricingUnitEconomicsInputSchema.safeParse(input);
   if (result.success) {
-    return { success: true, value: result.data, diagnostics: [] };
+    const output = pricingUnitEconomicsOutputSchema.safeParse(result.data);
+    if (output.success) {
+      return { success: true, value: output.data, diagnostics: [] };
+    }
+    return { success: false, diagnostics: diagnosticsFor(output.error.issues) };
   }
-  const diagnostics = result.error.issues.map((issue) => ({
+  return {
+    success: false,
+    diagnostics: diagnosticsFor(result.error.issues),
+  };
+}
+
+function diagnosticsFor(issues: z.core.$ZodIssue[]): Array<{
+  path: string;
+  code: string;
+  message: string;
+}> {
+  return issues.map((issue) => ({
     path: issue.path.map(String).join("."),
     code: issue.code,
     message: issue.message,
@@ -300,5 +325,4 @@ export function evaluatePricingUnitEconomics(
       a.path.localeCompare(b.path) || a.code.localeCompare(b.code) ||
       a.message.localeCompare(b.message)
     );
-  return { success: false, diagnostics };
 }

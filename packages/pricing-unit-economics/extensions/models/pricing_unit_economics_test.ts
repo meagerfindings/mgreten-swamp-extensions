@@ -1,8 +1,12 @@
 import {
   model,
+  summarizeArgumentsSchema,
   summarizePricingUnitEconomics,
 } from "./pricing_unit_economics.ts";
-import { evaluatePricingUnitEconomics } from "./_lib/pricing_unit_economics_contracts.ts";
+import {
+  evaluatePricingUnitEconomics,
+  pricingUnitEconomicsOutputSchema,
+} from "./_lib/pricing_unit_economics_contracts.ts";
 
 function assert(value: unknown, message = "assertion failed"): asserts value {
   if (!value) throw new Error(message);
@@ -81,9 +85,9 @@ Deno.test("preserves public type and writes one recommendation-only summary", as
     {
       globalArgs: {},
       now: () => new Date("2026-08-23T12:02:00Z"),
-      writeResource: async (spec, name, data) => {
+      writeResource: (spec, name, data) => {
         writes.push({ spec, name, data });
-        return { name };
+        return Promise.resolve({ name });
       },
     },
   );
@@ -156,6 +160,27 @@ Deno.test("rejects incompatible currency and denominator units", () => {
   assert(!evaluatePricingUnitEconomics(denominatorMismatch).success);
 });
 
+Deno.test("rejects non-normalized and unsafe monetary amounts", () => {
+  const fractionalMinorUnits = fixture();
+  fractionalMinorUnits.observedCostProxies[0].measure.amount = 40.5;
+  const incompatibleUnits = {
+    ...fixture(),
+    thresholdPolicy: {
+      ...fixture().thresholdPolicy,
+      maximum: {
+        ...fixture().thresholdPolicy.maximum,
+        unit: "currency_major",
+      },
+    },
+  };
+  const overflowingProjection = fixture();
+  overflowingProjection.hypotheticalRevenueScenarios[0].price.amount =
+    Number.MAX_SAFE_INTEGER;
+  assert(!evaluatePricingUnitEconomics(fractionalMinorUnits).success);
+  assert(!evaluatePricingUnitEconomics(incompatibleUnits).success);
+  assert(!evaluatePricingUnitEconomics(overflowingProjection).success);
+});
+
 Deno.test("rejects missing required data, expired evidence, and any authority claim", () => {
   const missing = fixture() as Record<string, unknown>;
   delete missing.thresholdPolicy;
@@ -189,4 +214,56 @@ Deno.test("rejects oversized text and input collections", () => {
   assert(!evaluatePricingUnitEconomics(oversizedText).success);
   assert(!evaluatePricingUnitEconomics(tooManyCaveats).success);
   assert(!evaluatePricingUnitEconomics(tooManyScenarios).success);
+});
+
+Deno.test("strict schemas reject malformed and tampered contracts", () => {
+  assert(
+    !summarizeArgumentsSchema.safeParse({
+      requestId: "request-1",
+      input: fixture(),
+      unexpected: true,
+    }).success,
+  );
+  const valid = summarizePricingUnitEconomics(
+    fixture(),
+    new Date("2026-08-23T12:02:00Z"),
+  );
+  const tampered = copy(valid) as Record<string, unknown>;
+  tampered.recommendation = {
+    policyId: "synthetic-policy",
+    status: "within_threshold",
+    actionAuthority: "execute",
+  };
+  assert(!pricingUnitEconomicsOutputSchema.safeParse(tampered).success);
+  assert(
+    !pricingUnitEconomicsOutputSchema.safeParse({ ...valid, unexpected: true })
+      .success,
+  );
+});
+
+Deno.test("repeated requests write the same instance and content", async () => {
+  const writes: Array<{ name: string; data: Record<string, unknown> }> = [];
+  const context = {
+    globalArgs: {},
+    now: () => new Date("2026-08-23T12:02:00Z"),
+    writeResource: (
+      _spec: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
+      writes.push({ name, data });
+      return Promise.resolve({ name });
+    },
+  };
+  await model.methods.summarize.execute(
+    { requestId: "idempotent-request", input: fixture() },
+    context,
+  );
+  await model.methods.summarize.execute(
+    { requestId: "idempotent-request", input: copy(fixture()) },
+    context,
+  );
+  assert(writes.length === 2);
+  assert(writes[0].name === writes[1].name);
+  assert(JSON.stringify(writes[0].data) === JSON.stringify(writes[1].data));
 });

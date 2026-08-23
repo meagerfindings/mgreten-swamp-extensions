@@ -20,7 +20,7 @@ export const globalArgumentsSchema = z.strictObject({});
 const SafeId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/);
 
 /** Arguments accepted by the deterministic summary method. */
-export const summarizeArgumentsSchema = z.object({
+export const summarizeArgumentsSchema = z.strictObject({
   requestId: SafeId,
   input: z.unknown(),
 });
@@ -57,6 +57,9 @@ export function summarizePricingUnitEconomics(
 
 type WriteContext = {
   globalArgs: z.infer<typeof globalArgumentsSchema>;
+  logger?: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -88,6 +91,9 @@ export const model = {
         args: z.infer<typeof summarizeArgumentsSchema>,
         context: WriteContext,
       ) => {
+        context.logger?.info("Validating pricing unit economics {requestId}", {
+          requestId: args.requestId,
+        });
         const summary = summarizePricingUnitEconomics(
           args.input,
           context.now?.() ?? new Date(),
@@ -97,6 +103,9 @@ export const model = {
           `summary-${args.requestId}`,
           summary,
         );
+        context.logger?.info("Wrote pricing unit economics {requestId}", {
+          requestId: args.requestId,
+        });
         return { dataHandles: [handle] };
       },
     },
