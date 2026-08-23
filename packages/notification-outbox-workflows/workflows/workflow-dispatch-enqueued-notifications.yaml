@@ -6,10 +6,10 @@ inputs:
   additionalProperties: false
   properties:
     sourceWorkflowRunId: { type: string, format: uuid }
-    enqueueJobName: { type: string, minLength: 1 }
-    enqueueStepName: { type: string, minLength: 1 }
-    outboxModel: { type: string, minLength: 1 }
-    outboxModelType: { type: string, minLength: 1, default: "@mgreten/notification-outbox" }
+    enqueueJobName: { type: string, minLength: 1, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$" }
+    enqueueStepName: { type: string, minLength: 1, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$" }
+    outboxModel: { type: string, minLength: 1, pattern: "^[A-Za-z0-9@][A-Za-z0-9@/._-]*$" }
+    outboxModelType: { type: string, minLength: 1, pattern: "^@[A-Za-z0-9][A-Za-z0-9_-]*/[A-Za-z0-9][A-Za-z0-9_-]*$", default: "@mgreten/notification-outbox" }
     sendWorkflow: { type: string, minLength: 1, default: "@mgreten/send-one-notification" }
     transportModel: { type: string, minLength: 1 }
     transportMethod: { type: string, minLength: 1 }
@@ -22,6 +22,15 @@ inputs:
 jobs:
   - name: dispatch
     steps:
+      - name: establish-scope
+        description: Preserve a valid no-op job when the exact enqueue scope contains no fresh records.
+        task:
+          type: assert
+          expr: "true"
+          message: Exact dispatch scope is valid.
+        dependsOn: []
+        weight: 0
+        allowFailure: false
       - name: send-fresh-pending
         description: Query one enqueue run and fan out only its notification output records.
         forEach:
@@ -38,7 +47,9 @@ jobs:
             transportMethod: "${{ inputs.transportMethod }}"
             transportOptions: "${{ inputs.transportOptions }}"
             notification: "${{ self.notification }}"
-        dependsOn: []
+        dependsOn:
+          - step: establish-scope
+            condition: { type: succeeded }
         weight: 0
         allowFailure: false
     dependsOn: []

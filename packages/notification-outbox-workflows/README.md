@@ -39,7 +39,8 @@ Queries only records emitted by one exact enqueue step: all of
 `outboxModelType`, and `specName == "notification"` must match. It never scans
 the global pending queue. Every matching resource is sent through the first
 workflow with concurrency one, preserving a conservative, transport-agnostic
-delivery order.
+delivery order. An exact scope with no fresh records completes as an explicit
+no-op, which makes deduplicated replay safe.
 
 ### `@mgreten/deliver-thin-watchdog-alert`
 

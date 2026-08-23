@@ -21,12 +21,13 @@ inputs:
       type: object
       description: Non-message transport options; payload and idempotencyKey are always bound from this notification.
       additionalProperties: true
+      default: {}
     notification:
       type: object
-      additionalProperties: true
-      required: [workItem, event, urgency, dedupKey, era, payload, status, attempts]
+      additionalProperties: false
+      required: [workItem, event, urgency, dedupKey, era, payload, status, attempts, enqueuedAt, updatedAt, policyVersion, redactionVersion]
       properties:
-        workItem: { type: string }
+        workItem: { type: string, minLength: 1, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]*$" }
         event: { type: string, enum: [approval-needed, failed, completed] }
         urgency: { type: string, enum: [low, default, high, urgent] }
         dedupKey: { type: string, minLength: 1 }
@@ -34,6 +35,11 @@ inputs:
         payload: { type: object }
         status: { type: string, enum: [pending, failed] }
         attempts: { type: integer, minimum: 0 }
+        lastError: { type: string }
+        enqueuedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        policyVersion: { type: string, const: "1" }
+        redactionVersion: { type: string, enum: ["1", "2"] }
   required: [outboxModel, transportModel, transportMethod, notification]
 jobs:
   - name: deliver

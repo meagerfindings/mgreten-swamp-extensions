@@ -11,6 +11,10 @@
     "era": "synthetic-2026-08-23",
     "payload": { "title": "Example incident", "message": "The synthetic watchdog check failed." },
     "status": "pending",
-    "attempts": 0
+    "attempts": 0,
+    "enqueuedAt": "2026-08-23T12:00:00Z",
+    "updatedAt": "2026-08-23T12:00:00Z",
+    "policyVersion": "1",
+    "redactionVersion": "2"
   }
 }
