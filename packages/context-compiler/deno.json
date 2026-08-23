@@ -1,0 +1,9 @@
+{
+  "nodeModulesDir": "auto",
+  "lint": { "rules": { "exclude": ["no-import-prefix"] } },
+  "tasks": {
+    "check": "deno check extensions/models/context_compiler.ts extensions/models/context_compiler_test.ts",
+    "test": "deno test extensions/models/context_compiler_test.ts",
+    "verify": "deno fmt --check && deno lint && deno task check && deno task test"
+  }
+}

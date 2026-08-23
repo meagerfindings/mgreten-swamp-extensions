@@ -1,0 +1,12 @@
+manifestVersion: 1
+name: "@mgreten/context-compiler"
+version: 2026.08.23.1
+description: "Deterministically compiles fresh, bounded, reference-only context with no operational authority."
+repository: "https://github.com/meagerfindings/swamp-context-compiler"
+models:
+  - context_compiler.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+  - extensions/models/context_compiler_test.ts
+platforms: []
