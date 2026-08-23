@@ -188,7 +188,27 @@ export const bottleneckRankingOutputSchema = z.strictObject({
     sideEffects: z.literal("none"),
   }),
 }).superRefine((value, context) => {
+  const evidenceIds = new Set<string>();
+  value.evidence.forEach((evidence, index) => {
+    if (evidenceIds.has(evidence.evidenceId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidence", index, "evidenceId"],
+        message: "duplicate evidenceId",
+      });
+    }
+    evidenceIds.add(evidence.evidenceId);
+  });
+  const candidateIds = new Set<string>();
   value.ranking.forEach((item, index) => {
+    if (candidateIds.has(item.candidateId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["ranking", index, "candidateId"],
+        message: "duplicate candidateId",
+      });
+    }
+    candidateIds.add(item.candidateId);
     if (item.rank !== index + 1) {
       context.addIssue({
         code: "custom",
@@ -208,6 +228,44 @@ export const bottleneckRankingOutputSchema = z.strictObject({
         path: ["ranking", index],
         message:
           "ranking must use descending score and ascending candidateId ties",
+      });
+    }
+    const criteria = new Set<string>();
+    item.criteria.forEach((criterion, criterionIndex) => {
+      if (criteria.has(criterion.criterion)) {
+        context.addIssue({
+          code: "custom",
+          path: ["ranking", index, "criteria", criterionIndex, "criterion"],
+          message: "duplicate criterion",
+        });
+      }
+      criteria.add(criterion.criterion);
+      criterion.evidenceIds.forEach((evidenceId, evidenceIndex) => {
+        if (!evidenceIds.has(evidenceId)) {
+          context.addIssue({
+            code: "custom",
+            path: [
+              "ranking",
+              index,
+              "criteria",
+              criterionIndex,
+              "evidenceIds",
+              evidenceIndex,
+            ],
+            message: "evidenceId must reference preserved evidence",
+          });
+        }
+      });
+    });
+    const contributionTotal = item.criteria.reduce(
+      (total, criterion) => total + criterion.contribution,
+      0,
+    );
+    if (Math.abs(item.score - contributionTotal) > 1e-12) {
+      context.addIssue({
+        code: "custom",
+        path: ["ranking", index, "score"],
+        message: "score must equal the sum of criterion contributions",
       });
     }
   });

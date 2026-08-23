@@ -36,6 +36,12 @@ function dossier(id: string, dueDay: number) {
     sourceReference: `data://decision-dossier/${id}/1`,
   };
 }
+function rankingSource() {
+  const source = copy(syntheticDossier.evidence[0].sourceReference);
+  source.freshness.asOf = "2026-08-17T09:00:00Z";
+  source.freshness.expiresAt = "2026-09-17T09:00:00Z";
+  return source;
+}
 const ranking = {
   schemaVersion: "1.0",
   rankingId: "ranking-1",
@@ -61,7 +67,20 @@ const ranking = {
     missingData: "exclude_and_reweight",
     tieBreak: "candidate_id_ascending",
   },
-  evidence: [],
+  evidence: [
+    {
+      evidenceId: "e-1",
+      evidenceLink: "https://example.com/evidence/1",
+      observation: "Synthetic observation one",
+      sourceReference: rankingSource(),
+    },
+    {
+      evidenceId: "e-2",
+      evidenceLink: "https://example.com/evidence/2",
+      observation: "Synthetic observation two",
+      sourceReference: rankingSource(),
+    },
+  ],
   ranking: [{
     rank: 1,
     candidateId: "bottleneck-1",
@@ -201,4 +220,54 @@ Deno.test("imported ranking must be contiguous and correctly ordered", () => {
     () => generateWeeklyDecisionQueue(wrongTie),
     "ascending candidateId ties",
   );
+});
+
+Deno.test("tampered ranking provenance and scores are rejected", () => {
+  const missingEvidence = input();
+  missingEvidence.bottleneckRanking.ranking.evidence = [];
+  rejects(
+    () => generateWeeklyDecisionQueue(missingEvidence),
+    "evidenceId must reference preserved evidence",
+  );
+
+  const changedScore = input();
+  changedScore.bottleneckRanking.ranking.ranking[0].score = .9;
+  rejects(
+    () => generateWeeklyDecisionQueue(changedScore),
+    "score must equal the sum of criterion contributions",
+  );
+});
+
+Deno.test("model binds replay identity, logs, and writes only validated output", async () => {
+  const writes: Array<{ spec: string; name: string; data: unknown }> = [];
+  const logs: string[] = [];
+  const context = {
+    logger: {
+      info: (message: string) => logs.push(message),
+    },
+    writeResource: (spec: string, name: string, data: Record<string, unknown>) => {
+      writes.push({ spec, name, data });
+      return Promise.resolve({ spec, name });
+    },
+  };
+  await model.methods.generate.execute(
+    { requestId: "queue-1", input: input() },
+    context,
+  );
+  assert(writes.length === 1);
+  assert(writes[0].name === "queue-queue-1");
+  assert(logs.length === 2);
+
+  const replayMismatch = input();
+  replayMismatch.queueId = "different-queue";
+  try {
+    await model.methods.generate.execute(
+      { requestId: "queue-1", input: replayMismatch },
+      context,
+    );
+    throw new Error("expected replay identity rejection");
+  } catch (error) {
+    assert(String(error).includes("queueId must equal requestId"));
+  }
+  assert(writes.length === 1, "rejected replay must not write");
 });

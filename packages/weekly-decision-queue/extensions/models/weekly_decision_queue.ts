@@ -19,6 +19,9 @@ const argumentsSchema = z.strictObject({
   input: z.unknown(),
 });
 type Context = {
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -47,15 +50,26 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: Context,
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "queue",
-            `queue-${args.requestId}`,
-            generateWeeklyDecisionQueue(args.input),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger.info("Generating weekly decision queue {requestId}", {
+          requestId: args.requestId,
+        });
+        const queue = generateWeeklyDecisionQueue(args.input);
+        if (queue.queueId !== args.requestId) {
+          throw new Error(
+            "Cannot generate weekly decision queue: queueId must equal requestId to preserve replay identity",
+          );
+        }
+        const handle = await context.writeResource(
+          "queue",
+          `queue-${args.requestId}`,
+          queue,
+        );
+        context.logger.info("Generated weekly decision queue {requestId}", {
+          requestId: args.requestId,
+        });
+        return { dataHandles: [handle] };
+      },
     },
   },
 };

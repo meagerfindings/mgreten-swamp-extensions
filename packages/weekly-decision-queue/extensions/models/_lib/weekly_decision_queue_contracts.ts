@@ -8,6 +8,8 @@ export const MAX_QUEUE_INPUTS = 50 as const;
 
 const Text = z.string().trim().min(1);
 const Timestamp = z.iso.datetime({ offset: true });
+const compareText = (left: string, right: string) =>
+  left < right ? -1 : left > right ? 1 : 0;
 const unavailableDossierSchema = z.strictObject({
   status: z.literal("unavailable"),
   dossierId: Text,
@@ -127,9 +129,14 @@ export function generateWeeklyDecisionQueue(raw: unknown): WeeklyDecisionQueue {
       });
       return [];
     }
-    const expiry = entry.dossier.evidence.map((evidence) =>
-      evidence.sourceReference.freshness.expiresAt
-    ).sort()[0];
+    const expiry = entry.dossier.evidence.reduce(
+      (earliest, evidence) =>
+        Date.parse(evidence.sourceReference.freshness.expiresAt) <
+            Date.parse(earliest)
+          ? evidence.sourceReference.freshness.expiresAt
+          : earliest,
+      entry.dossier.evidence[0].sourceReference.freshness.expiresAt,
+    );
     const availableAt = entry.dossier.evidence.every((evidence) =>
       Date.parse(evidence.sourceReference.freshness.asOf) <= at
     );
@@ -148,7 +155,7 @@ export function generateWeeklyDecisionQueue(raw: unknown): WeeklyDecisionQueue {
   }).sort((a, b) =>
     Date.parse(a.entry.dossier.authority.decisionDueAt) -
       Date.parse(b.entry.dossier.authority.decisionDueAt) ||
-    a.entry.dossier.dossierId.localeCompare(b.entry.dossier.dossierId)
+    compareText(a.entry.dossier.dossierId, b.entry.dossier.dossierId)
   );
 
   fresh.slice(MAX_WEEKLY_DOSSIERS).forEach(({ entry }) =>
@@ -224,7 +231,7 @@ export function generateWeeklyDecisionQueue(raw: unknown): WeeklyDecisionQueue {
     generatedAt: input.generatedAt,
     dossiers,
     dossierOmissions: omissions.sort((a, b) =>
-      a.dossierId.localeCompare(b.dossierId) || a.state.localeCompare(b.state)
+      compareText(a.dossierId, b.dossierId) || compareText(a.state, b.state)
     ),
     currentBottleneck,
     authority: {
