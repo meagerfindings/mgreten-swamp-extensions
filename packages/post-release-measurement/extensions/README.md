@@ -29,7 +29,9 @@ swamp model method run release-measurement record \
 ```
 
 The `recordId` is 1–100 ASCII letters, digits, `_`, or `-`, beginning with a
-letter or digit. The resource is stored as `plan-<recordId>`.
+letter or digit, and must exactly match `plan.planId`. The resource is stored as
+`plan-<recordId>`. Replaying identical content is a no-op; attempting to reuse
+an identifier for different content fails without writing.
 
 ## Plan contract
 
@@ -50,13 +52,13 @@ synthetic valid plan.
 ## Development
 
 ```sh
-deno fmt --check
-deno lint
-deno check models/post_release_measurement.ts
-deno test
-swamp extension fmt manifest.yaml --check --json
-swamp extension quality manifest.yaml --json
-swamp extension push manifest.yaml --dry-run
+deno fmt --check extensions
+deno lint extensions
+deno check extensions/models/post_release_measurement.ts
+deno test extensions
+swamp extension fmt extensions/manifest.yaml --check --json
+swamp extension quality extensions/manifest.yaml --json
+swamp extension push extensions/manifest.yaml --dry-run
 ```
 
 Licensed under the MIT License. See [LICENSE](LICENSE).

@@ -3,7 +3,7 @@ import { z } from "npm:zod@4";
 export const SIGNAL_SCHEMA_VERSION = "1.0" as const;
 
 const timestampSchema = z.iso.datetime({ offset: true });
-const identifierSchema = z.string().trim().min(1);
+const identifierSchema = z.string().trim().min(1).max(200);
 
 /** Identifies the measurement source and its provenance and freshness bounds. */
 export const sourceReferenceSchema = z.strictObject({

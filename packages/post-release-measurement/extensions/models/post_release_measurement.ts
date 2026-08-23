@@ -48,19 +48,48 @@ export const model = {
       execute: async (
         args: z.infer<typeof recordArgumentsSchema>,
         context: {
+          readResource(
+            name: string,
+          ): Promise<Record<string, unknown> | null>;
           writeResource(
             spec: string,
             name: string,
             data: Record<string, unknown>,
           ): Promise<unknown>;
+          logger: {
+            info(message: string, properties: Record<string, unknown>): void;
+          };
         },
       ) => {
         const plan = planForPersistence(args.plan);
+        if (args.recordId !== plan.planId) {
+          throw new TypeError("recordId must exactly match plan.planId");
+        }
+        const instanceName = `plan-${args.recordId}`;
+        context.logger.info("Recording measurement plan {recordId}", {
+          recordId: args.recordId,
+        });
+        const existing = await context.readResource(instanceName);
+        if (existing) {
+          const persisted = planForPersistence(existing);
+          if (JSON.stringify(persisted) !== JSON.stringify(plan)) {
+            throw new TypeError(
+              `Measurement plan ${args.recordId} already exists with different content`,
+            );
+          }
+          context.logger.info("Measurement plan {recordId} already recorded", {
+            recordId: args.recordId,
+          });
+          return { dataHandles: [] };
+        }
         const handle = await context.writeResource(
           "plan",
-          `plan-${args.recordId}`,
+          instanceName,
           plan,
         );
+        context.logger.info("Recorded measurement plan {recordId}", {
+          recordId: args.recordId,
+        });
         return { dataHandles: [handle] };
       },
     },

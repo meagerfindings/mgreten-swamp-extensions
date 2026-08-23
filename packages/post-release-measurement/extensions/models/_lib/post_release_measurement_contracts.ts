@@ -3,8 +3,8 @@ import { sourceReferenceSchema } from "./signal_contracts.ts";
 
 export const POST_RELEASE_MEASUREMENT_SCHEMA_VERSION = "2.0" as const;
 
-const Id = z.string().trim().min(1);
-const Text = z.string().trim().min(1);
+const Id = z.string().trim().min(1).max(200);
+const Text = z.string().trim().min(1).max(2_000);
 const Timestamp = z.iso.datetime({ offset: true });
 const ExactArtifact = z.strictObject({
   id: Id,
@@ -122,10 +122,10 @@ export function validatePostReleaseMeasurementPlan(input: unknown) {
     return { valid: true as const, value: result.data, diagnostics: [] };
   }
 
-  const diagnostics = result.error.issues.map((issue) => ({
+  const diagnostics = result.error.issues.slice(0, 32).map((issue) => ({
     path: issue.path.map(String).join("."),
     code: issue.code,
-    message: issue.message,
+    message: issue.message.slice(0, 500),
   })).sort((a, b) =>
     a.path.localeCompare(b.path) || a.code.localeCompare(b.code) ||
     a.message.localeCompare(b.message)
