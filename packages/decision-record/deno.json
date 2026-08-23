@@ -1,0 +1,8 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "check": "deno check extensions/models/decision_record.ts extensions/models/decision_record_test.ts",
+    "test": "deno test extensions/models/decision_record_test.ts",
+    "verify": "deno fmt --check && deno lint && deno task check && deno task test"
+  }
+}

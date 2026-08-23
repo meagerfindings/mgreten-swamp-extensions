@@ -1,0 +1,17 @@
+manifestVersion: 1
+name: "@mgreten/decision-record"
+version: 2026.08.23.1
+description: "Records explicit human decisions against an exact dossier without authorizing execution."
+repository: "https://github.com/meagerfindings/swamp-decision-record"
+models:
+  - decision_record.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - extensions/models/decision_record_test.ts
+platforms: []
