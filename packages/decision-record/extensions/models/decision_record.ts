@@ -110,6 +110,9 @@ export const recordArgumentsSchema = z.strictObject({ record: DecisionRecord });
 
 /** Minimal Swamp resource operations used by the persistence function. */
 export type DecisionRecordContext = {
+  logger: {
+    info(message: string, properties?: Record<string, unknown>): void;
+  };
   readResource(name: string): Promise<Record<string, unknown> | null>;
   writeResource(
     spec: string,
@@ -132,6 +135,10 @@ export async function persistDecision(
   context: DecisionRecordContext,
 ): Promise<{ dataHandles: unknown[] }> {
   const { record } = recordArgumentsSchema.parse(input);
+  context.logger.info(
+    "Recording decision {decisionId} for proposal {proposalId}",
+    { decisionId: record.decisionId, proposalId: record.proposalId },
+  );
   const decisionName = `decision-${record.decisionId}`;
   const existing = await context.readResource(decisionName);
   if (existing) {
@@ -144,12 +151,20 @@ export async function persistDecision(
       if (!same(DecisionRecord.parse(latest), record)) {
         throw new Error(`Conflicting latest decision for ${record.proposalId}`);
       }
+      context.logger.info(
+        "Decision {decisionId} already recorded for proposal {proposalId}",
+        { decisionId: record.decisionId, proposalId: record.proposalId },
+      );
       return { dataHandles: [] };
     }
     const latestHandle = await context.writeResource(
       "latestDecision",
       latestName,
       record,
+    );
+    context.logger.info(
+      "Repaired latest decision for proposal {proposalId}",
+      { proposalId: record.proposalId },
     );
     return { dataHandles: [latestHandle] };
   }
@@ -185,6 +200,10 @@ export async function persistDecision(
     "latestDecision",
     latestName,
     record,
+  );
+  context.logger.info(
+    "Recorded decision {decisionId} for proposal {proposalId}",
+    { decisionId: record.decisionId, proposalId: record.proposalId },
   );
   return { dataHandles: [decisionHandle, latestHandle] };
 }

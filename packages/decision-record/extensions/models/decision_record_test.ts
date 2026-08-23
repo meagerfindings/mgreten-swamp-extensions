@@ -59,9 +59,18 @@ function context(
   const writes: Array<
     { spec: string; name: string; data: Record<string, unknown> }
   > = [];
+  const logs: Array<
+    { message: string; properties?: Record<string, unknown> }
+  > = [];
   return {
     writes,
+    logs,
     api: {
+      logger: {
+        info: (message: string, properties?: Record<string, unknown>) => {
+          logs.push({ message, properties });
+        },
+      },
       readResource: (name: string) => Promise.resolve(stored[name] ?? null),
       writeResource: (
         spec: string,
@@ -164,6 +173,9 @@ Deno.test("persists supplied record only and makes an exact replay idempotent", 
       first.writes[1].name === "proposal-idea-1",
   );
   assert(result.dataHandles.length === 2);
+  assert(first.logs.length === 2);
+  assert(first.logs[0].properties?.decisionId === "decision-1");
+  assert(first.logs[1].message.startsWith("Recorded decision"));
 
   const replay = context({ "decision-decision-1": base() });
   const replayResult = await persistDecision({ record: base() }, replay.api);
