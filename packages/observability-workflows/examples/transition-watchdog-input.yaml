@@ -1,5 +1,6 @@
 readAdapter: example-read-adapter
 readMethod: collect
+readSpecName: observation-window
 readInputs:
   limit: 100
 selector:
@@ -14,8 +15,10 @@ freshnessPolicy:
   maximumAgeSeconds: 300
 normalizer: example-normalizer
 normalizeMethod: normalize
+normalizedSpecName: normalized-observations
 transitionEvaluator: example-transition-evaluator
 evaluateMethod: evaluateTransitions
+transitionSpecName: transition
 outboxSink: ""
 transportModel: ""
 transportMethod: ""

@@ -7,23 +7,35 @@ inputs:
   type: object
   additionalProperties: false
   properties:
-    readAdapter: { type: string, minLength: 1 }
-    readMethod: { type: string, minLength: 1 }
+    readAdapter: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    readMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
+    readSpecName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
     readInputs: { type: object, default: {} }
     selector: { type: object, default: {} }
     window: { type: object, default: {} }
     normalization: { type: object, default: {} }
     severityPolicy: { type: object, default: {} }
     freshnessPolicy: { type: object, default: {} }
-    normalizer: { type: string, minLength: 1 }
-    normalizeMethod: { type: string, minLength: 1, default: normalize }
-    digestBuilder: { type: string, minLength: 1 }
-    digestMethod: { type: string, minLength: 1, default: digest }
-  required: [readAdapter, readMethod, normalizer, digestBuilder]
+    normalizer: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    normalizeMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', default: normalize }
+    normalizedSpecName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
+    digestBuilder: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    digestMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', default: digest }
+  required: [readAdapter, readMethod, readSpecName, normalizer, normalizedSpecName, digestBuilder]
 jobs:
   - name: read-normalize-digest
     description: The ordered read→normalize→digest boundary. All read scope is caller supplied.
     steps:
+      - name: validate-identifiers
+        description: Reject unsafe dynamic targets before any adapter method executes.
+        task:
+          type: assert
+          expr: inputs.readAdapter.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.readMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.readSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizer.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.normalizeMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizedSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.digestBuilder.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.digestMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+          message: Adapter, method, and spec identifiers must use the documented safe identifier syntax.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
       - name: read
         description: Collect one bounded, read-only observation window.
         task:
@@ -35,7 +47,7 @@ jobs:
               selector: "${{ inputs.selector }}"
               window: "${{ inputs.window }}"
               options: "${{ inputs.readInputs }}"
-        dependsOn: []
+        dependsOn: [{ step: validate-identifiers, condition: { type: succeeded } }]
         weight: 0
         allowFailure: false
       - name: normalize
@@ -46,7 +58,7 @@ jobs:
           methodName: "${{ inputs.normalizeMethod }}"
           inputs:
             observations: >-
-              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "read-normalize-digest" && stepName == "read"', 'attributes') }}
+              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "read-normalize-digest" && stepName == "read" && modelName == "' + inputs.readAdapter + '" && specName == "' + inputs.readSpecName + '"', 'attributes') }}
             selector: "${{ inputs.selector }}"
             window: "${{ inputs.window }}"
             normalization: "${{ inputs.normalization }}"
@@ -65,7 +77,7 @@ jobs:
           methodName: "${{ inputs.digestMethod }}"
           inputs:
             observations: >-
-              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "read-normalize-digest" && stepName == "normalize"', 'attributes') }}
+              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "read-normalize-digest" && stepName == "normalize" && modelName == "' + inputs.normalizer + '" && specName == "' + inputs.normalizedSpecName + '"', 'attributes') }}
             selector: "${{ inputs.selector }}"
             window: "${{ inputs.window }}"
             severityPolicy: "${{ inputs.severityPolicy }}"

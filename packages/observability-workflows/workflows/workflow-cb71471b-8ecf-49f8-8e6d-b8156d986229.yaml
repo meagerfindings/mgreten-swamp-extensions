@@ -1,0 +1,63 @@
+id: cb71471b-8ecf-49f8-8e6d-b8156d986229
+name: "@mgreten/observability-deliver-transitions"
+description: Deliver a runtime-resolved batch of transition intents one at a time.
+tags:
+  capability: observability-transition-batch-delivery
+inputs:
+  type: object
+  additionalProperties: false
+  properties:
+    transitions:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: object
+        additionalProperties: false
+        required: [workItem, event, urgency, era, payload]
+        properties:
+          workItem: { type: string, minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]*$" }
+          event: { type: string, enum: [approval-needed, failed, completed] }
+          urgency: { type: string, enum: [low, default, high, urgent] }
+          era: { type: string, minLength: 1 }
+          payload: { type: object }
+    outboxSink: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    transportModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    transportMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
+    transportOptions: { type: object, default: {} }
+  required: [transitions, outboxSink, transportModel, transportMethod]
+jobs:
+  - name: deliver-batch
+    description: The child workflow owns one exact enqueue and dispatch boundary per transition.
+    steps:
+      - name: validate-transition-identities
+        description: Reject unsafe delivery targets and duplicate outbox identities even when urgency or payload differs.
+        task:
+          type: assert
+          expr: inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitions.all(transition, size(inputs.transitions.filter(candidate, candidate.workItem == transition.workItem && candidate.event == transition.event && candidate.era == transition.era)) == 1)
+          message: Delivery targets must use safe syntax, and each workItem, event, and era identity must occur exactly once per batch.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: deliver-transition
+        description: Expand by index only after the parent has resolved and validated this input array.
+        forEach:
+          item: transition
+          in: "${{ inputs.transitions }}"
+        concurrency: 1
+        task:
+          type: workflow
+          workflowIdOrName: "@mgreten/observability-deliver-transition"
+          inputs:
+            transition: "${{ self.transition }}"
+            outboxSink: "${{ inputs.outboxSink }}"
+            transportModel: "${{ inputs.transportModel }}"
+            transportMethod: "${{ inputs.transportMethod }}"
+            transportOptions: "${{ inputs.transportOptions }}"
+        dependsOn: [{ step: validate-transition-identities, condition: { type: succeeded } }]
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

@@ -7,27 +7,40 @@ inputs:
   type: object
   additionalProperties: false
   properties:
-    readAdapter: { type: string, minLength: 1 }
-    readMethod: { type: string, minLength: 1 }
+    readAdapter: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    readMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
+    readSpecName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
     readInputs: { type: object, default: {} }
     selector: { type: object, default: {} }
     window: { type: object, default: {} }
-    normalizer: { type: string, minLength: 1 }
-    normalizeMethod: { type: string, minLength: 1, default: normalize }
+    normalizer: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    normalizeMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', default: normalize }
+    normalizedSpecName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
     normalization: { type: object, default: {} }
     severityPolicy: { type: object, default: {} }
     freshnessPolicy: { type: object, default: {} }
-    transitionEvaluator: { type: string, minLength: 1 }
-    evaluateMethod: { type: string, minLength: 1, default: evaluateTransitions }
-    outboxSink: { type: string, default: "" }
-    transportModel: { type: string, default: "" }
-    transportMethod: { type: string, default: "" }
+    transitionEvaluator: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    evaluateMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', default: evaluateTransitions }
+    transitionSpecName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', default: transition }
+    outboxSink: { type: string, pattern: '^$|^[A-Za-z0-9@][A-Za-z0-9@._/-]*$', default: "" }
+    transportModel: { type: string, pattern: '^$|^[A-Za-z0-9@][A-Za-z0-9@._/-]*$', default: "" }
+    transportMethod: { type: string, pattern: '^$|^[A-Za-z0-9][A-Za-z0-9._-]*$', default: "" }
     transportOptions: { type: object, default: {} }
-  required: [readAdapter, readMethod, normalizer, transitionEvaluator]
+  required: [readAdapter, readMethod, readSpecName, normalizer, normalizedSpecName, transitionEvaluator]
 jobs:
   - name: inspect-and-alert
     description: Read once, normalize once, then evaluate durable state for newly-opened or resolved transitions only.
     steps:
+      - name: validate-delivery-configuration
+        description: Fail before adapter execution on unsafe identifiers or incomplete delivery configuration.
+        task:
+          type: assert
+          expr: inputs.readAdapter.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.readMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.readSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizer.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.normalizeMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizedSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitionEvaluator.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.evaluateMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitionSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && (inputs.outboxSink == "" || (inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")))
+          message: Dynamic identifiers must use safe syntax, and an enabled outbox requires valid transportModel and transportMethod inputs.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
       - name: read
         description: Collect the caller-selected bounded observation window.
         task:
@@ -39,7 +52,7 @@ jobs:
               selector: "${{ inputs.selector }}"
               window: "${{ inputs.window }}"
               options: "${{ inputs.readInputs }}"
-        dependsOn: []
+        dependsOn: [{ step: validate-delivery-configuration, condition: { type: succeeded } }]
         weight: 0
         allowFailure: false
       - name: normalize
@@ -50,7 +63,7 @@ jobs:
           methodName: "${{ inputs.normalizeMethod }}"
           inputs:
             observations: >-
-              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "read"', 'attributes') }}
+              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "read" && modelName == "' + inputs.readAdapter + '" && specName == "' + inputs.readSpecName + '"', 'attributes') }}
             selector: "${{ inputs.selector }}"
             window: "${{ inputs.window }}"
             normalization: "${{ inputs.normalization }}"
@@ -67,7 +80,7 @@ jobs:
           methodName: "${{ inputs.evaluateMethod }}"
           inputs:
             observations: >-
-              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "normalize"', 'attributes') }}
+              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "normalize" && modelName == "' + inputs.normalizer + '" && specName == "' + inputs.normalizedSpecName + '"', 'attributes') }}
             selector: "${{ inputs.selector }}"
             window: "${{ inputs.window }}"
             severityPolicy: "${{ inputs.severityPolicy }}"
@@ -76,17 +89,15 @@ jobs:
         weight: 0
         allowFailure: false
       - name: deliver-transitions
-        description: Run zero iterations when no state changed or no sink is configured.
-        forEach:
-          item: transition
-          in: >-
-            ${{ inputs.outboxSink == "" ? [] : data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "evaluate-transitions"', 'attributes') }}
-        concurrency: 1
+        description: Resolve fresh transition artifacts after evaluation, then let the child expand the batch.
+        guard: >-
+          ${{ inputs.outboxSink == "" || size(data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "evaluate-transitions" && modelName == "' + inputs.transitionEvaluator + '" && specName == "' + inputs.transitionSpecName + '"', 'attributes')) == 0 }}
         task:
           type: workflow
-          workflowIdOrName: "@mgreten/observability-deliver-transition"
+          workflowIdOrName: "@mgreten/observability-deliver-transitions"
           inputs:
-            transition: "${{ self.transition }}"
+            transitions: >-
+              ${{ inputs.outboxSink == "" ? [] : data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "evaluate-transitions" && modelName == "' + inputs.transitionEvaluator + '" && specName == "' + inputs.transitionSpecName + '"', 'attributes') }}
             outboxSink: "${{ inputs.outboxSink }}"
             transportModel: "${{ inputs.transportModel }}"
             transportMethod: "${{ inputs.transportMethod }}"

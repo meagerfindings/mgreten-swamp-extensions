@@ -1,8 +1,10 @@
 # @mgreten/observability-workflows
 
 A standalone workflow bundle for bounded operational observation. It contains
-three generic DAGs: `@mgreten/observability-daily-digest`,
+four generic DAGs: `@mgreten/observability-daily-digest`,
 `@mgreten/observability-transition-watchdog`, and
+the batch and single-record delivery boundaries
+`@mgreten/observability-deliver-transitions` and
 `@mgreten/observability-deliver-transition`.
 They accept caller-selected model instances and policies rather than embedding a
 provider, deployment target, resource identifier, or transport.
@@ -14,12 +16,16 @@ condition is new, resolved, or unchanged. Consequently, unchanged states create
 no alert intent. A sink is optional: leave `outboxSink` empty to record and
 evaluate observations without dispatching notifications.
 
-## Installation
+## Local installation before publication
 
 ```sh
-swamp extension pull @mgreten/observability-workflows
+swamp extension source add /path/to/swamp-observability-workflows/workflows --only workflows
 swamp workflow validate @mgreten/observability-daily-digest --json
 ```
+
+After a registry release exists, consumers may instead pull the package by
+name. Install compatible `@mgreten/notification-outbox` and
+`@mgreten/notification-outbox-workflows` sources before enabling delivery.
 
 The delivery path interoperates with `@mgreten/notification-outbox` and
 `@mgreten/notification-outbox-workflows`, using their `enqueueNotification` and
@@ -41,10 +47,11 @@ swamp workflow run @mgreten/observability-daily-digest \
 ## Run a transition-only watchdog
 
 The transition evaluator must durably remember its last state per stable
-observation key. It emits an empty list for repeated state and one intent for a
-meaningful change. Set `outboxSink` to a configured notification-outbox
-instance and provide a transport model/method to deliver those intents, or
-leave it empty for read-only monitoring.
+observation key. It emits no transition resource for repeated state and one
+delivery-ready transition resource for a meaningful change. Set `outboxSink`
+to a configured notification-outbox instance and provide a transport
+model/method to deliver those intents, or leave it empty for read-only
+monitoring.
 
 ```sh
 swamp workflow run @mgreten/observability-transition-watchdog \
@@ -53,10 +60,20 @@ swamp workflow run @mgreten/observability-transition-watchdog \
 
 ## Safety and scope
 
-These workflows perform no remediation, acknowledgement, source mutation, or
-transport configuration. The read adapter is responsible for bounded reads and
-redaction; the normalizer applies the caller's normalization, severity, and
-freshness policy; the evaluator owns deduplication and transition state. The
-delivery workflow only enqueues and dispatches evaluator-provided identities.
+These workflows contain no built-in remediation, acknowledgement, source
+mutation, or transport configuration. Runtime-selected model methods remain
+trusted capabilities governed by Swamp grants; callers must select reviewed
+read-only adapters to preserve that boundary. The read adapter is responsible
+for bounded reads and redaction; the normalizer applies the caller's
+normalization, severity, and freshness policy; the evaluator owns deduplication
+and transition state. Exact model and spec filters prevent unrelated artifacts
+from crossing each handoff. The delivery workflow only enqueues and dispatches
+evaluator-provided identities. The watchdog resolves same-run transition data
+after evaluation and passes it to the batch child; the child performs the
+`forEach` expansion only after receiving that concrete array.
+
+If delivery fails after transition state is recorded, resume the failed Swamp
+workflow run or use the configured outbox failure-drain policy. A new watchdog
+run does not repeat an unchanged transition and is not a delivery retry.
 
 Licensed under the MIT License. See [LICENSE](LICENSE).

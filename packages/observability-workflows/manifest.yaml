@@ -6,6 +6,7 @@ repository: "https://github.com/meagerfindings/swamp-observability-workflows"
 workflows:
   - workflow-observability-daily-digest.yaml
   - workflow-observability-transition-watchdog.yaml
+  - workflow-cb71471b-8ecf-49f8-8e6d-b8156d986229.yaml
   - workflow-observability-deliver-transition.yaml
 additionalFiles:
   - README.md

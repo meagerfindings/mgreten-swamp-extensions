@@ -12,22 +12,38 @@ inputs:
       additionalProperties: false
       required: [workItem, event, urgency, era, payload]
       properties:
-        workItem: { type: string, minLength: 1 }
+        workItem: { type: string, minLength: 1, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]*$" }
         event: { type: string, enum: [approval-needed, failed, completed] }
         urgency: { type: string, enum: [low, default, high, urgent] }
         era: { type: string, minLength: 1 }
         payload: { type: object }
-    outboxSink: { type: string, minLength: 1 }
-    outboxModelType: { type: string, minLength: 1, default: "@mgreten/notification-outbox" }
-    dispatchWorkflow: { type: string, minLength: 1, default: "@mgreten/dispatch-enqueued-notifications" }
-    transportModel: { type: string, minLength: 1 }
-    transportMethod: { type: string, minLength: 1 }
+    outboxSink: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    outboxModelType:
+      type: string
+      pattern: '^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      default: "@mgreten/notification-outbox"
+    dispatchWorkflow:
+      type: string
+      pattern: '^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      default: "@mgreten/dispatch-enqueued-notifications"
+    transportModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    transportMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
     transportOptions: { type: object, default: {} }
   required: [transition, outboxSink, transportModel, transportMethod]
 jobs:
   - name: enqueue-and-dispatch
     description: The evaluator owns transition identity; this workflow never invents or repeats it.
     steps:
+      - name: validate-delivery-identifiers
+        description: Reject unsafe dynamic targets before enqueueing the transition.
+        task:
+          type: assert
+          expr: inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.outboxModelType.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.dispatchWorkflow.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+          message: Outbox, workflow, transport, and method identifiers must use the documented safe syntax.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
       - name: enqueue
         description: Persist a deduplicated transition for an enabled generic sink.
         task:
@@ -40,7 +56,7 @@ jobs:
             urgency: "${{ inputs.transition.urgency }}"
             era: "${{ inputs.transition.era }}"
             payload: "${{ inputs.transition.payload }}"
-        dependsOn: []
+        dependsOn: [{ step: validate-delivery-identifiers, condition: { type: succeeded } }]
         weight: 0
         allowFailure: false
       - name: dispatch
