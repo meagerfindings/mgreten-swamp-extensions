@@ -150,6 +150,13 @@ export const ProductLineage = z.strictObject({
             "source evidence freshness must be established no later than artifact production",
         });
       }
+      if (Date.parse(source.freshness.expiresAt) < producedAt) {
+        context.addIssue({
+          code: "custom",
+          path: [...path, "freshness", "expiresAt"],
+          message: "source evidence must not be expired at artifact production",
+        });
+      }
     });
 
     if (index === 0 && artifact.predecessor !== null) {

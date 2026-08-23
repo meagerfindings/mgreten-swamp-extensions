@@ -21,12 +21,12 @@ swamp model create @mgreten/product-lineage lineage-store
 
 ```sh
 swamp model method run lineage-store record \
-  --input recordId=checkout-improvement-v1 \
   --input lineage="$(cat lineage.json)"
 ```
 
-`recordId` is a local resource-name component (`A–Z`, `a–z`, `0–9`, `_`, `-`, up
-to 100 characters). The resulting resource is named `lineage-<recordId>`.
+The resource name is deterministically derived from the SHA-256 digest of the
+lineage ID/version identity tuple. Once that identity/version exists, replay or
+replacement is rejected before writing.
 
 ## Validation guarantees
 
@@ -35,9 +35,13 @@ to 100 characters). The resulting resource is named `lineage-<recordId>`.
 - immutable lineage ID/version, unique artifact IDs, SHA-256 digests, and an
   exact predecessor chain;
 - strictly increasing artifact timestamps and source evidence that predates each
-  artifact;
+  artifact and remains fresh when it is produced;
 - strict object schemas and canonical-input enforcement, so no whitespace or
   other normalizations silently alter producer evidence.
+
+The model verifies internal integrity, not truth or authority. Producer-supplied
+digests and provenance remain claims; the model does not sign, endorse, fetch,
+or infer them.
 
 ## Local verification
 

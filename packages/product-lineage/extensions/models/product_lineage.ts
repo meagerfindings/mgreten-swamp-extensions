@@ -11,10 +11,8 @@ export const PRODUCT_LINEAGE_MODEL_VERSION = "2026.08.23.1" as const;
 
 /** This model needs no instance-level configuration. */
 export const globalArgumentsSchema = z.strictObject({});
-const SafeId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/);
 /** Arguments for persisting one producer-supplied lineage document. */
 export const recordArgumentsSchema = z.strictObject({
-  recordId: SafeId,
   lineage: z.unknown(),
 });
 
@@ -38,6 +36,20 @@ function fail(message: string, details?: unknown): never {
   );
 }
 
+async function lineageInstanceName(
+  lineage: ProductLineageValue,
+): Promise<string> {
+  const identity = `${lineage.lineageId}\u0000${lineage.lineageVersion}`;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(identity),
+  );
+  return `lineage-${
+    Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0")).join("")
+  }`;
+}
+
 /** Validates an already-canonical lineage without deriving, filling, or reordering evidence. */
 export function validateLineageForPersistence(
   input: unknown,
@@ -54,11 +66,15 @@ export function validateLineageForPersistence(
 
 type WriteContext = {
   globalArgs: z.infer<typeof globalArgumentsSchema>;
+  readResource: (name: string) => Promise<unknown>;
   writeResource: (
     spec: string,
     name: string,
     data: ProductLineageValue,
   ) => Promise<unknown>;
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
 };
 
 /** Swamp model that validates and stores producer-owned lineage evidence only. */
@@ -85,10 +101,30 @@ export const model = {
         context: WriteContext,
       ): Promise<{ dataHandles: unknown[] }> => {
         const lineage = validateLineageForPersistence(args.lineage);
+        const instanceName = await lineageInstanceName(lineage);
+        context.logger.info(
+          "Recording product lineage {lineageId} version {lineageVersion}",
+          {
+            lineageId: lineage.lineageId,
+            lineageVersion: lineage.lineageVersion,
+          },
+        );
+        if (await context.readResource(instanceName) !== undefined) {
+          fail(
+            "Product lineage identity/version has already been recorded; replay or replacement is prohibited",
+          );
+        }
         const handle = await context.writeResource(
           "lineage",
-          `lineage-${args.recordId}`,
+          instanceName,
           lineage,
+        );
+        context.logger.info(
+          "Recorded product lineage {lineageId} version {lineageVersion}",
+          {
+            lineageId: lineage.lineageId,
+            lineageVersion: lineage.lineageVersion,
+          },
         );
         return { dataHandles: [handle] };
       },

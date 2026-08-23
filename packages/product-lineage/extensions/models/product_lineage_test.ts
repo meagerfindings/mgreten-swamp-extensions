@@ -24,22 +24,24 @@ Deno.test("record preserves a complete lineage exactly and has no producer metho
   const lineage = syntheticCompleteLineage();
   const writes: unknown[][] = [];
   const result = await model.methods.record.execute({
-    recordId: "synthetic-v1",
     lineage,
   }, {
     globalArgs: {},
+    readResource: () => Promise.resolve(undefined),
     writeResource: (...args: unknown[]) => {
       writes.push(args);
       return Promise.resolve({ name: args[1] });
     },
+    logger: { info: () => {} },
   });
+  assert(writes.length === 1);
+  assert(writes[0][0] === "lineage");
+  assert(String(writes[0][1]).match(/^lineage-[0-9a-f]{64}$/));
+  assert(JSON.stringify(writes[0][2]) === JSON.stringify(lineage));
   assert(
-    JSON.stringify(writes) ===
-      JSON.stringify([["lineage", "lineage-synthetic-v1", lineage]]),
-  );
-  assert(
-    JSON.stringify(result) ===
-      JSON.stringify({ dataHandles: [{ name: "lineage-synthetic-v1" }] }),
+    JSON.stringify(result) === JSON.stringify({
+      dataHandles: [{ name: writes[0][1] }],
+    }),
   );
   assert(
     JSON.stringify(Object.keys(model.methods)) === JSON.stringify(["record"]),
@@ -60,12 +62,14 @@ Deno.test("record preserves an explicit incomplete suffix", async () => {
     })),
   );
   let written: unknown;
-  await model.methods.record.execute({ recordId: "partial", lineage }, {
+  await model.methods.record.execute({ lineage }, {
     globalArgs: {},
+    readResource: () => Promise.resolve(undefined),
     writeResource: (_spec, _name, data) => {
       written = data;
       return Promise.resolve({});
     },
+    logger: { info: () => {} },
   });
   assert(JSON.stringify(written) === JSON.stringify(lineage));
 });
@@ -78,12 +82,14 @@ Deno.test("invalid and silently normalized inputs fail before persistence", asyn
   let writes = 0;
   await rejects(
     () =>
-      model.methods.record.execute({ recordId: "bad", lineage: bad }, {
+      model.methods.record.execute({ lineage: bad }, {
         globalArgs: {},
+        readResource: () => Promise.resolve(undefined),
         writeResource: () => {
           writes += 1;
           return Promise.resolve({});
         },
+        logger: { info: () => {} },
       }),
     "normalization is prohibited",
   );
@@ -96,9 +102,43 @@ Deno.test("invalid and silently normalized inputs fail before persistence", asyn
 
 Deno.test("record arguments reject unknown fields", () => {
   const result = model.methods.record.arguments.safeParse({
-    recordId: "synthetic",
     lineage: syntheticCompleteLineage(),
     bypass: true,
   });
   assert(!result.success, "unknown public arguments must fail closed");
+});
+
+Deno.test("record deterministically rejects replay or replacement of an identity/version", async () => {
+  const original = syntheticCompleteLineage();
+  let instanceName = "";
+  await model.methods.record.execute({ lineage: original }, {
+    globalArgs: {},
+    readResource: () => Promise.resolve(undefined),
+    writeResource: (_spec, name) => {
+      instanceName = name;
+      return Promise.resolve({});
+    },
+    logger: { info: () => {} },
+  });
+
+  const replacement = structuredClone(original) as {
+    stages: { artifact: { sha256: string } }[];
+  };
+  replacement.stages.at(-1)!.artifact.sha256 = "f".repeat(64);
+  let writes = 0;
+  await rejects(
+    () =>
+      model.methods.record.execute({ lineage: replacement }, {
+        globalArgs: {},
+        readResource: (name) =>
+          Promise.resolve(name === instanceName ? original : undefined),
+        writeResource: () => {
+          writes += 1;
+          return Promise.resolve({});
+        },
+        logger: { info: () => {} },
+      }),
+    "replay or replacement is prohibited",
+  );
+  assert(writes === 0);
 });

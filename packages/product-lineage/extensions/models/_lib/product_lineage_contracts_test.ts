@@ -114,8 +114,16 @@ Deno.test("rejects chronology and evidence timestamps that follow their artifact
   };
   futureEvidence.stages[2].artifact.sourceReferences[0].freshness.asOf =
     "2026-01-04T00:00:00Z";
+  const staleEvidence = structuredClone(syntheticCompleteLineage()) as {
+    stages: {
+      artifact: { sourceReferences: { freshness: { expiresAt: string } }[] };
+    }[];
+  };
+  staleEvidence.stages[2].artifact.sourceReferences[0].freshness.expiresAt =
+    "2026-01-02T12:00:00Z";
   assert(!evaluateProductLineage(sameTime).valid);
   assert(!evaluateProductLineage(futureEvidence).valid);
+  assert(!evaluateProductLineage(staleEvidence).valid);
 });
 
 Deno.test("returns stable, sorted diagnostics", () => {
