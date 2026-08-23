@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "2.0",
+  "planId": "onboarding-release-example-2026-08-23",
+  "releasedArtifact": {
+    "id": "onboarding-release",
+    "version": 7,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "workOrder": {
+    "id": "onboarding-improvement",
+    "version": 3,
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "releasedAt": "2026-08-23T12:00:00Z",
+  "declaredAt": "2026-08-23T11:45:00Z",
+  "expectedOutcome": {
+    "statement": "New users complete onboarding more often.",
+    "successCondition": "Completion rate is at least 0.50.",
+    "failureCondition": "Completion rate is below 0.40.",
+    "ambiguityCondition": "The rate is from 0.40 through 0.49, or the sample is insufficient."
+  },
+  "measurementSource": {
+    "schemaVersion": "1.0",
+    "sourceId": "onboarding-completion-query-v1",
+    "source": {
+      "system": "analytics",
+      "resourceType": "saved-query",
+      "resourceId": "onboarding-completion"
+    },
+    "provenance": {
+      "collector": "release-manager",
+      "collectorVersion": "1",
+      "method": "declared",
+      "collectedAt": "2026-08-23T11:30:00Z"
+    },
+    "observedAt": "2026-08-23T11:00:00Z",
+    "freshness": {
+      "asOf": "2026-08-23T11:30:00Z",
+      "expiresAt": "2026-09-30T00:00:00Z"
+    },
+    "sensitivity": "internal"
+  },
+  "observationWindow": {
+    "startsAt": "2026-08-24T00:00:00Z",
+    "endsAt": "2026-08-31T00:00:00Z"
+  },
+  "nextDecisions": {
+    "success": {
+      "decision": "Recommend retaining the release.",
+      "rationale": "The target was met."
+    },
+    "failure": {
+      "decision": "Recommend a human rollback review.",
+      "rationale": "The failure bound was met."
+    },
+    "ambiguity": {
+      "decision": "Recommend another bounded observation.",
+      "rationale": "The evidence cannot classify the outcome."
+    }
+  },
+  "authority": {
+    "disposition": "recommendation-only",
+    "humanDecisionRequired": true,
+    "mayExecute": false,
+    "productionEffects": "none"
+  }
+}
