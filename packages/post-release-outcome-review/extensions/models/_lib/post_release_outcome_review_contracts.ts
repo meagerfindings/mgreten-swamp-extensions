@@ -12,8 +12,8 @@ export const RECOMMENDATIONS = [
   "stop",
 ] as const;
 
-const Id = z.string().trim().min(1);
-const Text = z.string().trim().min(1);
+const Id = z.string().trim().min(1).max(200);
+const Text = z.string().trim().min(1).max(4000);
 const Timestamp = z.iso.datetime({ offset: true });
 const Hash = z.string().regex(/^[0-9a-f]{64}$/);
 const ExactReference = z.strictObject({
@@ -72,19 +72,19 @@ export const PostReleaseOutcomeReview = z.strictObject({
     policyId: Id,
     version: z.number().int().positive(),
     sha256: Hash,
-    metrics: z.array(MetricPolicy).min(1),
+    metrics: z.array(MetricPolicy).min(1).max(100),
     recommendationByOutcome: z.strictObject({
       success: Recommendation,
       failure: Recommendation,
       ambiguity: Recommendation,
     }),
   }),
-  observedMetrics: z.array(ObservedMetric).min(1),
-  comparisons: z.array(Comparison).min(1),
+  observedMetrics: z.array(ObservedMetric).min(1).max(100),
+  comparisons: z.array(Comparison).min(1).max(100),
   aggregateOutcome: Outcome,
   recommendation: Recommendation,
   rationale: Text,
-  evidence: z.array(Id).min(1),
+  evidence: z.array(Id).min(1).max(100),
   authority: z.strictObject({
     disposition: z.literal("recommendation-only"),
     humanDecisionRequired: z.literal(true),

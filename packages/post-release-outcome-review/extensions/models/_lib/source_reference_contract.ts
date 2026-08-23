@@ -4,12 +4,14 @@ import { z } from "npm:zod@4";
 export const SIGNAL_SCHEMA_VERSION = "1.0" as const;
 
 const timestampSchema = z.iso.datetime({ offset: true });
-const identifierSchema = z.string().trim().min(1);
+const identifierSchema = z.string().trim().min(1).max(200);
+const hashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 
 /** Evidence provenance, freshness, and sensitivity metadata. */
 export const sourceReferenceSchema = z.strictObject({
   schemaVersion: z.literal(SIGNAL_SCHEMA_VERSION),
   sourceId: identifierSchema,
+  sha256: hashSchema,
   source: z.strictObject({
     system: identifierSchema,
     accountId: identifierSchema.optional(),
@@ -53,6 +55,13 @@ export const sourceReferenceSchema = z.strictObject({
       code: "custom",
       path: ["provenance", "collectedAt"],
       message: "collectedAt must be at or after observedAt",
+    });
+  }
+  if (collectedAt < asOf) {
+    context.addIssue({
+      code: "custom",
+      path: ["provenance", "collectedAt"],
+      message: "collectedAt must be at or after asOf",
     });
   }
 });

@@ -37,6 +37,9 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: {
+          logger?: {
+            info(message: string, properties?: Record<string, unknown>): void;
+          };
           writeResource(
             spec: string,
             name: string,
@@ -44,6 +47,9 @@ export const model = {
           ): Promise<unknown>;
         },
       ) => {
+        context.logger?.info("Validating post-release outcome review", {
+          recordId: args.recordId,
+        });
         const result = validatePostReleaseOutcomeReview(args.review);
         if (!result.valid) {
           throw new TypeError(
@@ -52,11 +58,17 @@ export const model = {
             }`,
           );
         }
+        if (args.recordId !== result.value.reviewId) {
+          throw new TypeError("recordId must exactly match review.reviewId");
+        }
         const handle = await context.writeResource(
           "review",
           `review-${args.recordId}`,
           result.value,
         );
+        context.logger?.info("Recorded post-release outcome review", {
+          recordId: args.recordId,
+        });
         return { dataHandles: [handle] };
       },
     },

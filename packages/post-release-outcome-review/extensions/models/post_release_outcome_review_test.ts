@@ -12,6 +12,7 @@ const hash = (char: string) => char.repeat(64);
 const evidence = (id: string): SourceReference => ({
   schemaVersion: "1.0",
   sourceId: id,
+  sha256: hash("e"),
   source: { system: "warehouse", resourceType: "query", resourceId: id },
   provenance: {
     collector: "synthetic-test",
@@ -121,6 +122,13 @@ Deno.test("fails closed on early review, binding, freshness, units, denominator,
     },
     {
       ...review,
+      observedMetrics: [{
+        ...review.observedMetrics[0],
+        evidence: { ...review.observedMetrics[0].evidence, sha256: "bad" },
+      }],
+    },
+    {
+      ...review,
       observedMetrics: [{ ...review.observedMetrics[0], denominator: 0 }],
     },
     {
@@ -152,6 +160,7 @@ Deno.test("fails closed on early review, binding, freshness, units, denominator,
       }],
     },
     { ...review, aggregateOutcome: "success", recommendation: "keep" },
+    { ...review, unexpected: "tampered" },
   ];
   cases.forEach((value) =>
     assert(!PostReleaseOutcomeReview.safeParse(value).success)
@@ -160,22 +169,56 @@ Deno.test("fails closed on early review, binding, freshness, units, denominator,
 
 Deno.test("record is persistence-only", async () => {
   const writes: unknown[][] = [];
+  const logs: unknown[][] = [];
   const result = await model.methods.record.execute({
-    recordId: "synthetic-1",
+    recordId: "review-1",
     review,
   }, {
+    logger: { info: (...args: unknown[]) => logs.push(args) },
     writeResource: (...args: unknown[]) => {
       writes.push(args);
       return Promise.resolve({ name: args[1] });
     },
   });
   assert(writes.length === 1);
+  assert(logs.length === 2);
   assert(
     JSON.stringify(result) ===
-      JSON.stringify({ dataHandles: [{ name: "review-synthetic-1" }] }),
+      JSON.stringify({ dataHandles: [{ name: "review-review-1" }] }),
   );
   assert(
     JSON.stringify(Object.keys(model.methods)) === JSON.stringify(["record"]),
   );
   assert(!("files" in model));
+});
+
+Deno.test("record rejects identity substitution and replays deterministically", async () => {
+  const names: unknown[] = [];
+  const context = {
+    writeResource: (_spec: string, name: string) => {
+      names.push(name);
+      return Promise.resolve({ name });
+    },
+  };
+  for (let replay = 0; replay < 2; replay++) {
+    await model.methods.record.execute(
+      { recordId: "review-1", review },
+      context,
+    );
+  }
+  assert(
+    JSON.stringify(names) ===
+      JSON.stringify(["review-review-1", "review-review-1"]),
+  );
+
+  let rejected = false;
+  try {
+    await model.methods.record.execute(
+      { recordId: "other-review", review },
+      context,
+    );
+  } catch (error) {
+    rejected = error instanceof TypeError;
+  }
+  assert(rejected, "recordId substitution must fail closed");
 });

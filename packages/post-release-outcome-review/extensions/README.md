@@ -35,6 +35,8 @@ swamp model method run release-review record \
 
 The schema version is `2.0`. A review binds immutable references for the
 release, work order, and measurement plan; includes one observation per policy
-metric; and supplies fresh post-window evidence. It rejects mismatched units,
-overlapping thresholds, invented comparisons, or an early review. See the
-synthetic test file for a complete valid fixture and negative cases.
+metric; and supplies digest-bound, fresh post-window evidence. `recordId` must
+exactly match the review's `reviewId`, so identical replays target the same
+resource identity. It rejects mismatched units, overlapping thresholds, invented
+comparisons, or an early review. See the synthetic test file for a complete
+valid fixture and negative cases.
