@@ -5,11 +5,14 @@ import {
 } from "./_lib/read_only_trial_contracts.ts";
 
 const argumentsSchema = z.strictObject({
-  evaluationId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/),
+  evaluationId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/),
   input: z.unknown(),
 });
 
 type Context = {
+  logger: {
+    info: (message: string, properties: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -39,15 +42,26 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: Context,
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "evaluation",
-            `evaluation-${args.evaluationId}`,
-            evaluateReadOnlyTrial(args.input),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger.info("Evaluating read-only trial {evaluationId}", {
+          evaluationId: args.evaluationId,
+        });
+        const evaluation = evaluateReadOnlyTrial(args.input);
+        if (evaluation.trialId !== args.evaluationId) {
+          throw new Error(
+            "evaluationId must match input.trialId to prevent cross-trial replay",
+          );
+        }
+        const handle = await context.writeResource(
+          "evaluation",
+          `evaluation-${args.evaluationId}`,
+          evaluation,
+        );
+        context.logger.info("Evaluated read-only trial {evaluationId}", {
+          evaluationId: args.evaluationId,
+        });
+        return { dataHandles: [handle] };
+      },
     },
   },
 };

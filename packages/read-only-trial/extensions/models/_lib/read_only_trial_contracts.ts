@@ -2,7 +2,7 @@ import { z } from "npm:zod@4";
 
 export const READ_ONLY_TRIAL_SCHEMA_VERSION = "1.0" as const;
 
-const Id = z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/);
+const Id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/);
 const Timestamp = z.iso.datetime({ offset: true });
 const EvidenceRefs = z.array(Id).min(1).max(100);
 const Source = Id;
@@ -168,11 +168,11 @@ export const readOnlyTrialInputSchema = z.strictObject({
   input.sourceReadiness.forEach((source, index) => {
     if (
       Date.parse(source.checkedAt) > startsAt ||
-      Date.parse(source.expiresAt) <= startsAt
+      Date.parse(source.expiresAt) < endsAt
     ) {
       issue(
         ["sourceReadiness", index],
-        "source readiness must be checked and fresh at trial start",
+        "source readiness must be checked by trial start and remain fresh through trial end",
       );
     }
   });

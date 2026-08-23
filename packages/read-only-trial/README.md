@@ -24,6 +24,9 @@ compatibility alias.
 
 The model validates evidence and writes one `evaluation` resource. It neither
 retrieves evidence nor performs a side effect beyond that resource persistence.
+`evaluationId` must equal the supplied `trialId`, preventing evidence from one
+trial from being replayed into another trial's resource identity. Source
+readiness must remain fresh through the complete declared duration.
 Licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Minimal input shape
