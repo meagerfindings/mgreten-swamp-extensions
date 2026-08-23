@@ -96,8 +96,22 @@ type Context = {
     name: string,
     data: Record<string, unknown>,
   ) => Promise<unknown>;
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
   now?: () => Date;
 };
+
+function compareEvidence(
+  left: z.infer<typeof crossSourceEvidenceItemSchema>,
+  right: z.infer<typeof crossSourceEvidenceItemSchema>,
+): number {
+  return left.evidenceId < right.evidenceId
+    ? -1
+    : left.evidenceId > right.evidenceId
+    ? 1
+    : 0;
+}
 
 function fail(message: string, details?: unknown): never {
   throw new TypeError(
@@ -142,7 +156,7 @@ export async function prepareRequest(
   const settings = globalArgumentsSchema.parse(globals);
   const evidence = z.array(crossSourceEvidenceItemSchema).min(2).max(100).parse(
     raw,
-  );
+  ).sort(compareEvidence);
   const evaluatedAt = now.getTime();
   evidence.forEach((item, index) => {
     if (Date.parse(item.sourceReference.freshness.asOf) > evaluatedAt) {
@@ -219,9 +233,7 @@ export async function validateAgentResult(
   if (
     JSON.stringify(result.value.evidence) !==
       JSON.stringify(
-        [...request.evidence].sort((a, b) =>
-          a.evidenceId.localeCompare(b.evidenceId)
-        ),
+        [...request.evidence].sort(compareEvidence),
       )
   ) fail("Output must preserve every supplied evidence source exactly");
   return validatedClusterSchema.parse({
@@ -276,13 +288,17 @@ export const model = {
         "Prepare deterministic cross-domain evidence without provider access.",
       arguments: prepareArgs,
       execute: async (args: z.infer<typeof prepareArgs>, context: Context) => {
+        context.logger.info(
+          "Preparing cross-source evidence request {requestId}",
+          { requestId: args.requestId },
+        );
         const prepared = await prepareRequest(
           args.requestId,
           args.evidence,
           context.globalArgs,
           context.now?.(),
         );
-        return {
+        const result = {
           dataHandles: [
             await context.writeResource(
               "request",
@@ -291,12 +307,21 @@ export const model = {
             ),
           ],
         };
+        context.logger.info(
+          "Prepared cross-source evidence request {requestId}",
+          { requestId: args.requestId },
+        );
+        return result;
       },
     },
     validate: {
       description: "Validate output and readonly sandbox invocation binding.",
       arguments: validateArgs,
       execute: async (args: z.infer<typeof validateArgs>, context: Context) => {
+        context.logger.info(
+          "Validating cross-source evidence request {requestId}",
+          { requestId: args.requestId },
+        );
         const value = await validateAgentResult(
           args.requestId,
           args.request,
@@ -305,7 +330,7 @@ export const model = {
           args.invocationClaim,
           context.now?.(),
         );
-        return {
+        const result = {
           dataHandles: [
             await context.writeResource(
               "validatedCluster",
@@ -314,6 +339,11 @@ export const model = {
             ),
           ],
         };
+        context.logger.info(
+          "Validated cross-source evidence request {requestId}",
+          { requestId: args.requestId },
+        );
+        return result;
       },
     },
   },

@@ -5,7 +5,7 @@ import { z } from "npm:zod@4";
 export const SOURCE_REFERENCE_SCHEMA_VERSION = "1.0" as const;
 
 const timestampSchema = z.iso.datetime({ offset: true });
-const identifierSchema = z.string().trim().min(1);
+const identifierSchema = z.string().trim().min(1).max(200);
 
 /** A provenance envelope that identifies, dates, and classifies one source. */
 export const sourceReferenceSchema = z.strictObject({
@@ -41,11 +41,11 @@ export const sourceReferenceSchema = z.strictObject({
       message: "asOf must be at or after observedAt",
     });
   }
-  if (asOf > expiresAt) {
+  if (asOf >= expiresAt) {
     context.addIssue({
       code: "custom",
       path: ["freshness", "expiresAt"],
-      message: "expiresAt must be at or after asOf",
+      message: "expiresAt must be after asOf",
     });
   }
   if (collectedAt < observedAt) {

@@ -103,6 +103,17 @@ Deno.test("fixtures are capped and sanitized", () => {
 Deno.test("prepare is deterministic and rejects a single source domain", async () => {
   assert(buildPrompt(evidence) === buildPrompt(evidence));
   assert(buildPrompt(evidence).includes("untrusted quoted data"));
+  const forward = await prepareRequest("review-1", evidence, globals, now);
+  const reversed = await prepareRequest(
+    "review-1",
+    [...evidence].reverse(),
+    globals,
+    now,
+  );
+  assert(forward.promptHash === reversed.promptHash);
+  assert(
+    JSON.stringify(forward.evidence) === JSON.stringify(reversed.evidence),
+  );
   await rejects(
     () =>
       prepareRequest(
@@ -271,4 +282,171 @@ Deno.test("arguments are strict and freshness is enforced at preparation and val
       ),
     "stale at validation",
   );
+});
+
+Deno.test("bounded strict contracts reject malformed and oversized input", async () => {
+  const malformed = { ...evidence[0], extra: true };
+  await rejects(
+    () => prepareRequest("review-1", [malformed, evidence[1]], globals, now),
+    "unrecognized",
+  );
+  const oversized = {
+    ...evidence[0],
+    evidenceId: "metric-oversized",
+    sourceReference: source("demo:metric:oversized"),
+    observation: "x".repeat(4_001),
+  };
+  await rejects(
+    () => prepareRequest("review-1", [oversized, evidence[1]], globals, now),
+    "Too big",
+  );
+  assert(
+    !evaluateCrossSourceEvidence({
+      ...output,
+      relationships: Array(201).fill(output.relationships[0]),
+    }).success,
+  );
+});
+
+Deno.test("tampered binding fails while exact replay is deterministic and side-effect free", async () => {
+  const request = await prepareRequest("review-1", evidence, globals, now);
+  const audit = {
+    invocationId: "review-1",
+    provider: "amp",
+    model: "fixture",
+    promptHash: request.promptHash,
+    cwd: request.agentCwd,
+    success: true,
+  };
+  const claim = invocationClaimAuditSchema.parse({
+    operation: "invokeAndParse",
+    invocationId: "review-1",
+    provider: "amp",
+    model: "fixture",
+    promptHash: request.promptHash,
+    cwd: request.agentCwd,
+    toolProfile: "readonly",
+    sandbox: {
+      mode: "auto",
+      provider: "amp",
+      credentialAccess: "isolated",
+      network: "allow",
+      profilePath: "",
+      required: true,
+    },
+  });
+  const first = await validateAgentResult(
+    "review-1",
+    request,
+    output,
+    audit,
+    claim,
+    now,
+  );
+  const replay = await validateAgentResult(
+    "review-1",
+    request,
+    output,
+    audit,
+    claim,
+    now,
+  );
+  assert(JSON.stringify(first) === JSON.stringify(replay));
+  assert(first.authority.sideEffects === "none");
+  await rejects(
+    () =>
+      validateAgentResult(
+        "review-1",
+        {
+          ...request,
+          createdAt: "2026-08-23T11:59:59Z",
+          prompt: `${request.prompt}tampered`,
+        },
+        output,
+        audit,
+        claim,
+        now,
+      ),
+    "binding is invalid",
+  );
+  await rejects(
+    () =>
+      validateAgentResult(
+        "review-1",
+        request,
+        output,
+        { ...audit, promptHash: "0".repeat(64) },
+        claim,
+        now,
+      ),
+    "binding is invalid",
+  );
+});
+
+Deno.test("model methods write schema-conformant resources and log boundaries", async () => {
+  const writes: Array<
+    { spec: string; name: string; data: Record<string, unknown> }
+  > = [];
+  const logs: string[] = [];
+  const context = {
+    globalArgs: globals,
+    now: () => now,
+    logger: { info: (message: string) => logs.push(message) },
+    writeResource: (
+      spec: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
+      writes.push({ spec, name, data });
+      return Promise.resolve(`${spec}:${name}`);
+    },
+  };
+  await model.methods.prepare.execute(
+    { requestId: "review-1", evidence },
+    context,
+  );
+  assert(writes[0].spec === "request");
+  assert(writes[0].name === "request-review-1");
+  assert(model.resources.request.schema.safeParse(writes[0].data).success);
+  assert(logs.length === 2);
+
+  const request = writes[0].data;
+  const promptHash = String(request.promptHash);
+  const cwd = String(request.agentCwd);
+  await model.methods.validate.execute({
+    requestId: "review-1",
+    request: model.resources.request.schema.parse(request),
+    agentOutput: output,
+    invocation: {
+      invocationId: "review-1",
+      provider: "amp",
+      model: "fixture",
+      promptHash,
+      cwd,
+      success: true,
+    },
+    invocationClaim: {
+      operation: "invokeAndParse",
+      invocationId: "review-1",
+      provider: "amp",
+      model: "fixture",
+      promptHash,
+      cwd,
+      toolProfile: "readonly",
+      sandbox: {
+        mode: "auto",
+        provider: "amp",
+        credentialAccess: "isolated",
+        network: "allow",
+        profilePath: "",
+        required: true,
+      },
+    },
+  }, context);
+  assert(writes[1].spec === "validatedCluster");
+  assert(writes[1].name === "cluster-review-1");
+  assert(
+    model.resources.validatedCluster.schema.safeParse(writes[1].data).success,
+  );
+  assert(Number(logs.length) === 4);
 });

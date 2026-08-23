@@ -64,5 +64,4 @@ swamp extension quality manifest.yaml --json
 swamp extension push manifest.yaml --dry-run --json
 ```
 
-Licensed under the MIT License. See [LICENSE](LICENSE). No source repository,
-registry, or remote is modified by this handoff.
+Licensed under the MIT License. See [LICENSE](LICENSE).

@@ -10,6 +10,6 @@
   },
   "tasks": {
     "check": "deno check extensions/models/cross_source_evidence.ts extensions/models/_lib/cross_source_evidence_contracts.ts extensions/models/_lib/source_reference_contracts.ts",
-    "test": "deno test --allow-read extensions/models tests"
+    "test": "deno test --allow-read extensions/models"
   }
 }
