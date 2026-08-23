@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@mgreten/observation-record"
+version: 2026.08.23.1
+description: "Retain a single source-evidence observation as a recommendation-only, non-authorizing record."
+repository: "https://github.com/meagerfindings/swamp-observation-record"
+models:
+  - observation_record.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - COMPATIBILITY.md
+  - TYPE_DECISION.md
+dependencies: []
