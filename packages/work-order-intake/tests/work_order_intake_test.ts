@@ -1,6 +1,7 @@
 import {
   evaluateWorkOrderIntake,
   model,
+  proposalSha256,
   WORK_ORDER_INTAKE_ACTION,
   WORK_ORDER_LIMITS,
 } from "../extensions/models/work_order_intake.ts";
@@ -21,7 +22,7 @@ const subject = {
   sha256: "a".repeat(64),
 };
 function proposal() {
-  return {
+  const value = {
     proposalId: "proposal-1",
     subject: structuredClone(subject),
     title: "Constrain a synthetic change",
@@ -53,6 +54,10 @@ function proposal() {
       expectedExitCode: 0,
     }],
   };
+  value.subject.sha256 = proposalSha256(value);
+  subject.sha256 = value.subject.sha256;
+  value.approval.subject = structuredClone(value.subject);
+  return value;
 }
 
 Deno.test("synthetic proposal schema accepts only a bounded, subject-bound decision", () => {
@@ -63,6 +68,7 @@ Deno.test("synthetic proposal schema accepts only a bounded, subject-bound decis
 });
 
 Deno.test("intake is deterministic and idempotently persists the same synthetic result", async () => {
+  let stored: Record<string, unknown> | null = null;
   const run = async () => {
     const writes: Array<
       { spec: string; name: string; data: Record<string, unknown> }
@@ -71,8 +77,10 @@ Deno.test("intake is deterministic and idempotently persists the same synthetic 
       intakeId: "synthetic-intake",
       proposal: proposal(),
     }, {
+      readResource: () => Promise.resolve(stored),
       writeResource: (spec, name, data) => {
         writes.push({ spec, name, data });
+        stored = data;
         return Promise.resolve({ name });
       },
     });
@@ -80,8 +88,25 @@ Deno.test("intake is deterministic and idempotently persists the same synthetic 
   };
   const first = await run();
   const second = await run();
-  equal(first, second);
   equal(first.writes[0].name, "intake-synthetic-intake");
+  equal(second.writes, []);
+  equal(second.result.dataHandles, []);
+
+  let collisionRejected = false;
+  const changed = proposal();
+  changed.title = "Different content for the same intake ID";
+  try {
+    await model.methods.intake.execute({
+      intakeId: "synthetic-intake",
+      proposal: changed,
+    }, {
+      readResource: () => Promise.resolve(stored),
+      writeResource: () => Promise.resolve({}),
+    });
+  } catch (error) {
+    collisionRejected = String(error).includes("different content");
+  }
+  assert(collisionRejected);
 });
 
 Deno.test("unapproved, mismatched, expired, oversized, and unsafe proposals fail closed", () => {
@@ -140,19 +165,19 @@ Deno.test("the extension retains no authority and cannot perform external action
 Deno.test("assertAccepted trusts only the persisted stable intake identity", async () => {
   const accepted = evaluateWorkOrderIntake(proposal());
   const context = {
-    readResource: async (name: string) =>
-      name === "intake-synthetic-intake" ? accepted : null,
+    readResource: (name: string) =>
+      Promise.resolve(name === "intake-synthetic-intake" ? accepted : null),
     writeResource: () => Promise.resolve({}),
   };
   await model.methods.assertAccepted.execute(
-    { intakeId: "synthetic-intake" },
+    { intakeId: "synthetic-intake", subject },
     context,
   );
 
   let rejected = false;
   try {
     await model.methods.assertAccepted.execute(
-      { intakeId: "missing" },
+      { intakeId: "missing", subject },
       context,
     );
   } catch (error) {
@@ -162,10 +187,32 @@ Deno.test("assertAccepted trusts only the persisted stable intake identity", asy
   assert(
     !model.methods.assertAccepted.arguments.safeParse({
       intakeId: "missing",
+      subject,
       result: accepted,
     }).success,
     "fabricated caller results must be rejected",
   );
+});
+
+Deno.test("tampered proposal content and confused-deputy assertions fail closed", async () => {
+  const tampered = proposal();
+  tampered.title = "Tampered after approval";
+  assert(!evaluateWorkOrderIntake(tampered).accepted);
+
+  const accepted = evaluateWorkOrderIntake(proposal());
+  let rejected = false;
+  try {
+    await model.methods.assertAccepted.execute({
+      intakeId: "synthetic-intake",
+      subject: { ...subject, sha256: "b".repeat(64) },
+    }, {
+      readResource: () => Promise.resolve(accepted),
+      writeResource: () => Promise.resolve({}),
+    });
+  } catch (error) {
+    rejected = String(error).includes("expected subject");
+  }
+  assert(rejected);
 });
 
 Deno.test("proposal text and collection inputs have practical hard bounds", () => {

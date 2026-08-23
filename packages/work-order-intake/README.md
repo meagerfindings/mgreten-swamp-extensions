@@ -22,7 +22,10 @@ implementation requires a separate `plan-approval` gate.
   checks.
 
 Valid proposals become an `acceptedProposal`; invalid proposals fail closed as
-`invalid`, `unapproved`, or `split_required`, with stable diagnostics.
+`invalid`, `unapproved`, or `split_required`, with stable diagnostics. The
+subject SHA-256 is computed over the canonical proposal content (excluding the
+decision and evaluation timestamp), so post-approval content changes fail
+closed. The accepted result retains the complete decision provenance.
 
 ```ts
 const proposal = {
@@ -45,7 +48,8 @@ const proposal = {
 
 - `intake`: validate and persist the deterministic disposition.
 - `assertAccepted`: accept only `intakeId`, read `intake-<intakeId>` through
-  Swamp resource storage, and stop a calling workflow when that persisted
+  Swamp resource storage, require the caller's expected subject to exactly match
+  the accepted subject, and stop a calling workflow when that persisted
   disposition was not accepted. Caller-supplied result objects are not trusted.
   It does not perform or authorize implementation.
 

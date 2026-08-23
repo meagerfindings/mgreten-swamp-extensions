@@ -1,4 +1,5 @@
 import { z } from "npm:zod@4";
+import { createHash } from "node:crypto";
 
 /** Published CalVer for the decision-only intake model. */
 export const WORK_ORDER_INTAKE_MODEL_VERSION = "2026.08.23.1" as const;
@@ -68,19 +69,21 @@ const Check = z.strictObject({
   command: Text,
   expectedExitCode: z.literal(0),
 });
-const Target = z.string().trim().min(1).superRefine((value, context) => {
-  if (
-    value.startsWith("/") || value.includes("\\") || value.includes("\0") ||
-    value.split("/").some((part) => part === "" || part === "..") ||
-    /^[A-Za-z]:/.test(value)
-  ) {
-    context.addIssue({
-      code: "custom",
-      message:
-        "target must be a canonical relative path and may not traverse parents",
-    });
-  }
-});
+const Target = z.string().trim().min(1).max(500).superRefine(
+  (value, context) => {
+    if (
+      value.startsWith("/") || value.includes("\\") || value.includes("\0") ||
+      value.split("/").some((part) => part === "" || part === "..") ||
+      /^[A-Za-z]:/.test(value)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "target must be a canonical relative path and may not traverse parents",
+      });
+    }
+  },
+);
 
 function unique(
   values: string[],
@@ -92,12 +95,42 @@ function unique(
   values.forEach((value, index) => {
     const first = seen.get(value);
     if (first === undefined) seen.set(value, index);
-    else {context.addIssue({
+    else {
+      context.addIssue({
         code: "custom",
         path: [path, index],
         message: `duplicate ${label} (first at index ${first})`,
-      });}
+      });
+    }
   });
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** Hash of all proposal content authorized by the decision subject. */
+export function proposalSha256(
+  proposal: { subject: z.infer<typeof Subject>; [key: string]: unknown },
+): string {
+  const {
+    approval: _approval,
+    evaluatedAt: _evaluatedAt,
+    subject: completeSubject,
+    ...content
+  } = proposal;
+  const { sha256: _sha256, ...subject } = completeSubject;
+  return createHash("sha256").update(canonicalJson({ ...content, subject }))
+    .digest("hex");
 }
 
 /** Strict input contract for one bounded work proposal. */
@@ -129,6 +162,22 @@ export const Proposal = z.strictObject({
     "deterministicChecks",
     "checkId",
   );
+  if (proposal.subject.id !== proposal.proposalId) {
+    context.addIssue({
+      code: "custom",
+      path: ["subject", "id"],
+      message: "subject id must equal proposalId",
+    });
+  }
+  const { approval: _approval, evaluatedAt: _evaluatedAt, ...authorized } =
+    proposal;
+  if (proposal.subject.sha256 !== proposalSha256(authorized)) {
+    context.addIssue({
+      code: "custom",
+      path: ["subject", "sha256"],
+      message: "subject sha256 must bind the complete proposal content",
+    });
+  }
 });
 
 const Authority = z.strictObject({
@@ -149,6 +198,8 @@ const AcceptedProposal = z.strictObject({
   context: Text,
   subject: Subject,
   decisionId: Id,
+  approval: Decision,
+  evaluatedAt: Timestamp,
   acceptanceCriteria: z.array(Criterion).min(1),
   allowedTargets: z.array(Target).min(1).max(WORK_ORDER_LIMITS.targets),
   changeBudget: z.strictObject({
@@ -337,6 +388,8 @@ export function evaluateWorkOrderIntake(input: unknown): WorkOrderIntake {
       context: proposal.context,
       subject: proposal.subject,
       decisionId: proposal.approval.decisionId,
+      approval: proposal.approval,
+      evaluatedAt: proposal.evaluatedAt,
       acceptanceCriteria: proposal.acceptanceCriteria,
       allowedTargets: proposal.allowedTargets,
       changeBudget: proposal.changeBudget,
@@ -359,6 +412,7 @@ export const intakeArgumentsSchema = z.strictObject({
 /** Arguments for the decision-only workflow assertion. */
 export const assertAcceptedArgumentsSchema = z.strictObject({
   intakeId: SafeId,
+  subject: Subject,
 });
 type WriteContext = {
   readResource?(name: string): Promise<Record<string, unknown> | null>;
@@ -367,6 +421,9 @@ type WriteContext = {
     name: string,
     data: Record<string, unknown>,
   ) => Promise<unknown>;
+  logger?: {
+    info(message: string, properties?: Record<string, unknown>): void;
+  };
 };
 
 /** Swamp model exposing only persistence and a no-authority assertion. */
@@ -391,15 +448,34 @@ export const model = {
       execute: async (
         args: z.infer<typeof intakeArgumentsSchema>,
         context: WriteContext,
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "result",
-            `intake-${args.intakeId}`,
-            WorkOrderIntakeResult.parse(evaluateWorkOrderIntake(args.proposal)),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger?.info("Evaluating work-order intake {intakeId}", {
+          intakeId: args.intakeId,
+        });
+        const name = `intake-${args.intakeId}`;
+        const result = WorkOrderIntakeResult.parse(
+          evaluateWorkOrderIntake(args.proposal),
+        );
+        const existing = context.readResource
+          ? WorkOrderIntakeResult.safeParse(await context.readResource(name))
+          : undefined;
+        if (existing?.success) {
+          if (canonicalJson(existing.data) !== canonicalJson(result)) {
+            throw new TypeError(
+              `Work-order intake ${args.intakeId} already exists with different content`,
+            );
+          }
+          context.logger?.info("Reused work-order intake {intakeId}", {
+            intakeId: args.intakeId,
+          });
+          return { dataHandles: [] };
+        }
+        const handle = await context.writeResource("result", name, result);
+        context.logger?.info("Persisted work-order intake {intakeId}", {
+          intakeId: args.intakeId,
+        });
+        return { dataHandles: [handle] };
+      },
     },
     assertAccepted: {
       description:
@@ -409,6 +485,9 @@ export const model = {
         args: z.infer<typeof assertAcceptedArgumentsSchema>,
         context: WriteContext,
       ) => {
+        context.logger?.info("Asserting work-order intake {intakeId}", {
+          intakeId: args.intakeId,
+        });
         if (!context.readResource) {
           throw new TypeError("Resource reading is unavailable");
         }
@@ -427,6 +506,17 @@ export const model = {
             }`,
           );
         }
+        if (
+          canonicalJson(result.data.acceptedProposal.subject) !==
+            canonicalJson(args.subject)
+        ) {
+          throw new TypeError(
+            `Work-order intake ${args.intakeId} does not match the expected subject`,
+          );
+        }
+        context.logger?.info("Confirmed work-order intake {intakeId}", {
+          intakeId: args.intakeId,
+        });
         return { dataHandles: [] };
       },
     },
