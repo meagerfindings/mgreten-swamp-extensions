@@ -37,21 +37,33 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: {
+          logger: {
+            info(message: string, properties: Record<string, unknown>): void;
+          };
           writeResource(
             spec: string,
             name: string,
             data: Record<string, unknown>,
           ): Promise<unknown>;
         },
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "evaluation",
-            `response-quality-${args.recordId}`,
-            evaluateResponseQuality(args.input),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger.info("Evaluating response quality for {recordId}", {
+          recordId: args.recordId,
+        });
+        const evaluation = await evaluateResponseQuality(args.input);
+        const handle = await context.writeResource(
+          "evaluation",
+          `response-quality-${args.recordId}-${evaluation.evaluationSha256}`,
+          evaluation,
+        );
+        context.logger.info(
+          "Persisted response quality evaluation for {recordId}",
+          {
+            recordId: args.recordId,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
     },
   },
 };

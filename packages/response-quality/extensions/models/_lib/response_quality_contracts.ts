@@ -136,6 +136,9 @@ export const responseQualityInputSchema = z.strictObject({
     const scale = input.policy.scales.find((x) =>
       x.dimension === score.dimension
     );
+    if (new Set(score.evidenceIds).size !== score.evidenceIds.length) {
+      issue([...path, "evidenceIds"], "duplicate evidenceId reference");
+    }
     if (score.status === "available") {
       if (score.value === null) {
         issue([...path, "value"], "available score requires a value");
@@ -199,6 +202,7 @@ export const responseQualityOutputSchema = z.strictObject({
   overallNormalizedScore: z.number().min(0).max(1),
   result: z.enum(["pass", "review"]),
   reviewReasons: z.array(Text).max(20),
+  evaluationSha256: Hash,
   authority: z.strictObject({
     purpose: z.literal("evaluation_only"),
     sending: z.literal("forbidden"),
@@ -213,10 +217,10 @@ export const responseQualityOutputSchema = z.strictObject({
 export type ResponseQualityEvaluation = z.infer<
   typeof responseQualityOutputSchema
 >;
-/** Validate, normalize, and deterministically evaluate caller-supplied response-quality evidence. */
-export function evaluateResponseQuality(
+/** Validate, normalize, hash, and deterministically evaluate caller-supplied response-quality evidence. */
+export async function evaluateResponseQuality(
   raw: unknown,
-): ResponseQualityEvaluation {
+): Promise<ResponseQualityEvaluation> {
   const input = responseQualityInputSchema.parse(raw);
   const scales = new Map(input.policy.scales.map((x) => [x.dimension, x]));
   const scores = new Map(input.scores.map((x) => [x.dimension, x]));
@@ -271,9 +275,12 @@ export function evaluateResponseQuality(
       unavailableReason: null,
     };
   });
-  const overallNormalizedScore = resultScores.reduce(
-    (sum, score) => sum + score.contribution,
-    0,
+  const overallNormalizedScore = Math.min(
+    1,
+    Math.max(
+      0,
+      resultScores.reduce((sum, score) => sum + score.contribution, 0),
+    ),
   );
   const reviewReasons = resultScores.flatMap((score) => {
     const scale = scales.get(score.dimension)!;
@@ -288,7 +295,7 @@ export function evaluateResponseQuality(
   if (overallNormalizedScore < input.policy.overallMinimumNormalizedScore) {
     reviewReasons.push("overall score below policy threshold");
   }
-  return responseQualityOutputSchema.parse({
+  const evaluation = {
     ...input,
     scores: resultScores,
     overallNormalizedScore,
@@ -303,5 +310,15 @@ export function evaluateResponseQuality(
       productionEffects: "none" as const,
       sideEffects: "persistence_only" as const,
     },
-  });
+  };
+  const evaluationSha256 = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(JSON.stringify(evaluation)),
+      ),
+    ),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return responseQualityOutputSchema.parse({ ...evaluation, evaluationSha256 });
 }

@@ -7,8 +7,10 @@ contract dimensions; and returns `pass` or `review` with explicit reasons. The
 model has no credentials, configuration, network calls, contact actions,
 provider actions, or production actions.
 
-Its sole `evaluate` method persists one `evaluation` resource named
-`response-quality-<recordId>`. Its public type and schema version remain
+Its sole `evaluate` method persists one hash-bound `evaluation` resource named
+`response-quality-<recordId>-<evaluationSha256>`. Exact replays are idempotent;
+different valid payloads cannot overwrite an earlier evaluation under the same
+record ID. Its public type and schema version remain
 compatible with `@mgreten/response-quality` version `2026.08.23.1`.
 
 ## Install
