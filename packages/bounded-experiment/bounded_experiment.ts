@@ -45,6 +45,12 @@ export function validateBoundedExperiment(
 type Context = {
   globalArgs: z.infer<typeof globalArgumentsSchema>;
   now?: () => Date;
+  logger: {
+    info: (message: string, args?: Record<string, unknown>) => void;
+  };
+  readResource: (
+    name: string,
+  ) => Promise<Record<string, unknown> | null>;
   writeResource: (
     spec: string,
     name: string,
@@ -75,15 +81,41 @@ export const model = {
         args: z.infer<typeof proposeArgumentsSchema>,
         context: Context,
       ) => {
+        context.logger.info("Validating bounded experiment {requestId}", {
+          requestId: args.requestId,
+        });
         const proposal = validateBoundedExperiment(
           args.input,
           context.now?.() ?? new Date(),
         );
+        const instanceName = `proposal-${args.requestId}`;
+        const existing = await context.readResource(instanceName);
+        if (existing) {
+          const parsed = boundedExperimentOutputSchema.safeParse(existing);
+          if (
+            !parsed.success ||
+            JSON.stringify(parsed.data) !== JSON.stringify(proposal)
+          ) {
+            throw new TypeError(
+              `Request ${args.requestId} was already used for a different proposal`,
+            );
+          }
+          context.logger.info(
+            "Bounded experiment {requestId} already persisted",
+            {
+              requestId: args.requestId,
+            },
+          );
+          return { dataHandles: [] };
+        }
         const handle = await context.writeResource(
           "proposal",
-          `proposal-${args.requestId}`,
+          instanceName,
           proposal,
         );
+        context.logger.info("Persisted bounded experiment {requestId}", {
+          requestId: args.requestId,
+        });
         return { dataHandles: [handle] };
       },
     },

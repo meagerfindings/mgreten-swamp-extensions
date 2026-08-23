@@ -12,6 +12,7 @@ swamp model method run bounded-experiment propose --input requestId=proposal-001
 The input must include caller-owned policy maxima, stricter-or-equal experiment
 bounds, at least one `stop_and_review` guardrail and stop condition, all four
 approval kinds, observed claims linked to evidence IDs, and fresh provenance.
+Request IDs are idempotency keys and must never be reused for changed content.
 The returned resource is a decision-support record only. A separate authorized
 human workflow must decide whether to seek approvals or execute any action.
 

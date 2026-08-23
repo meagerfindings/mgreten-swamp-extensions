@@ -6,7 +6,9 @@ bounded pricing or positioning experiment proposal. Version: `2026.08.23.1`.
 It deterministically normalizes unordered collections and reports sorted
 diagnostics. It requires two kinds of evidence (`product_metric` and
 `unit_economics`), content-hash provenance, and evidence fresh at both proposal
-evaluation time and runtime persistence.
+evaluation time and runtime persistence. Evidence generated more than 30 days
+before evaluation, or carrying an expiry more than 30 days after generation, is
+rejected.
 
 ## Authority boundary
 
@@ -23,7 +25,8 @@ downside, and user-downside bounds; mismatched money units; missing/expired or
 time-inconsistent evidence; dangling claims; duplicate identifiers; and approval
 applicability/requiredness that disagrees with pricing, spend, publishing, or
 launch context. Guardrails and stop conditions can only specify
-`stop_and_review`.
+`stop_and_review`. Replaying an identical request ID and proposal is a no-op;
+reusing that request ID with changed content fails closed.
 
 ## Install and invoke
 

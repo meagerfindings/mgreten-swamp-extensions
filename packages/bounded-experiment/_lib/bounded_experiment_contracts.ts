@@ -7,6 +7,7 @@ export const BOUNDED_EXPERIMENT_LIMITS = {
   stopConditions: 20,
   population: 100_000,
   durationDays: 90,
+  evidenceAgeDays: 30,
   text: 1_000,
 } as const;
 
@@ -193,12 +194,23 @@ export function evaluateBoundedExperiment(input: unknown): Evaluation {
   if (parsed.success) {
     const value = parsed.data;
     for (const kind of ["product_metric", "unit_economics"] as const) {
-      if (!value.evidence.some((item) => item.evidenceKind === kind)) {
+      const count = value.evidence.filter((item) =>
+        item.evidenceKind === kind
+      ).length;
+      if (count === 0) {
         diagnostics.push(
           diagnostic(
             "evidence",
             "missing_evidence_kind",
             `${kind} evidence is required`,
+          ),
+        );
+      } else if (count > BOUNDED_EXPERIMENT_LIMITS.evidencePerKind) {
+        diagnostics.push(
+          diagnostic(
+            "evidence",
+            "evidence_kind_limit",
+            `${kind} evidence exceeds the per-kind limit`,
           ),
         );
       }
@@ -242,6 +254,31 @@ export function evaluateBoundedExperiment(input: unknown): Evaluation {
             base,
             "stale_evidence",
             "evidence must be fresh at evaluatedAt",
+          ),
+        );
+      }
+      const maxAge = BOUNDED_EXPERIMENT_LIMITS.evidenceAgeDays * 86_400_000;
+      if (
+        Date.parse(value.evaluatedAt) - Date.parse(provenance.generatedAt) >
+          maxAge
+      ) {
+        diagnostics.push(
+          diagnostic(
+            base,
+            "evidence_too_old",
+            "generated evidence exceeds maximum age",
+          ),
+        );
+      }
+      if (
+        Date.parse(provenance.expiresAt) - Date.parse(provenance.generatedAt) >
+          maxAge
+      ) {
+        diagnostics.push(
+          diagnostic(
+            base,
+            "expiry_too_distant",
+            "evidence expiry exceeds maximum lifetime",
           ),
         );
       }
@@ -340,6 +377,32 @@ export function evaluateBoundedExperiment(input: unknown): Evaluation {
         ),
       );
     }
+    const criteria = [
+      ...value.decisions.success.criteria,
+      ...value.decisions.failure.criteria,
+    ];
+    if (
+      new Set(criteria.map((item) => item.criterionId)).size !== criteria.length
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "decisions",
+          "duplicate_id",
+          "criterionId values must be unique",
+        ),
+      );
+    }
+    criteria.forEach((criterion, index) => {
+      if (criterion.minimumSampleSize > bounds.population) {
+        diagnostics.push(
+          diagnostic(
+            `decisions.criteria.${index}.minimumSampleSize`,
+            "unreachable_criterion",
+            "minimum sample size exceeds bounded population",
+          ),
+        );
+      }
+    });
     const expected = {
       pricing: value.experimentKind === "pricing",
       spend: bounds.maxSpend.amountMinor > 0,

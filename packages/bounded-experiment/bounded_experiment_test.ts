@@ -1,5 +1,6 @@
 import { evaluateBoundedExperiment } from "./_lib/bounded_experiment_contracts.ts";
 import { model, validateBoundedExperiment } from "./bounded_experiment.ts";
+import { createModelTestContext } from "jsr:@swamp-club/swamp-testing@0.20260823.31";
 
 function assert(value: unknown, message = "assertion failed"): asserts value {
   if (!value) throw new Error(message);
@@ -141,25 +142,63 @@ Deno.test("is deterministic, normalized, and persistence-only", async () => {
   assert(first.value.evidence[0].evidenceId === "economics");
   assert(first.value.authority.mode === "recommendation_only");
   assert(first.value.authority.prohibitedEffects.includes("launch"));
-  const writes: unknown[][] = [];
+  const { context, getWrittenResources, getLogs } = createModelTestContext({
+    methodName: "propose",
+  });
   const result = await model.methods.propose.execute({
     requestId: "request-1",
     input,
   }, {
+    ...context,
     globalArgs: {},
     now: () => new Date("2026-08-23T12:01:00Z"),
-    writeResource: (...args) => {
-      writes.push(args);
-      return Promise.resolve({ name: args[1] });
-    },
   });
-  assert(writes.length === 1);
+  assert(getWrittenResources().length === 1);
+  assert(result.dataHandles.length === 1);
   assert(
-    JSON.stringify(result) ===
-      JSON.stringify({ dataHandles: [{ name: "proposal-request-1" }] }),
+    (result.dataHandles[0] as { name: string }).name === "proposal-request-1",
   );
   assert(Object.keys(model.methods).join(",") === "propose");
   assert(!("files" in model));
+  assert(getLogs().length === 2);
+});
+
+Deno.test("replays identically and rejects request-id tampering", async () => {
+  const proposal = validateBoundedExperiment(
+    fixture(),
+    new Date("2026-08-23T12:01:00Z"),
+  );
+  const { context, getWrittenResources } = createModelTestContext({
+    methodName: "propose",
+    storedResources: { "proposal-request-1": proposal },
+  });
+  const replay = await model.methods.propose.execute({
+    requestId: "request-1",
+    input: fixture(),
+  }, {
+    ...context,
+    globalArgs: {},
+    now: () => new Date("2026-08-23T12:01:00Z"),
+  });
+  assert(replay.dataHandles.length === 0);
+  assert(getWrittenResources().length === 0);
+
+  const tampered = fixture();
+  tampered.title = "Changed after the request was persisted";
+  let rejected = false;
+  try {
+    await model.methods.propose.execute({
+      requestId: "request-1",
+      input: tampered,
+    }, {
+      ...context,
+      globalArgs: {},
+      now: () => new Date("2026-08-23T12:01:00Z"),
+    });
+  } catch (error) {
+    rejected = String(error).includes("already used for a different proposal");
+  }
+  assert(rejected);
 });
 
 Deno.test("fails closed for runtime stale and future proposal clocks", () => {
@@ -235,4 +274,31 @@ Deno.test("requires evidence kinds and correct approval applicability without gr
     result.diagnostics.filter((item) => item.code === "approval_mismatch")
       .length >= 3,
   );
+});
+
+Deno.test("rejects malformed fields, excessive evidence age, and unreachable criteria", () => {
+  const malformed = { ...fixture(), unexpected: true };
+  const strict = evaluateBoundedExperiment(malformed);
+  assert(!strict.success);
+  assert(strict.diagnostics.some((item) => item.code === "unrecognized_keys"));
+
+  const input = fixture();
+  input.evidence[0].provenance.generatedAt = "2026-07-01T00:00:00Z";
+  input.evidence[0].provenance.observedAt = "2026-07-01T00:00:00Z";
+  input.evidence[0].provenance.expiresAt = "2026-09-01T00:00:00Z";
+  input.decisions.success.criteria[0].minimumSampleSize = 101;
+  const result = evaluateBoundedExperiment(input);
+  assert(!result.success);
+  for (
+    const code of [
+      "evidence_too_old",
+      "expiry_too_distant",
+      "unreachable_criterion",
+    ]
+  ) {
+    assert(
+      result.diagnostics.some((item) => item.code === code),
+      `missing ${code}`,
+    );
+  }
 });
