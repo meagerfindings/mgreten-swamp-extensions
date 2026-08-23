@@ -1,0 +1,23 @@
+manifestVersion: 1
+name: "@mgreten/observability-workflows"
+version: "2026.08.23.1"
+description: "Generic read, normalization, digest, and transition-only alert workflows for Swamp observability adapters."
+repository: "https://github.com/meagerfindings/swamp-observability-workflows"
+workflows:
+  - workflow-observability-daily-digest.yaml
+  - workflow-observability-transition-watchdog.yaml
+  - workflow-observability-deliver-transition.yaml
+additionalFiles:
+  - README.md
+  - LICENSE
+  - docs/contracts.md
+  - examples/daily-digest-input.yaml
+  - examples/transition-watchdog-input.yaml
+labels:
+  - observability
+  - workflows
+  - read-only
+  - alerting
+dependencies:
+  - "@mgreten/notification-outbox"
+  - "@mgreten/notification-outbox-workflows"

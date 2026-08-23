@@ -1,0 +1,22 @@
+readAdapter: example-read-adapter
+readMethod: collect
+readInputs:
+  limit: 100
+selector:
+  groups: [example]
+window:
+  lookbackSeconds: 120
+normalization:
+  schemaVersion: "1.0"
+severityPolicy:
+  levels: [critical, warning, info]
+freshnessPolicy:
+  maximumAgeSeconds: 300
+normalizer: example-normalizer
+normalizeMethod: normalize
+transitionEvaluator: example-transition-evaluator
+evaluateMethod: evaluateTransitions
+outboxSink: ""
+transportModel: ""
+transportMethod: ""
+transportOptions: {}

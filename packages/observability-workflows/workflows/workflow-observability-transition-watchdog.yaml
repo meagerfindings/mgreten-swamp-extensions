@@ -1,0 +1,99 @@
+id: 93690dad-2282-4589-a2d3-f590f0ece6fe
+name: "@mgreten/observability-transition-watchdog"
+description: Evaluate normalized evidence and emit notifications only for state transitions.
+tags:
+  capability: observability-transition-watchdog
+inputs:
+  type: object
+  additionalProperties: false
+  properties:
+    readAdapter: { type: string, minLength: 1 }
+    readMethod: { type: string, minLength: 1 }
+    readInputs: { type: object, default: {} }
+    selector: { type: object, default: {} }
+    window: { type: object, default: {} }
+    normalizer: { type: string, minLength: 1 }
+    normalizeMethod: { type: string, minLength: 1, default: normalize }
+    normalization: { type: object, default: {} }
+    severityPolicy: { type: object, default: {} }
+    freshnessPolicy: { type: object, default: {} }
+    transitionEvaluator: { type: string, minLength: 1 }
+    evaluateMethod: { type: string, minLength: 1, default: evaluateTransitions }
+    outboxSink: { type: string, default: "" }
+    transportModel: { type: string, default: "" }
+    transportMethod: { type: string, default: "" }
+    transportOptions: { type: object, default: {} }
+  required: [readAdapter, readMethod, normalizer, transitionEvaluator]
+jobs:
+  - name: inspect-and-alert
+    description: Read once, normalize once, then evaluate durable state for newly-opened or resolved transitions only.
+    steps:
+      - name: read
+        description: Collect the caller-selected bounded observation window.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.readAdapter }}"
+          methodName: "${{ inputs.readMethod }}"
+          inputs:
+            request:
+              selector: "${{ inputs.selector }}"
+              window: "${{ inputs.window }}"
+              options: "${{ inputs.readInputs }}"
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: normalize
+        description: Normalize the read result before any severity or freshness decision.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.normalizer }}"
+          methodName: "${{ inputs.normalizeMethod }}"
+          inputs:
+            observations: >-
+              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "read"', 'attributes') }}
+            selector: "${{ inputs.selector }}"
+            window: "${{ inputs.window }}"
+            normalization: "${{ inputs.normalization }}"
+            severityPolicy: "${{ inputs.severityPolicy }}"
+            freshnessPolicy: "${{ inputs.freshnessPolicy }}"
+        dependsOn: [{ step: read, condition: { type: succeeded } }]
+        weight: 0
+        allowFailure: false
+      - name: evaluate-transitions
+        description: Compare normalized observations with durable evaluator state; repeated states create no intents.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.transitionEvaluator }}"
+          methodName: "${{ inputs.evaluateMethod }}"
+          inputs:
+            observations: >-
+              ${{ data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "normalize"', 'attributes') }}
+            selector: "${{ inputs.selector }}"
+            window: "${{ inputs.window }}"
+            severityPolicy: "${{ inputs.severityPolicy }}"
+            freshnessPolicy: "${{ inputs.freshnessPolicy }}"
+        dependsOn: [{ step: normalize, condition: { type: succeeded } }]
+        weight: 0
+        allowFailure: false
+      - name: deliver-transitions
+        description: Run zero iterations when no state changed or no sink is configured.
+        forEach:
+          item: transition
+          in: >-
+            ${{ inputs.outboxSink == "" ? [] : data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "evaluate-transitions"', 'attributes') }}
+        concurrency: 1
+        task:
+          type: workflow
+          workflowIdOrName: "@mgreten/observability-deliver-transition"
+          inputs:
+            transition: "${{ self.transition }}"
+            outboxSink: "${{ inputs.outboxSink }}"
+            transportModel: "${{ inputs.transportModel }}"
+            transportMethod: "${{ inputs.transportMethod }}"
+            transportOptions: "${{ inputs.transportOptions }}"
+        dependsOn: [{ step: evaluate-transitions, condition: { type: succeeded } }]
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1
