@@ -34,6 +34,12 @@ export const model = {
       execute: async (
         args: z.infer<typeof observationRecordInputSchema>,
         context: {
+          logger: {
+            info(message: string, properties: Record<string, unknown>): void;
+          };
+          readResource(
+            name: string,
+          ): Promise<Record<string, unknown> | null>;
           writeResource: (
             spec: string,
             name: string,
@@ -41,12 +47,33 @@ export const model = {
           ) => Promise<unknown>;
         },
       ) => {
-        const observation = retainObservationRecord(args);
+        context.logger.info("Validating bounded observation", {});
+        const observation = await retainObservationRecord(args);
+        const existing = await context.readResource(observation.observationId);
+        if (existing) {
+          const parsed = observationRecordSchema.parse(existing);
+          if (
+            parsed.contentHash !== observation.contentHash ||
+            JSON.stringify(parsed) !== JSON.stringify(observation)
+          ) {
+            throw new Error(
+              `Conflicting or tampered replay for observation ${observation.observationId}`,
+            );
+          }
+          context.logger.info(
+            "Observation {observationId} already retained",
+            { observationId: observation.observationId },
+          );
+          return { dataHandles: [] };
+        }
         const handle = await context.writeResource(
           "observation",
           observation.observationId,
           observation,
         );
+        context.logger.info("Retained observation {observationId}", {
+          observationId: observation.observationId,
+        });
         return { dataHandles: [handle] };
       },
     },
