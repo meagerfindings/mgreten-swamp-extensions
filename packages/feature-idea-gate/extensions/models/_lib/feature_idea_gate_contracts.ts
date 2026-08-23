@@ -63,6 +63,7 @@ const evidenceSchema = z.strictObject({
   evidenceId: Id,
   evidenceLink: z.url(),
   evidenceType: EvidenceType,
+  labels: z.array(Text.max(100)).min(1).max(20),
   claim: Text.max(1_000),
   independenceKey: Id.nullable(),
   sourceReference: sourceReferenceSchema,
@@ -106,7 +107,14 @@ export const featureIdeaGateInputSchema = z.strictObject({
   policy: z.strictObject({
     scales: z.array(scaleSchema).length(FEATURE_IDEA_GATE_CRITERIA.length),
     requiredEvidenceTypes: requiredEvidenceTypesSchema,
+    userSignalEvidenceTypes: z.array(EvidenceType).min(1),
+    activeBottleneckEvidenceTypes: z.array(EvidenceType).min(1),
+    trustPrivacyBlockerEvidenceTypes: z.array(EvidenceType).min(1),
+    requiredEvidenceLabels: z.array(Text.max(100)).min(1).max(20),
     requiredCandidateLabels: z.array(Text.max(100)).min(1).max(20),
+    allowedSourceSystems: z.array(Text.max(100)).min(1).max(20),
+    allowedProvenanceCollectors: z.array(Text.max(100)).min(1).max(20),
+    maximumEvidenceAgeSeconds: z.number().int().positive(),
     missingData: z.literal("ineligible"),
     minimumScore: z.number().finite().min(0).max(1),
     minimumIndependentUserSignals: z.number().int().positive(),
@@ -130,13 +138,19 @@ export const featureIdeaGateInputSchema = z.strictObject({
       add(["evidence", index, "evidenceId"], "duplicate evidenceId");
     }
     evidence.set(item.evidenceId, item);
-    if (item.evidenceType === "user-signal" && item.independenceKey === null) {
+    if (
+      input.policy.userSignalEvidenceTypes.includes(item.evidenceType) &&
+      item.independenceKey === null
+    ) {
       add(
         ["evidence", index, "independenceKey"],
         "user signals require an independenceKey",
       );
     }
-    if (item.evidenceType !== "user-signal" && item.independenceKey !== null) {
+    if (
+      !input.policy.userSignalEvidenceTypes.includes(item.evidenceType) &&
+      item.independenceKey !== null
+    ) {
       add(
         ["evidence", index, "independenceKey"],
         "only user signals may declare an independenceKey",
@@ -154,9 +168,43 @@ export const featureIdeaGateInputSchema = z.strictObject({
       Date.parse(item.sourceReference.freshness.expiresAt) <
         Date.parse(input.evaluatedAt)
     ) add(["evidence", index], "evidence must be fresh at evaluatedAt");
+    if (
+      Date.parse(input.evaluatedAt) -
+          Date.parse(item.sourceReference.freshness.asOf) >
+        input.policy.maximumEvidenceAgeSeconds * 1_000
+    ) add(["evidence", index], "evidence exceeds policy maximum age");
+    if (
+      !input.policy.allowedSourceSystems.includes(
+        item.sourceReference.source.system,
+      )
+    ) {
+      add(
+        ["evidence", index],
+        "evidence source system is not allowed by policy",
+      );
+    }
+    if (
+      !input.policy.allowedProvenanceCollectors.includes(
+        item.sourceReference.provenance.collector,
+      )
+    ) {
+      add(["evidence", index], "evidence collector is not allowed by policy");
+    }
+    input.policy.requiredEvidenceLabels.forEach((label) => {
+      if (!item.labels.includes(label)) {
+        add(
+          ["evidence", index, "labels"],
+          `evidence requires policy label ${label}`,
+        );
+      }
+    });
   });
   input.activeBottleneck.evidenceIds.forEach((id, index) => {
-    if (evidence.get(id)?.evidenceType !== "active-bottleneck") {
+    if (
+      !input.policy.activeBottleneckEvidenceTypes.includes(
+        evidence.get(id)?.evidenceType ?? "",
+      )
+    ) {
       add(
         ["activeBottleneck", "evidenceIds", index],
         "active bottleneck requires preserved active-bottleneck evidence",
@@ -408,7 +456,11 @@ export function evaluateFeatureIdeas(
         );
       }
       blocker.evidenceIds.forEach((id) => {
-        if (evidence.get(id)?.evidenceType !== "trust-privacy") {
+        if (
+          !input.policy.trustPrivacyBlockerEvidenceTypes.includes(
+            evidence.get(id)?.evidenceType ?? "",
+          )
+        ) {
           throw new TypeError(
             "Trust/privacy blocker must cite trust-privacy evidence",
           );
@@ -424,9 +476,10 @@ export function evaluateFeatureIdeas(
       ratings.get("userEvidence")!.evidenceIds.map((id) => evidence.get(id))
         .filter((
           item,
-        ) => item?.evidenceType === "user-signal").map((item) =>
-          item!.independenceKey!
-        ),
+        ) =>
+          item &&
+          input.policy.userSignalEvidenceTypes.includes(item.evidenceType)
+        ).map((item) => item!.independenceKey!),
     );
     if (signals.size < input.policy.minimumIndependentUserSignals) {
       reasons.push(
@@ -454,7 +507,11 @@ export function evaluateFeatureIdeas(
   }).sort((left, right) =>
     Number(right.eligible) - Number(left.eligible) ||
     right.score - left.score ||
-    left.candidateId.localeCompare(right.candidateId)
+    (left.candidateId < right.candidateId
+      ? -1
+      : left.candidateId > right.candidateId
+      ? 1
+      : 0)
   ).map((candidate, index) => ({ rank: index + 1, ...candidate }));
   const winner = ranking.find((candidate) => candidate.eligible);
   return featureIdeaGateEvaluationSchema.parse({

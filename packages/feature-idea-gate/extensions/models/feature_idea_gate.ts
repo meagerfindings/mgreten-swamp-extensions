@@ -51,6 +51,7 @@ export const invocationAuditSchema = z.strictObject({
   provider: z.string().trim().min(1).max(100),
   model: z.string().trim().min(1).max(200),
   promptHash: z.string().regex(/^[a-f0-9]{64}$/),
+  outputHash: z.string().regex(/^[a-f0-9]{64}$/),
   cwd: z.string().min(1),
   success: z.boolean(),
 });
@@ -62,6 +63,7 @@ export const invocationClaimAuditSchema = z.strictObject({
   model: z.string().trim().min(1).max(200),
   cwd: z.string().min(1),
   promptHash: z.string().regex(/^[a-f0-9]{64}$/),
+  outputHash: z.string().regex(/^[a-f0-9]{64}$/),
   toolProfile: z.literal("readonly"),
   sandbox: z.strictObject({
     mode: z.enum(["auto", "bwrap", "seatbelt"]),
@@ -178,6 +180,7 @@ export async function validateAgentResult(
   const agentOutput = featureIdeaGateAgentOutputSchema.parse(agentOutputInput);
   const invocation = invocationAuditSchema.parse(invocationInput);
   const claim = invocationClaimAuditSchema.parse(claimInput);
+  const outputHash = await sha256(JSON.stringify(agentOutput));
   if (request.gateId !== gateId || request.input.gateId !== gateId) {
     fail("Gate ID does not match prepared request");
   }
@@ -194,6 +197,9 @@ export async function validateAgentResult(
     invocation.promptHash !== request.promptHash ||
     claim.promptHash !== request.promptHash
   ) fail("Invocation prompt hash does not match prepared request");
+  if (invocation.outputHash !== outputHash || claim.outputHash !== outputHash) {
+    fail("Invocation output hash does not match agent output");
+  }
   if (invocation.cwd !== request.agentCwd || claim.cwd !== request.agentCwd) {
     fail("Invocation cwd does not match isolated request workspace");
   }
@@ -231,6 +237,9 @@ type Context = {
     data: Record<string, unknown>,
   ) => Promise<unknown>;
   now?: () => Date;
+  logger: {
+    info: (message: string, properties: Record<string, unknown>) => void;
+  };
 };
 /** Swamp model definition for preparing and validating feature-idea assessments. */
 export const model = {
@@ -261,13 +270,16 @@ export const model = {
         args: z.infer<typeof prepareArgumentsSchema>,
         context: Context,
       ) => {
+        context.logger.info("Preparing feature idea gate {gateId}", {
+          gateId: args.gateId,
+        });
         const prepared = await prepareRequest(
           args.gateId,
           args.input,
           context.globalArgs,
           context.now?.() ?? new Date(),
         );
-        return {
+        const result = {
           dataHandles: [
             await context.writeResource(
               "request",
@@ -276,6 +288,10 @@ export const model = {
             ),
           ],
         };
+        context.logger.info("Prepared feature idea gate {gateId}", {
+          gateId: args.gateId,
+        });
+        return result;
       },
     },
     validate: {
@@ -286,6 +302,9 @@ export const model = {
         args: z.infer<typeof validateArgumentsSchema>,
         context: Context,
       ) => {
+        context.logger.info("Validating feature idea gate {gateId}", {
+          gateId: args.gateId,
+        });
         const gate = await validateAgentResult(
           args.gateId,
           args.request,
@@ -294,7 +313,7 @@ export const model = {
           args.invocationClaim,
           context.now?.() ?? new Date(),
         );
-        return {
+        const result = {
           dataHandles: [
             await context.writeResource(
               "validatedGate",
@@ -303,6 +322,10 @@ export const model = {
             ),
           ],
         };
+        context.logger.info("Validated feature idea gate {gateId}", {
+          gateId: args.gateId,
+        });
+        return result;
       },
     },
   },
