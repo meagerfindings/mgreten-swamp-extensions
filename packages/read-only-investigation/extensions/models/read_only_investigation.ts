@@ -17,6 +17,9 @@ type Context = {
     name: string,
     data: Record<string, unknown>,
   ) => Promise<unknown>;
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
 };
 
 /**
@@ -44,15 +47,27 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: Context,
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "plan",
-            `plan-${args.requestId}`,
-            prepareReadOnlyInvestigation(args.input),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger.info(
+          "Preparing read-only investigation plan {requestId}",
+          {
+            requestId: args.requestId,
+          },
+        );
+        const plan = await prepareReadOnlyInvestigation(args.input);
+        const dataHandle = await context.writeResource(
+          "plan",
+          `plan-${args.requestId}-${plan.requestDigest.slice(0, 16)}`,
+          plan,
+        );
+        context.logger.info(
+          "Prepared read-only investigation plan {requestId}",
+          {
+            requestId: args.requestId,
+          },
+        );
+        return { dataHandles: [dataHandle] };
+      },
     },
   },
 };

@@ -25,7 +25,7 @@ const Sensitivity = z.enum([
 ]);
 const Operation = z.enum(["lookup", "list", "search", "aggregate"]);
 const Severity = z.enum(["low", "medium", "high", "critical"]);
-const ProviderRoute = z.enum(["none", "internal", "external", "public"]);
+const DestinationClass = z.enum(["none", "controlled", "external", "public"]);
 
 const sourceSchema = z.strictObject({
   sourceId: Id,
@@ -49,7 +49,7 @@ const querySchema = z.strictObject({
   maxRows: z.number().int().positive(),
   maxBytes: z.number().int().positive(),
   windowSeconds: z.number().int().positive(),
-  providerRoute: ProviderRoute,
+  destinationClass: DestinationClass,
 });
 const anomalySchema = z.strictObject({
   anomalyId: Id,
@@ -106,7 +106,9 @@ export const readOnlyInvestigationInputSchema = z.strictObject({
 });
 
 const authoritySchema = z.strictObject({
-  disposition: z.literal("authorization-plan-only"),
+  disposition: z.literal("unverified-plan-only"),
+  authorityBasis: z.literal("caller-supplied-unverified"),
+  grant: z.literal("none"),
   execution: z.literal("none"),
   network: z.literal("none"),
   providerInvocation: z.literal("none"),
@@ -122,6 +124,7 @@ export const readOnlyInvestigationPlanSchema = z.strictObject({
   evaluatedAt: Timestamp,
   expiresAt: Timestamp,
   registrySnapshotId: Id,
+  requestDigest: z.string().regex(/^[a-f0-9]{64}$/),
   anomalies: z.array(z.strictObject({
     anomalyId: Id,
     confidence: z.number().min(0).max(1),
@@ -150,9 +153,9 @@ const severityRank = { low: 0, medium: 1, high: 2, critical: 3 } as const;
  *
  * The returned plan deliberately grants no execution or network authority.
  */
-export function prepareReadOnlyInvestigation(
+export async function prepareReadOnlyInvestigation(
   raw: unknown,
-): ReadOnlyInvestigationPlan {
+): Promise<ReadOnlyInvestigationPlan> {
   const input = readOnlyInvestigationInputSchema.parse(raw);
   function fail(message: string): never {
     throw new TypeError(message);
@@ -228,7 +231,8 @@ export function prepareReadOnlyInvestigation(
       ) fail("query limit exceeded");
       if (
         source.sensitivity !== "public" &&
-        (query.providerRoute === "external" || query.providerRoute === "public")
+        (query.destinationClass === "external" ||
+          query.destinationClass === "public")
       ) fail("private data cannot be routed to public or external providers");
     }
     return {
@@ -247,6 +251,7 @@ export function prepareReadOnlyInvestigation(
     };
   });
   if (queryCount > input.authorization.maxQueries) fail("query limit exceeded");
+  const requestDigest = await sha256(canonicalJson(input));
   return readOnlyInvestigationPlanSchema.parse({
     schemaVersion: READ_ONLY_INVESTIGATION_SCHEMA_VERSION,
     authorizationId: input.authorizationId,
@@ -254,9 +259,12 @@ export function prepareReadOnlyInvestigation(
     evaluatedAt: input.evaluatedAt,
     expiresAt: input.authorization.expiresAt,
     registrySnapshotId: input.sourceRegistrySnapshot.registrySnapshotId,
+    requestDigest,
     anomalies,
     authority: {
-      disposition: "authorization-plan-only",
+      disposition: "unverified-plan-only",
+      authorityBasis: "caller-supplied-unverified",
+      grant: "none",
       execution: "none",
       network: "none",
       providerInvocation: "none",
@@ -264,4 +272,27 @@ export function prepareReadOnlyInvestigation(
       adapterApprovalRequired: true,
     },
   });
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+        .join(",")
+    }}`;
+  }
+  return JSON.stringify(value);
+}
+
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return [...new Uint8Array(digest)].map((byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
 }

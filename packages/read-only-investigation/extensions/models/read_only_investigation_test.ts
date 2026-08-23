@@ -4,16 +4,16 @@ import { model } from "./read_only_investigation.ts";
 function assert(value: unknown, message = "assertion failed"): asserts value {
   if (!value) throw new Error(message);
 }
-function rejects(fn: () => unknown, text: string): void {
+async function rejects(fn: () => unknown, text: string): Promise<void> {
   try {
-    fn();
+    await fn();
   } catch (error) {
     assert(String(error).includes(text), String(error));
     return;
   }
   throw new Error(`expected ${text}`);
 }
-function fixture(): Record<string, unknown> {
+function fixture() {
   return {
     schemaVersion: "1.0",
     authorizationId: "auth-1",
@@ -66,48 +66,77 @@ function fixture(): Record<string, unknown> {
         maxRows: 50,
         maxBytes: 5_000,
         windowSeconds: 1_800,
-        providerRoute: "internal",
+        destinationClass: "controlled",
       }],
     }],
   };
 }
 
-Deno.test("creates deterministic synthetic plans with no execution authority", () => {
-  const first = prepareReadOnlyInvestigation(fixture());
-  const second = prepareReadOnlyInvestigation(fixture());
+Deno.test("creates deterministic synthetic plans with no execution authority", async () => {
+  const first = await prepareReadOnlyInvestigation(fixture());
+  const second = await prepareReadOnlyInvestigation(fixture());
   assert(JSON.stringify(first) === JSON.stringify(second));
   assert(
-    first.authority.execution === "none" &&
+    first.authority.grant === "none" &&
+      first.authority.authorityBasis === "caller-supplied-unverified" &&
+      first.authority.execution === "none" &&
       first.authority.network === "none" &&
       first.authority.providerInvocation === "none" &&
       first.authority.productionMutation === "none",
   );
   assert(first.anomalies[0].escalation.required);
 });
-Deno.test("fails closed for expired authority, unavailable sources, and external private-data routes", () => {
-  const expired = fixture() as any;
+Deno.test("fails closed for expired authority, unavailable sources, and external private-data routes", async () => {
+  const expired = fixture();
   expired.authorization.expiresAt = expired.evaluatedAt;
-  rejects(() => prepareReadOnlyInvestigation(expired), "expired");
-  const unavailable = fixture() as any;
+  await rejects(() => prepareReadOnlyInvestigation(expired), "expired");
+  const unavailable = fixture();
   unavailable.sourceRegistrySnapshot.sources[0].availability = "unavailable";
-  rejects(() => prepareReadOnlyInvestigation(unavailable), "unavailable");
-  const external = fixture() as any;
-  external.anomalies[0].queries[0].providerRoute = "external";
-  rejects(() => prepareReadOnlyInvestigation(external), "private data");
+  await rejects(() => prepareReadOnlyInvestigation(unavailable), "unavailable");
+  const external = fixture();
+  external.anomalies[0].queries[0].destinationClass = "external";
+  await rejects(() => prepareReadOnlyInvestigation(external), "private data");
+});
+Deno.test("rejects malformed and excess fields rather than granting implied authority", async () => {
+  for (const malformed of [null, {}, [], "authority", 7]) {
+    await rejects(
+      () => prepareReadOnlyInvestigation(malformed),
+      "Invalid input",
+    );
+  }
+  const base = fixture();
+  const excess = {
+    ...base,
+    authorization: { ...base.authorization, execute: true },
+  };
+  await rejects(() => prepareReadOnlyInvestigation(excess), "Unrecognized key");
+});
+Deno.test("binds changed replay content to a different digest", async () => {
+  const original = await prepareReadOnlyInvestigation(fixture());
+  const replay = await prepareReadOnlyInvestigation(fixture());
+  const tampered = fixture();
+  tampered.anomalies[0].queries[0].purpose = "Changed synthetic purpose";
+  const changed = await prepareReadOnlyInvestigation(tampered);
+  assert(original.requestDigest === replay.requestDigest);
+  assert(original.requestDigest !== changed.requestDigest);
 });
 Deno.test("persists exactly one plan and exposes no execution collaborator", async () => {
   const writes: unknown[][] = [];
   await model.methods.prepare.execute(
     { requestId: "demo-1", input: fixture() },
     {
-      writeResource: async (...args: unknown[]) => {
+      writeResource: (...args: unknown[]) => {
         writes.push(args);
-        return { name: args[1] };
+        return Promise.resolve({ name: args[1] });
       },
+      logger: { info: () => undefined },
     },
   );
   assert(
     writes.length === 1 && writes[0][0] === "plan" &&
-      writes[0][1] === "plan-demo-1",
+      String(writes[0][1]).startsWith("plan-demo-1-") &&
+      String(writes[0][1]).endsWith(
+        (writes[0][2] as { requestDigest: string }).requestDigest.slice(0, 16),
+      ),
   );
 });

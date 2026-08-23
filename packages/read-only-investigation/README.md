@@ -1,12 +1,14 @@
 # Read-only investigation
 
-`@mgreten/read-only-investigation` validates caller-supplied authorization,
+`@mgreten/read-only-investigation` validates the shape and internal consistency
+of caller-supplied authorization assertions,
 source-registry snapshots, and proposed evidence queries. Its sole `prepare`
 method writes a deterministic authorization plan. It does not execute a query,
 open a network connection, call an external service, or mutate a production
 system.
 
-The model is intentionally an authorization-planning boundary, not a data
+The caller assertions are unverified and grant no authority. The model is
+intentionally a planning boundary, not an authorization service, data
 collector or an execution adapter. A separate, explicitly approved adapter may
 interpret a plan only after enforcing its own authorization and runtime policy.
 
@@ -17,11 +19,14 @@ interpret a plan only after enforcing its own authorization and runtime policy.
   allowed scope, and allowed operation.
 - Query, byte, row, time-window, anomaly, and total-query limits fail closed.
 - Non-public source material cannot be marked for external or public routing.
-- The output states `execution`, `network`, `providerInvocation`, and
+- The output states `grant`, `execution`, `network`, `providerInvocation`, and
   `productionMutation` are all `none`; adapters require separate approval.
+- A canonical SHA-256 request digest makes changed replays produce a distinct
+  resource identity; it is tamper evidence, not a signature or trust proof.
 
-These are declarative controls, not a substitute for platform sandbox
-enforcement. Deploy this extension in a runtime that independently denies
+These are declarative controls, not platform sandbox enforcement. This code
+does not create or verify a sandbox and cannot attest to its host runtime.
+Deploy it in a runtime that independently denies
 network access, filesystem writes, credential access, and mutation-capable tools
 unless those capabilities are intentionally and separately granted.
 
@@ -36,8 +41,10 @@ swamp model method run investigation prepare --input requestId=demo-1 \
   --input input='{"schemaVersion":"1.0", "authorizationId":"auth-1", ...}'
 ```
 
-The resulting `plan` resource is a request for a separately authorized adapter
-to act; it is never a grant of execution authority.
+The resulting `plan` resource is untrusted input for a separately authorized
+adapter to revalidate; it is never a grant of execution authority. The model is
+provider-neutral: destination classes describe data boundaries and do not name,
+select, authenticate, or invoke a provider.
 
 ## Development
 
