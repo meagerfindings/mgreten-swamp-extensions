@@ -32,13 +32,22 @@ export const model = {
         "Strictly validate, canonically order, and persist supplied campaign evidence without external effects.",
       arguments: recordArgumentsSchema,
       execute: async (args: z.infer<typeof recordArgumentsSchema>, context: {
+        logger: {
+          info(message: string, properties?: Record<string, unknown>): void;
+        };
         writeResource(
           spec: string,
           name: string,
           data: Record<string, unknown>,
         ): Promise<unknown>;
       }) => {
-        const evaluated = evaluateCampaignOutcomeEvidence(args.evidence);
+        const validatedArgs = recordArgumentsSchema.parse(args);
+        context.logger.info("Recording campaign outcome evidence {recordId}", {
+          recordId: validatedArgs.recordId,
+        });
+        const evaluated = evaluateCampaignOutcomeEvidence(
+          validatedArgs.evidence,
+        );
         if (!evaluated.success) {
           throw new TypeError(
             `Invalid campaign outcome evidence: ${
@@ -48,9 +57,12 @@ export const model = {
         }
         const handle = await context.writeResource(
           "evidence",
-          `evidence-${args.recordId}`,
+          `evidence-${validatedArgs.recordId}`,
           evaluated.value,
         );
+        context.logger.info("Recorded campaign outcome evidence {recordId}", {
+          recordId: validatedArgs.recordId,
+        });
         return { dataHandles: [handle] };
       },
     },

@@ -5,6 +5,9 @@ function assert(value: unknown, message = "assertion failed"): asserts value {
   if (!value) throw new Error(message);
 }
 
+const logger = {
+  info: (_message: string, _properties?: Record<string, unknown>) => {},
+};
 const hash = (letter: string) => letter.repeat(64);
 const source = (sourceId: string) => ({
   sourceId,
@@ -101,6 +104,13 @@ Deno.test("accepts aggregate evidence and canonicalizes every ordered collection
   );
 });
 
+Deno.test("produces byte-stable canonical output for replayed evidence", () => {
+  const first = evaluateCampaignOutcomeEvidence(fixture());
+  const second = evaluateCampaignOutcomeEvidence(structuredClone(fixture()));
+  assert(first.success && second.success);
+  assert(JSON.stringify(first.value) === JSON.stringify(second.value));
+});
+
 Deno.test("rejects boundary chronology, duplicated stages, and unrecognized references", () => {
   const invalid: unknown[] = [];
   const zeroWindow = fixture();
@@ -126,6 +136,29 @@ Deno.test("rejects evidence expiring exactly at evaluatedAt", () => {
   assert(!evaluateCampaignOutcomeEvidence(value).success);
 });
 
+Deno.test("rejects malformed provenance, tampered hashes, and action authority", () => {
+  const malformedChronology = fixture();
+  malformedChronology.evidence[0].source.provenance.collectedAt =
+    "2026-08-17T10:00:01Z";
+  const tamperedHash = fixture();
+  tamperedHash.campaign.sha256 = hash("A");
+  const actionAuthority = fixture() as Record<string, unknown>;
+  (actionAuthority.recommendation as Record<string, unknown>).authority =
+    "autonomous";
+  const actionTaken = fixture() as Record<string, unknown>;
+  (actionTaken.recommendation as Record<string, unknown>).actionTaken = true;
+  for (
+    const value of [
+      malformedChronology,
+      tamperedHash,
+      actionAuthority,
+      actionTaken,
+    ]
+  ) {
+    assert(!evaluateCampaignOutcomeEvidence(value).success);
+  }
+});
+
 Deno.test("rejects strict-object leaks and does not persist invalid evidence", async () => {
   const value = fixture() as Record<string, unknown>;
   value.unexpected = "leak";
@@ -134,6 +167,7 @@ Deno.test("rejects strict-object leaks and does not persist invalid evidence", a
     recordId: "valid-id",
     evidence: fixture(),
   }, {
+    logger,
     writeResource: (...args: unknown[]) => {
       writes.push(args);
       return Promise.resolve({ name: args[1] });
@@ -146,6 +180,7 @@ Deno.test("rejects strict-object leaks and does not persist invalid evidence", a
         recordId: "valid-id",
         evidence: value,
       }, {
+        logger,
         writeResource: (...args: unknown[]) =>
           Promise.resolve(writes.push(args)),
       });
@@ -155,4 +190,24 @@ Deno.test("rejects strict-object leaks and does not persist invalid evidence", a
     }
   })();
   assert(writes.length === 1);
+});
+
+Deno.test("validates direct method arguments before persistence", async () => {
+  let writes = 0;
+  try {
+    await model.methods.record.execute({
+      recordId: "../unsafe",
+      evidence: fixture(),
+    }, {
+      logger,
+      writeResource: () => {
+        writes += 1;
+        return Promise.resolve({});
+      },
+    });
+    throw new Error("expected malformed arguments to throw");
+  } catch (error) {
+    assert(error instanceof Error);
+  }
+  assert(writes === 0);
 });

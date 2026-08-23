@@ -16,6 +16,8 @@ const id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 const timestamp = z.iso.datetime({ offset: true });
 const hash = z.string().regex(/^[0-9a-f]{64}$/);
 const nonnegative = z.number().finite().nonnegative();
+const compareText = (left: string, right: string) =>
+  left < right ? -1 : left > right ? 1 : 0;
 
 const artifact = z.strictObject({ id, version: text, sha256: hash });
 const source = z.strictObject({
@@ -237,10 +239,10 @@ export const campaignOutcomeEvidenceSchema = z.strictObject({
     CAMPAIGN_OUTCOME_STAGES.indexOf(b.stage)
   ),
   evidence: [...record.evidence].sort((a, b) =>
-    a.evidenceId.localeCompare(b.evidenceId)
+    compareText(a.evidenceId, b.evidenceId)
   ),
   uncertainties: [...record.uncertainties].sort((a, b) =>
-    a.uncertaintyId.localeCompare(b.uncertaintyId)
+    compareText(a.uncertaintyId, b.uncertaintyId)
   ),
   recommendation: {
     ...record.recommendation,
@@ -264,8 +266,8 @@ export function evaluateCampaignOutcomeEvidence(input: unknown) {
     code: item.code,
     message: item.message,
   })).sort((a, b) =>
-    a.path.localeCompare(b.path) || a.code.localeCompare(b.code) ||
-    a.message.localeCompare(b.message)
+    compareText(a.path, b.path) || compareText(a.code, b.code) ||
+    compareText(a.message, b.message)
   );
   return { success: false as const, diagnostics };
 }
