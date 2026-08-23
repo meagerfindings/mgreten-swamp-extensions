@@ -3,6 +3,7 @@ import {
   DIGEST_SECTIONS,
   model,
 } from "./operational_digest.ts";
+import { createModelTestContext } from "jsr:@swamp-club/swamp-testing@0.20260706.24";
 import { syntheticSourceV1 } from "./fixtures/v1.ts";
 
 const assert = (value: unknown, message = "assertion failed") => {
@@ -148,16 +149,21 @@ Deno.test("v1 fixture fails closed for stale, future, uncited, and non-redacted 
 });
 
 Deno.test("model writes one digest and exposes no effectful collaborators", async () => {
-  const writes: unknown[] = [];
-  const result = await model.methods.build.execute(input(), {
-    writeResource: (...args: unknown[]) => {
-      writes.push(args);
-      return Promise.resolve({ name: "daily" });
-    },
+  const { context, getLogs, getWrittenResources } = createModelTestContext({
+    methodName: "build",
   });
-  equal(writes.length, 1);
-  equal(result, { dataHandles: [{ name: "daily" }] });
-  equal(Object.keys(model.methods), ["build"]);
+  const result = await model.methods.build.execute(input(), context);
+  equal(getWrittenResources().length, 1);
+  equal(result.dataHandles.length, 1);
+  equal(getLogs().map((log) => log.message), [
+    "operational digest build started",
+    "operational digest build completed",
+  ]);
+  equal(Object.keys(model.methods), [
+    "build",
+    "buildFromBetterStackTriage",
+    "buildPhaseOnePulse",
+  ]);
   assert(!("files" in model));
 });
 

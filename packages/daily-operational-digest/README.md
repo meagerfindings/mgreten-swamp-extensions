@@ -12,6 +12,11 @@ available source, and fails closed when evidence is stale, future-dated,
 unredacted, or uncited. Full normalized-evidence, freshness, redaction, and
 output-bound contracts are in [CONTRACTS.md](CONTRACTS.md).
 
+The generic `build` API remains primary. For existing consumers, the model also
+retains `buildFromBetterStackTriage` and `buildPhaseOnePulse`, persists Phase 1
+pulses, and exports `phaseOnePulseSchema`. These compatibility methods are pure,
+strict adapters over colocated contracts and add no database or reader runtime.
+
 ```ts
 import { buildOperationalDigest } from "./extensions/models/operational_digest.ts";
 

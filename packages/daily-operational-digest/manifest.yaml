@@ -16,4 +16,10 @@ additionalFiles:
   - CONTRACTS.md
   - README.md
   - LICENSE
+  - extensions/models/compatibility.ts
+  - extensions/models/_lib/signal_contracts.ts
+  - extensions/models/_lib/better_stack_triage_contracts.ts
+  - extensions/models/_lib/feedback_triage_contracts.ts
+  - extensions/models/_lib/feedback_batch_contract.ts
+  - extensions/models/_lib/railway_read_contracts.ts
 dependencies: []

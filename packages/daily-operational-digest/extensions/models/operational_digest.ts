@@ -1,4 +1,20 @@
 import { z } from "npm:zod@4";
+import {
+  buildFromBetterStackTriage,
+  buildFromBetterStackTriageArgumentsSchema,
+  buildPhaseOnePulse,
+  buildPhaseOnePulseArgumentsSchema,
+  dailyOperationalDigestSchema,
+  phaseOnePulseSchema,
+} from "./compatibility.ts";
+
+export {
+  buildFromBetterStackTriage,
+  buildFromBetterStackTriageArgumentsSchema,
+  buildPhaseOnePulse,
+  buildPhaseOnePulseArgumentsSchema,
+  phaseOnePulseSchema,
+} from "./compatibility.ts";
 
 /** Version of the operational digest model and persisted resource contract. */
 export const OPERATIONAL_DIGEST_MODEL_VERSION = "2026.08.23.1" as const;
@@ -130,6 +146,12 @@ export const operationalDigestSchema = z.strictObject({
     tokenMeasurement: z.literal("unicode-code-points-upper-bound"),
   }),
 });
+
+/** Accepts both the primary generic digest and the persisted legacy digest. */
+export const persistedDigestSchema = z.union([
+  operationalDigestSchema,
+  dailyOperationalDigestSchema,
+]);
 
 const rank: Record<z.infer<typeof severity>, number> = {
   critical: 4,
@@ -286,11 +308,23 @@ export const model = {
   type: "@mgreten/daily-operational-digest",
   version: OPERATIONAL_DIGEST_MODEL_VERSION,
   globalArguments: z.strictObject({}),
+  upgrades: [{
+    toVersion: OPERATIONAL_DIGEST_MODEL_VERSION,
+    description:
+      "Add the generic digest contract while retaining existing digest and Phase 1 pulse resources and compatibility methods",
+    upgradeAttributes: (attributes: Record<string, unknown>) => attributes,
+  }],
   resources: {
     digest: {
       description:
         "Bounded, source-cited, recommendation-only operational digest",
-      schema: operationalDigestSchema,
+      schema: persistedDigestSchema,
+      lifetime: "30d" as const,
+      garbageCollection: 10,
+    },
+    pulse: {
+      description: "Deterministic redacted Phase 1 daily pulse (compatibility)",
+      schema: phaseOnePulseSchema,
       lifetime: "30d" as const,
       garbageCollection: 10,
     },
@@ -303,6 +337,7 @@ export const model = {
       execute: async (
         args: z.infer<typeof buildOperationalDigestArgumentsSchema>,
         context: {
+          logger: { info: (message: string, fields?: unknown) => void };
           writeResource: (
             spec: string,
             name: string,
@@ -310,11 +345,81 @@ export const model = {
           ) => Promise<unknown>;
         },
       ) => {
+        context.logger.info("operational digest build started", {
+          method: "build",
+          digestId: args.digestId,
+        });
         const handle = await context.writeResource(
           "digest",
           args.digestId,
           buildOperationalDigest(args),
         );
+        context.logger.info("operational digest build completed", {
+          method: "build",
+          digestId: args.digestId,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    buildFromBetterStackTriage: {
+      description:
+        "Build and persist the legacy digest from strict Better Stack triage evidence",
+      arguments: buildFromBetterStackTriageArgumentsSchema,
+      execute: async (
+        args: z.infer<typeof buildFromBetterStackTriageArgumentsSchema>,
+        context: {
+          logger: { info: (message: string, fields?: unknown) => void };
+          writeResource: (
+            spec: string,
+            name: string,
+            data: Record<string, unknown>,
+          ) => Promise<unknown>;
+        },
+      ) => {
+        context.logger.info("Better Stack compatibility build started", {
+          method: "buildFromBetterStackTriage",
+          digestId: args.digestId,
+        });
+        const handle = await context.writeResource(
+          "digest",
+          args.digestId,
+          buildFromBetterStackTriage(args),
+        );
+        context.logger.info("Better Stack compatibility build completed", {
+          method: "buildFromBetterStackTriage",
+          digestId: args.digestId,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    buildPhaseOnePulse: {
+      description:
+        "Build and persist the legacy deterministic, redacted Phase 1 pulse",
+      arguments: buildPhaseOnePulseArgumentsSchema,
+      execute: async (
+        args: z.infer<typeof buildPhaseOnePulseArgumentsSchema>,
+        context: {
+          logger: { info: (message: string, fields?: unknown) => void };
+          writeResource: (
+            spec: string,
+            name: string,
+            data: Record<string, unknown>,
+          ) => Promise<unknown>;
+        },
+      ) => {
+        context.logger.info("Phase 1 pulse build started", {
+          method: "buildPhaseOnePulse",
+          pulseId: args.pulseId,
+        });
+        const handle = await context.writeResource(
+          "pulse",
+          args.pulseId,
+          buildPhaseOnePulse(args),
+        );
+        context.logger.info("Phase 1 pulse build completed", {
+          method: "buildPhaseOnePulse",
+          pulseId: args.pulseId,
+        });
         return { dataHandles: [handle] };
       },
     },
