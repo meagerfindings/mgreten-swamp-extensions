@@ -1,0 +1,89 @@
+id: 27bf8818-7eef-4ce8-8302-c9d6bb7e1a15
+name: "@mgreten/send-one-notification"
+description: Send one outbox record through a caller-selected transport, then explicitly fold the transport outcome into the same outbox instance.
+inputs:
+  type: object
+  additionalProperties: false
+  properties:
+    outboxModel:
+      type: string
+      minLength: 1
+      description: Model instance implementing @mgreten/notification-outbox.
+    transportModel:
+      type: string
+      minLength: 1
+      description: Caller-selected transport model instance.
+    transportMethod:
+      type: string
+      minLength: 1
+      description: Caller-selected transport delivery method.
+    transportOptions:
+      type: object
+      description: Non-message transport options; payload and idempotencyKey are always bound from this notification.
+      additionalProperties: true
+    notification:
+      type: object
+      additionalProperties: true
+      required: [workItem, event, urgency, dedupKey, era, payload, status, attempts]
+      properties:
+        workItem: { type: string }
+        event: { type: string, enum: [approval-needed, failed, completed] }
+        urgency: { type: string, enum: [low, default, high, urgent] }
+        dedupKey: { type: string, minLength: 1 }
+        era: { type: string, minLength: 1 }
+        payload: { type: object }
+        status: { type: string, enum: [pending, failed] }
+        attempts: { type: integer, minimum: 0 }
+  required: [outboxModel, transportModel, transportMethod, notification]
+jobs:
+  - name: deliver
+    steps:
+      - name: send
+        description: Attempt transport delivery. Failure is retained so the failure drain can own retry state.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.transportModel }}"
+          methodName: "${{ inputs.transportMethod }}"
+          inputs:
+            payload: "${{ inputs.notification.payload }}"
+            idempotencyKey: "${{ inputs.notification.dedupKey }}"
+            options: "${{ inputs.transportOptions }}"
+        dependsOn: []
+        weight: 0
+        allowFailure: true
+      - name: drain-success
+        description: Mark the fresh authoritative outbox record delivered only after transport success.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.outboxModel }}"
+          methodName: drainNotifications
+          inputs:
+            notifications: ["${{ inputs.notification }}"]
+            transportResults:
+              - dedupKey: "${{ inputs.notification.dedupKey }}"
+                delivered: true
+        dependsOn:
+          - step: send
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+      - name: drain-failure
+        description: Persist the outbox-owned retry state without persisting a transport error.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.outboxModel }}"
+          methodName: drainNotifications
+          inputs:
+            notifications: ["${{ inputs.notification }}"]
+            transportResults:
+              - dedupKey: "${{ inputs.notification.dedupKey }}"
+                delivered: false
+                error: transport delivery failed
+        dependsOn:
+          - step: send
+            condition: { type: failed }
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

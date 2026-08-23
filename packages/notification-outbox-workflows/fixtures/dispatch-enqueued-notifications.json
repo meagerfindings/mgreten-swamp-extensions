@@ -1,0 +1,9 @@
+{
+  "sourceWorkflowRunId": "4ef55fda-95b3-476a-8bcb-cf52a8275953",
+  "enqueueJobName": "enqueue-and-dispatch",
+  "enqueueStepName": "enqueue-alert",
+  "outboxModel": "example-notification-outbox",
+  "transportModel": "example-transport",
+  "transportMethod": "send",
+  "transportOptions": { "priority": "default" }
+}

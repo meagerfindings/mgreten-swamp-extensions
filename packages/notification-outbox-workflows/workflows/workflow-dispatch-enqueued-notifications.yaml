@@ -1,0 +1,46 @@
+id: 512aa8fd-1529-4ea6-9a6f-e21699e5ec55
+name: "@mgreten/dispatch-enqueued-notifications"
+description: Dispatch only notification records emitted by one exact enqueue step in one completed workflow run.
+inputs:
+  type: object
+  additionalProperties: false
+  properties:
+    sourceWorkflowRunId: { type: string, format: uuid }
+    enqueueJobName: { type: string, minLength: 1 }
+    enqueueStepName: { type: string, minLength: 1 }
+    outboxModel: { type: string, minLength: 1 }
+    outboxModelType: { type: string, minLength: 1, default: "@mgreten/notification-outbox" }
+    sendWorkflow: { type: string, minLength: 1, default: "@mgreten/send-one-notification" }
+    transportModel: { type: string, minLength: 1 }
+    transportMethod: { type: string, minLength: 1 }
+    transportOptions:
+      type: object
+      additionalProperties: true
+      default: {}
+      description: Shared non-message options; each iteration binds its own payload and dedupKey.
+  required: [sourceWorkflowRunId, enqueueJobName, enqueueStepName, outboxModel, transportModel, transportMethod]
+jobs:
+  - name: dispatch
+    steps:
+      - name: send-fresh-pending
+        description: Query one enqueue run and fan out only its notification output records.
+        forEach:
+          item: notification
+          in: >-
+            ${{ data.query('workflowRunId == "' + inputs.sourceWorkflowRunId + '" && jobName == "' + inputs.enqueueJobName + '" && stepName == "' + inputs.enqueueStepName + '" && modelName == "' + inputs.outboxModel + '" && modelType == "' + inputs.outboxModelType + '" && specName == "notification"', 'attributes') }}
+        concurrency: 1
+        task:
+          type: workflow
+          workflowIdOrName: "${{ inputs.sendWorkflow }}"
+          inputs:
+            outboxModel: "${{ inputs.outboxModel }}"
+            transportModel: "${{ inputs.transportModel }}"
+            transportMethod: "${{ inputs.transportMethod }}"
+            transportOptions: "${{ inputs.transportOptions }}"
+            notification: "${{ self.notification }}"
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

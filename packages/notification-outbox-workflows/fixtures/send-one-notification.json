@@ -1,0 +1,16 @@
+{
+  "outboxModel": "example-notification-outbox",
+  "transportModel": "example-transport",
+  "transportMethod": "send",
+  "transportOptions": { "priority": "high" },
+  "notification": {
+    "workItem": "synthetic-watchdog",
+    "event": "failed",
+    "urgency": "high",
+    "dedupKey": "failed-01234567",
+    "era": "synthetic-2026-08-23",
+    "payload": { "title": "Example incident", "message": "The synthetic watchdog check failed." },
+    "status": "pending",
+    "attempts": 0
+  }
+}

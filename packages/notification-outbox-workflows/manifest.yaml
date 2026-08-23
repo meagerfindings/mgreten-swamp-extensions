@@ -1,0 +1,24 @@
+manifestVersion: 1
+name: "@mgreten/notification-outbox-workflows"
+version: "2026.08.23.1"
+description: "Transport-neutral workflow patterns for atomically enqueuing, exactly scoped dispatching, and explicitly draining notification outbox records."
+repository: https://github.com/meagerfindings/swamp-notification-outbox-workflows
+paths:
+  base: manifest
+workflows:
+  - workflows/workflow-send-one-notification.yaml
+  - workflows/workflow-dispatch-enqueued-notifications.yaml
+  - workflows/workflow-deliver-thin-watchdog-alert.yaml
+additionalFiles:
+  - README.md
+  - LICENSE
+  - fixtures/send-one-notification.json
+  - fixtures/dispatch-enqueued-notifications.json
+  - fixtures/deliver-thin-watchdog-alert.json
+labels:
+  - notifications
+  - outbox
+  - workflow
+  - transport-neutral
+dependencies:
+  - "@mgreten/notification-outbox"

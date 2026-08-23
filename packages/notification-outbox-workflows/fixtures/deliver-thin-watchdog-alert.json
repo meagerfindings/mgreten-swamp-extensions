@@ -1,0 +1,16 @@
+{
+  "outboxModel": "example-notification-outbox",
+  "transportModel": "example-transport",
+  "transportMethod": "send",
+  "transportOptions": { "priority": "high" },
+  "alert": {
+    "incidentId": "synthetic-watchdog",
+    "event": "failed",
+    "urgency": "high",
+    "era": "synthetic-2026-08-23"
+  },
+  "outboxPayload": {
+    "title": "Watchdog alert",
+    "message": "Synthetic health check failed."
+  }
+}
