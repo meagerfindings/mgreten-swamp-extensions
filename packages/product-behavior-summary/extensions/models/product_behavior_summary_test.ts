@@ -63,10 +63,11 @@ Deno.test("generic catalog persists deterministic rates", async () => {
   const writes: Array<{ spec: string; name: string; data: unknown }> = [];
   const context = {
     globalArgs: { expectedOutcomes: [...outcomes] },
+    logger: { info: () => undefined },
     now: () => new Date("2026-08-17T12:00:00Z"),
-    writeResource: async (spec: string, name: string, data: unknown) => {
+    writeResource: (spec: string, name: string, data: unknown) => {
       writes.push({ spec, name, data });
-      return { name };
+      return Promise.resolve({ name });
     },
   };
   const result = await model.methods.summarize.execute(
@@ -85,6 +86,17 @@ Deno.test("generic catalog persists deterministic rates", async () => {
       { status: "calculated", rate: 0.22 },
     ],
   );
+});
+
+Deno.test("catalog order makes equivalent input deterministic", () => {
+  const input = summary();
+  input.metrics.reverse();
+  const output = summarizeProductBehavior(
+    input,
+    outcomes,
+    new Date("2026-08-17T12:00:00Z"),
+  );
+  equal(output.metrics.map((item) => item.outcome), outcomes);
 });
 
 Deno.test("missing and privacy-suppressed metrics retain null rates", () => {
@@ -194,6 +206,55 @@ Deno.test("identifiers, catalog mismatches, low cohorts, stale inputs, and causa
         new Date("2026-08-17T12:00:00Z"),
       ), message);
   }
+});
+
+Deno.test("future provenance and cyclic malformed inputs fail closed", async () => {
+  const future = summary();
+  future.generatedAt = "2026-08-17T12:00:01Z";
+  await rejects(
+    () =>
+      summarizeProductBehavior(
+        future,
+        outcomes,
+        new Date("2026-08-17T12:00:00Z"),
+      ),
+    "generatedAt cannot be in the future",
+  );
+
+  const cyclic: Record<string, unknown> = { ...summary() };
+  cyclic.self = cyclic;
+  await rejects(
+    () =>
+      summarizeProductBehavior(
+        cyclic,
+        outcomes,
+        new Date("2026-08-17T12:00:00Z"),
+      ),
+    "Invalid product behavior summary",
+  );
+});
+
+Deno.test("retries are idempotent and invalid input never writes", async () => {
+  const writes: unknown[] = [];
+  const context = {
+    globalArgs: { expectedOutcomes: [...outcomes] },
+    logger: { info: () => undefined },
+    now: () => new Date("2026-08-17T12:00:00Z"),
+    writeResource: (_spec: string, name: string, data: unknown) => {
+      writes.push(data);
+      return Promise.resolve({ name });
+    },
+  };
+  await model.methods.summarize.execute({ input: summary() }, context);
+  await model.methods.summarize.execute({ input: summary() }, context);
+  equal(writes[0], writes[1]);
+
+  const tampered = { ...summary(), sideEffectAuthority: "write" };
+  await rejects(
+    () => model.methods.summarize.execute({ input: tampered }, context),
+    "Invalid product behavior summary",
+  );
+  equal(writes.length, 2);
 });
 
 Deno.test("catalogs, metrics, dimensions, and free text are practically bounded", async () => {

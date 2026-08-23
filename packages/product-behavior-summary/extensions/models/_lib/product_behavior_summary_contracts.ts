@@ -210,17 +210,22 @@ export function createProductBehaviorSummarySchema(
     });
   }).transform((value) => ({
     ...value,
-    metrics: value.metrics.map((metric) => ({
-      ...metric,
-      result: metric.status === "measured"
-        ? metric.denominator === 0
-          ? { status: "insufficient_denominator" as const, rate: null }
-          : {
-            status: "calculated" as const,
-            rate: metric.numerator / metric.denominator,
-          }
-        : { status: metric.status, rate: null },
-    })),
+    metrics: catalog.map((outcome) => {
+      const metric = value.metrics.find((candidate) =>
+        candidate.outcome === outcome
+      )!;
+      return {
+        ...metric,
+        result: metric.status === "measured"
+          ? metric.denominator === 0
+            ? { status: "insufficient_denominator" as const, rate: null }
+            : {
+              status: "calculated" as const,
+              rate: metric.numerator / metric.denominator,
+            }
+          : { status: metric.status, rate: null },
+      };
+    }),
   }));
 }
 

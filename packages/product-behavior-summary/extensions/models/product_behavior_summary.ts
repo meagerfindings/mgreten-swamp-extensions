@@ -19,17 +19,27 @@ export const summarizeArgumentsSchema = z.object({ input: z.unknown() });
 const identifierKey =
   /^(?:user|customer|account|person|email|phone|device|session)(?:_?id|_?identifier)?$/i;
 
-function identifierPath(value: unknown, path = "input"): string | undefined {
+function identifierPath(
+  value: unknown,
+  path = "input",
+  visited = new WeakSet<object>(),
+): string | undefined {
   if (Array.isArray(value)) {
-    return value.map((item, index) => identifierPath(item, `${path}.${index}`))
+    if (visited.has(value)) return undefined;
+    visited.add(value);
+    return value.map((item, index) =>
+      identifierPath(item, `${path}.${index}`, visited)
+    )
       .find(Boolean);
   }
   if (value === null || typeof value !== "object") return undefined;
+  if (visited.has(value)) return undefined;
+  visited.add(value);
   for (
     const [key, nested] of Object.entries(value as Record<string, unknown>)
   ) {
     if (identifierKey.test(key)) return `${path}.${key}`;
-    const found = identifierPath(nested, `${path}.${key}`);
+    const found = identifierPath(nested, `${path}.${key}`, visited);
     if (found) return found;
   }
   return undefined;
@@ -53,6 +63,9 @@ export function summarizeProductBehavior(
   if (!evaluated.success) {
     fail("Invalid product behavior summary", evaluated.diagnostics);
   }
+  if (Date.parse(evaluated.value.generatedAt) > evaluatedAt.getTime()) {
+    fail("Product behavior summary generatedAt cannot be in the future");
+  }
   evaluated.value.metrics.forEach((metric, index) => {
     if (evaluatedAt.getTime() >= Date.parse(metric.freshness.expiresAt)) {
       fail(
@@ -65,6 +78,9 @@ export function summarizeProductBehavior(
 
 type WriteContext = {
   globalArgs: z.infer<typeof globalArgumentsSchema>;
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -96,6 +112,7 @@ export const model = {
         args: z.infer<typeof summarizeArgumentsSchema>,
         context: WriteContext,
       ) => {
+        context.logger.info("Summarizing product behavior metrics");
         const summary = summarizeProductBehavior(
           args.input,
           context.globalArgs.expectedOutcomes,
@@ -106,6 +123,9 @@ export const model = {
           "current",
           summary,
         );
+        context.logger.info("Persisted product behavior summary {summaryId}", {
+          summaryId: summary.summaryId,
+        });
         return { dataHandles: [handle] };
       },
     },
