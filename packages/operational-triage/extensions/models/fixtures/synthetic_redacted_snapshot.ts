@@ -1,0 +1,70 @@
+/** A deliberately synthetic fixture with only allowlisted, redacted metadata. */
+export const syntheticRedactedSnapshot = () => ({
+  schemaVersion: "1.0",
+  snapshotId: "synthetic-snapshot-1",
+  generatedAt: "2026-08-23T11:00:00Z",
+  records: [{
+    kind: "monitor",
+    recordId: "synthetic-monitor-record-1",
+    sourceReference: {
+      schemaVersion: "1.0",
+      sourceId: "synthetic-source-1",
+      source: {
+        system: "synthetic-monitoring",
+        resourceType: "health-check",
+        resourceId: "primary-check",
+      },
+      provenance: {
+        collector: "synthetic-collector",
+        collectorVersion: "1",
+        method: "fixture",
+        collectedAt: "2026-08-23T10:00:00Z",
+      },
+      observedAt: "2026-08-23T09:59:00Z",
+      freshness: {
+        asOf: "2026-08-23T10:00:00Z",
+        expiresAt: "2026-08-23T12:00:00Z",
+      },
+      sensitivity: "internal",
+    },
+    status: "confirmed_failure",
+    summary: "Synthetic health check is down",
+    evidenceIds: ["synthetic-evidence-1"],
+    monitor: { checkState: "down", responseTimeMs: null },
+  }],
+  filtering: {
+    policy: "exact-resource-identity-allowlist",
+    includedCount: 1,
+    excludedCount: 0,
+    excludedByReason: { identityNotAllowed: 0, missingIdentity: 0 },
+  },
+  limits: {
+    maxRows: 100,
+    maxBytes: 100_000,
+    maxWindowSeconds: 3600,
+    rowsRead: 1,
+    bytesRead: 500,
+    windowStartedAt: "2026-08-23T10:00:00Z",
+    windowEndedAt: "2026-08-23T11:00:00Z",
+    truncated: false,
+  },
+  redaction: {
+    method: "deterministic-secret-and-identifier-redaction",
+    methodVersion: "1",
+    applied: true,
+    rawLogsRetained: false,
+    replacementCount: 0,
+  },
+  authority: {
+    mode: "read-only",
+    sideEffects: "none",
+    remediation: "prohibited",
+    mayAcknowledgeIncidents: false,
+    mayModifyMonitors: false,
+  },
+  escalation: {
+    disposition: "recommend_review",
+    evidenceIds: ["synthetic-evidence-1"],
+    rationale: "Synthetic failure needs human review",
+  },
+});
