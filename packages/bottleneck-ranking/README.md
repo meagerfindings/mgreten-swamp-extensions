@@ -3,7 +3,8 @@
 A standalone Swamp model that ranks bottleneck candidates from **only** the
 scales, directions, weights, ratings, evidence, and missing-data policy supplied
 by its caller. It makes no network calls, persists no hidden state, and has no
-authority to take action. Its result is explicitly `recommendation_only`.
+authority to take action. Its result is explicitly `recommendation_only`, and
+it labels evidence authenticity as caller-supplied and unverified.
 
 ## Install and run
 
@@ -21,7 +22,7 @@ Run the model with a stable request identifier and an input matching
 
 ```sh
 swamp model method run bottleneck-ranking rank \
-  --input requestId=example-1 \
+  --input requestId=example-bottlenecks \
   --input input=@examples/rank.json
 ```
 
@@ -40,6 +41,10 @@ available values for that candidate. `score_as_zero` keeps all configured
 weights and assigns a zero contribution to missing values. Missing values are
 always disclosed in `missingDataDisclosure`; the model never guesses a score or
 policy.
+
+`requestId` must equal the input's `rankingId`. Replaying that request writes the
+same resource, while replaying the payload under another identifier is rejected.
+This deterministic behavior is not a global anti-replay ledger.
 
 ## Development
 

@@ -18,6 +18,9 @@ const argumentsSchema = z.strictObject({
 
 type Arguments = z.infer<typeof argumentsSchema>;
 type Context = {
+  logger: {
+    info: (message: string, values?: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -49,11 +52,22 @@ export const model = {
         context: Context,
       ): Promise<{ dataHandles: unknown[] }> => {
         const ranking = rankBottlenecks(args.input);
+        if (ranking.rankingId !== args.requestId) {
+          throw new Error(
+            "rank requestId must equal input.rankingId to bind replays to one resource",
+          );
+        }
+        context.logger.info("Ranking bottlenecks for {requestId}", {
+          requestId: args.requestId,
+        });
         const handle = await context.writeResource(
           "ranking",
           `ranking-${args.requestId}`,
           ranking,
         );
+        context.logger.info("Ranked {candidateCount} bottlenecks", {
+          candidateCount: ranking.ranking.length,
+        });
         return { dataHandles: [handle] };
       },
     },

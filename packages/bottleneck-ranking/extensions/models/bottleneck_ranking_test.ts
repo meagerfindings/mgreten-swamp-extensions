@@ -24,7 +24,7 @@ function rejects(fn: () => unknown, text: string): void {
 function fixture(): Record<string, unknown> {
   return {
     schemaVersion: "1.0",
-    rankingId: "synthetic-ranking",
+    rankingId: "synthetic-1",
     evaluatedAt: "2026-08-23T12:00:00Z",
     policy: {
       scales: BOTTLENECK_CRITERIA.map((criterion) => ({
@@ -87,7 +87,8 @@ Deno.test("ties, criteria order, evidence ordering, and repeated calculations ar
   );
   assert(
     first.authority.replacesJudgment === false &&
-      first.authority.sideEffects === "none",
+      first.authority.sideEffects === "none" &&
+      first.authority.evidenceAuthenticity === "caller_supplied_unverified",
   );
 });
 
@@ -196,10 +197,14 @@ Deno.test("the Swamp model writes exactly the deterministic ranking resource", a
     { spec: string; name: string; data: Record<string, unknown> }
   > = [];
   const input = fixture();
+  const logs: string[] = [];
   const response = await model.methods.rank.execute({
     requestId: "synthetic-1",
     input,
   }, {
+    logger: {
+      info: (message) => logs.push(message),
+    },
     writeResource: (spec, name, data) => {
       writes.push({ spec, name, data });
       return Promise.resolve({ name });
@@ -213,6 +218,66 @@ Deno.test("the Swamp model writes exactly the deterministic ranking resource", a
   assert(
     JSON.stringify(writes[0].data) === JSON.stringify(rankBottlenecks(input)),
   );
+  assert(logs.length === 2);
+});
+
+Deno.test("request identity binds deterministic replay to one resource", async () => {
+  const writes: string[] = [];
+  const context = {
+    logger: { info: () => undefined },
+    writeResource: (_spec: string, name: string) => {
+      writes.push(name);
+      return Promise.resolve({ name });
+    },
+  };
+  const input = fixture();
+  await model.methods.rank.execute(
+    { requestId: "synthetic-1", input },
+    context,
+  );
+  await model.methods.rank.execute(
+    { requestId: "synthetic-1", input },
+    context,
+  );
+  assert(writes.join(",") === "ranking-synthetic-1,ranking-synthetic-1");
+  await (async () => {
+    try {
+      await model.methods.rank.execute(
+        { requestId: "replayed-as-new", input },
+        context,
+      );
+    } catch (error) {
+      assert(String(error).includes("bind replays"));
+      return;
+    }
+    throw new Error("expected replay under a different requestId to fail");
+  })();
+});
+
+Deno.test("rejects stale, future-collected, malformed, and unsafe-link evidence", () => {
+  const stale = fixture() as {
+    evidence: Array<{ sourceReference: { freshness: { expiresAt: string } } }>;
+  };
+  stale.evidence[0].sourceReference.freshness.expiresAt =
+    "2026-08-23T11:59:59Z";
+  rejects(() => rankBottlenecks(stale), "evidence must be fresh");
+
+  const futureCollected = fixture() as {
+    evidence: Array<
+      { sourceReference: { provenance: { collectedAt: string } } }
+    >;
+  };
+  futureCollected.evidence[0].sourceReference.provenance.collectedAt =
+    "2026-08-23T12:00:01Z";
+  rejects(() => rankBottlenecks(futureCollected), "collected by evaluatedAt");
+
+  const malformed = fixture() as Record<string, unknown>;
+  malformed.unexpected = true;
+  rejects(() => rankBottlenecks(malformed), "Unrecognized key");
+
+  const unsafeLink = fixture() as { evidence: Array<{ evidenceLink: string }> };
+  unsafeLink.evidence[0].evidenceLink = "javascript:alert(1)";
+  rejects(() => rankBottlenecks(unsafeLink), "Invalid URL");
 });
 
 Deno.test("rejects practical collection and identifier boundaries", () => {

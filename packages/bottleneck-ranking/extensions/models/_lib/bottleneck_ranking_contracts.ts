@@ -19,7 +19,7 @@ const Id = z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/);
 const Criterion = z.enum(BOTTLENECK_CRITERIA);
 const Evidence = z.strictObject({
   evidenceId: Id,
-  evidenceLink: z.url().max(2_000),
+  evidenceLink: z.url({ protocol: /^https?$/ }).max(2_000),
   observation: Text,
   sourceReference: sourceReferenceSchema,
 });
@@ -72,6 +72,15 @@ export const bottleneckRankingInputSchema = z.strictObject({
       add(
         ["evidence", index, "sourceReference", "freshness", "asOf"],
         "evidence must be available by evaluatedAt",
+      );
+    }
+    if (
+      Date.parse(evidence.sourceReference.provenance.collectedAt) >
+        Date.parse(input.evaluatedAt)
+    ) {
+      add(
+        ["evidence", index, "sourceReference", "provenance", "collectedAt"],
+        "evidence must be collected by evaluatedAt",
       );
     }
     if (
@@ -192,11 +201,17 @@ export const bottleneckRankingOutputSchema = z.strictObject({
     disposition: z.literal("recommendation_only"),
     replacesJudgment: z.literal(false),
     sideEffects: z.literal("none"),
+    evidenceAuthenticity: z.literal("caller_supplied_unverified"),
+    replayBehavior: z.literal("same_request_overwrites_same_resource"),
   }),
 });
 
 /** A validated ranking result. */
 export type BottleneckRanking = z.infer<typeof bottleneckRankingOutputSchema>;
+
+function compareIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 /** Validate, normalize, score, and deterministically order caller-supplied candidates. */
 export function rankBottlenecks(raw: unknown): BottleneckRanking {
@@ -265,7 +280,7 @@ export function rankBottlenecks(raw: unknown): BottleneckRanking {
       criteria,
     };
   }).sort((a, b) =>
-    b.score - a.score || a.candidateId.localeCompare(b.candidateId)
+    b.score - a.score || compareIds(a.candidateId, b.candidateId)
   );
   const { candidates: _candidates, ...rankingMetadata } = input;
   return bottleneckRankingOutputSchema.parse({
@@ -275,13 +290,15 @@ export function rankBottlenecks(raw: unknown): BottleneckRanking {
       ...candidate,
     })),
     missingDataDisclosure: missingDataDisclosure.sort((a, b) =>
-      a.candidateId.localeCompare(b.candidateId) ||
-      a.criterion.localeCompare(b.criterion)
+      compareIds(a.candidateId, b.candidateId) ||
+      compareIds(a.criterion, b.criterion)
     ),
     authority: {
       disposition: "recommendation_only",
       replacesJudgment: false,
       sideEffects: "none",
+      evidenceAuthenticity: "caller_supplied_unverified",
+      replayBehavior: "same_request_overwrites_same_resource",
     },
   });
 }

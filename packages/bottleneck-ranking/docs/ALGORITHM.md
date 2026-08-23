@@ -31,8 +31,15 @@ zero.
 ## Ordering and output
 
 Candidates are ordered by descending score. Equal scores are ordered by
-ascending `candidateId`, yielding a repeatable total order. Criteria and
+ascending Unicode code-unit `candidateId` (without locale-sensitive comparison),
+yielding a repeatable total order. Criteria and
 missing-data disclosures are also sorted deterministically. The output preserves
 input policy and evidence, exposes raw values, normalized values, effective
 weights, and each contribution, then states that it is recommendation-only with
-no side effects.
+no side effects. Evidence provenance and freshness are validated for internal
+consistency, but authenticity remains caller-supplied and unverified.
+
+At the model boundary, `requestId` must equal `rankingId`. Replaying the same
+request therefore writes the same deterministic resource; presenting the same
+payload under a different request identifier fails closed. The model does not
+claim to provide a global anti-replay ledger.
