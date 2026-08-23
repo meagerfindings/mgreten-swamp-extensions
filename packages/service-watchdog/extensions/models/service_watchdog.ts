@@ -41,25 +41,24 @@ const policySchema = z.strictObject({
     openUrgency: z.enum(["high", "default"]).default("high"),
     resolveUrgency: z.enum(["high", "default"]).default("default"),
   }),
-}).superRefine((value, context) => {
+});
+const parsePolicy = (value: unknown): z.infer<typeof policySchema> => {
+  const parsed = policySchema.parse(value);
   for (
     const [field, values] of [[
       "topology.subjects",
-      value.topology.subjects.map((item) => item.key),
+      parsed.topology.subjects.map((item) => item.key),
     ], [
       "sourceAdapters",
-      value.sourceAdapters.map((item) => item.adapterKey),
+      parsed.sourceAdapters.map((item) => item.adapterKey),
     ]] as const
   ) {
     if (new Set(values).size !== values.length) {
-      context.addIssue({
-        code: "custom",
-        path: [field],
-        message: "keys must be unique",
-      });
+      throw new TypeError(`${field} keys must be unique`);
     }
   }
-});
+  return parsed;
+};
 /** Schema for the immutable plan captured before adapter reads begin. */
 export const planSchema = z.strictObject({
   schemaVersion: z.literal("1.0"),
@@ -83,6 +82,15 @@ const sourceSnapshotSchema = z.strictObject({
   windowEndedAt: timestamp,
   truncated: z.boolean(),
   observations: z.array(observationSchema).max(1_000),
+}).superRefine((value, context) => {
+  const subjectKeys = value.observations.map((item) => item.subjectKey);
+  if (new Set(subjectKeys).size !== subjectKeys.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["observations"],
+      message: "subject keys must be unique within an adapter snapshot",
+    });
+  }
 });
 /** Schema for a provider-neutral inspection result. */
 export const inspectionSchema = z.strictObject({
@@ -136,6 +144,10 @@ type Policy = ServiceWatchdogPolicy;
 type Context = {
   globalArgs?: Policy;
   now?: () => Date;
+  logger?: {
+    info(message: string, properties?: Record<string, unknown>): void;
+    warning(message: string, properties?: Record<string, unknown>): void;
+  };
   readResource(name: string): Promise<Record<string, unknown> | null>;
   writeResource(
     spec: string,
@@ -146,10 +158,10 @@ type Context = {
 const iso = (milliseconds: number) => new Date(milliseconds).toISOString();
 const nameFor = (prefix: string, value: string) =>
   `${prefix}-${value.replace(/[^A-Za-z0-9_.:-]/g, "_")}`;
-const parsePolicy = (value: unknown): Policy => policySchema.parse(value);
 
 /** Capture or reuse the deterministic inspection plan for the current interval. */
 export async function prepareInspection(context: Context) {
+  context.logger?.info("Preparing service watchdog inspection");
   const captured = (context.now ?? (() => new Date()))();
   const policy = parsePolicy(context.globalArgs);
   const intervalMs = policy.retry.intervalSeconds * 1_000;
@@ -159,6 +171,9 @@ export async function prepareInspection(context: Context) {
     await context.readResource("plan-current"),
   );
   if (current.success && current.data.intervalId === intervalId) {
+    context.logger?.info("Reusing inspection plan {inspectionId}", {
+      inspectionId: current.data.inspectionId,
+    });
     return { value: current.data, handles: [] };
   }
   const plan = planSchema.parse({
@@ -172,6 +187,9 @@ export async function prepareInspection(context: Context) {
     authority: noAuthority,
   });
   const handle = await context.writeResource("plan", "plan-current", plan);
+  context.logger?.info("Prepared inspection plan {inspectionId}", {
+    inspectionId: plan.inspectionId,
+  });
   return { value: plan, handles: [handle] };
 }
 
@@ -205,6 +223,7 @@ const sourceState = (
 
 /** Evaluate supplied snapshots and persist only deterministic state transitions. */
 export async function evaluateInspection(input: unknown, context: Context) {
+  context.logger?.info("Evaluating service watchdog inspection");
   const args = z.strictObject({
     sourceSnapshots: z.array(z.unknown()).max(20).default([]),
   }).parse(input);
@@ -229,7 +248,15 @@ export async function evaluateInspection(input: unknown, context: Context) {
     return parsed.data;
   });
   const byAdapter = new Map<string, z.infer<typeof sourceSnapshotSchema>>();
+  const configuredAdapters = new Set(
+    plan.policy.sourceAdapters.map((adapter) => adapter.adapterKey),
+  );
   for (const snapshot of snapshots) {
+    if (!configuredAdapters.has(snapshot.adapterKey)) {
+      throw new TypeError(
+        `Unknown source snapshot adapter ${snapshot.adapterKey}`,
+      );
+    }
     if (byAdapter.has(snapshot.adapterKey)) {
       throw new TypeError(
         `Duplicate source snapshot for adapter ${snapshot.adapterKey}`,
@@ -253,13 +280,24 @@ export async function evaluateInspection(input: unknown, context: Context) {
     authority: noAuthority,
   });
   const subjects = await Promise.all(
-    plan.policy.topology.subjects.map(async (subject) => ({
-      subject,
-      previous: subjectStateSchema.safeParse(
-        await context.readResource(nameFor("subject", subject.key)),
-      ),
-    })),
+    plan.policy.topology.subjects.map(async (subject) => {
+      const stored = await context.readResource(
+        nameFor("subject", subject.key),
+      );
+      if (stored === null) return { subject, previous: null };
+      return { subject, previous: subjectStateSchema.parse(stored) };
+    }),
   );
+  if (
+    subjects.every(({ previous }) =>
+      previous?.lastInspectionId === inspection.inspectionId
+    )
+  ) {
+    context.logger?.info("Suppressing replay of inspection {inspectionId}", {
+      inspectionId: inspection.inspectionId,
+    });
+    return { dataHandles: [] };
+  }
   const pending: Array<{
     spec: string;
     name: string;
@@ -279,24 +317,26 @@ export async function evaluateInspection(input: unknown, context: Context) {
     const valid = evidence.every((item) =>
       item.state === "available" && item.observation
     );
-    const observedAt = valid
-      ? evidence.map((item) => item.observation!.observedAt).sort().at(-1)!
-      : null;
-    const fresh = observedAt !== null &&
-      Date.parse(observedAt) >=
-        Date.parse(plan.capturedAt) -
-          plan.policy.freshness.maxObservationAgeSeconds * 1_000 &&
-      Date.parse(observedAt) <= Date.parse(plan.capturedAt);
+    const observedAts = valid
+      ? evidence.map((item) => item.observation!.observedAt)
+      : [];
+    const observedAt = observedAts.sort().at(-1) ?? null;
+    const earliestFresh = Date.parse(plan.capturedAt) -
+      plan.policy.freshness.maxObservationAgeSeconds * 1_000;
+    const fresh = observedAts.length > 0 &&
+      observedAts.every((value) =>
+        Date.parse(value) >= earliestFresh &&
+        Date.parse(value) <= Date.parse(plan.capturedAt)
+      );
     const healthy = fresh &&
       evidence.every((item) =>
         item.adapter.healthyStatuses.includes(item.observation!.status)
       );
     const stateName = nameFor("subject", subject.key);
     if (
-      previous.success &&
-      previous.data.lastInspectionId === inspection.inspectionId
+      previous?.lastInspectionId === inspection.inspectionId
     ) continue;
-    const prior = previous.success ? previous.data : {
+    const prior = previous ?? {
       schemaVersion: "1.0" as const,
       subjectKey: subject.key,
       state: "unknown" as const,
@@ -310,6 +350,10 @@ export async function evaluateInspection(input: unknown, context: Context) {
     let event: "opened" | "resolved" | null = null;
     let eventIncidentId: string | null = null;
     if (!fresh) {
+      context.logger?.warning(
+        "Inspection {inspectionId} has degraded evidence for {subjectKey}",
+        { inspectionId: inspection.inspectionId, subjectKey: subject.key },
+      );
       next = {
         ...prior,
         state: "unknown" as const,
@@ -332,11 +376,11 @@ export async function evaluateInspection(input: unknown, context: Context) {
     } else {
       const continuous = prior.state === "unhealthy" &&
         prior.lastObservedAt !== null &&
-        Date.parse(observedAt) - Date.parse(prior.lastObservedAt) <=
+        Date.parse(observedAt!) - Date.parse(prior.lastObservedAt) <=
           plan.policy.freshness.maxObservationAgeSeconds * 1_000;
       const unhealthySince = continuous ? prior.unhealthySince : observedAt;
       const breached = unhealthySince !== null &&
-        Date.parse(observedAt) - Date.parse(unhealthySince) >=
+        Date.parse(observedAt!) - Date.parse(unhealthySince) >=
           plan.policy.alert.sustainedForSeconds * 1_000;
       const incidentId = prior.incidentId ??
         (breached
@@ -358,10 +402,15 @@ export async function evaluateInspection(input: unknown, context: Context) {
     }
     const state = subjectStateSchema.parse(next);
     if (event && eventIncidentId) {
-      const incidentName = nameFor("incident", eventIncidentId);
-      const priorIncident = incidentSchema.safeParse(
-        await context.readResource(incidentName),
+      context.logger?.info(
+        "Recorded {event} transition for {subjectKey}",
+        { event, subjectKey: subject.key },
       );
+      const incidentName = nameFor("incident", eventIncidentId);
+      const storedIncident = await context.readResource(incidentName);
+      const priorIncident = storedIncident === null
+        ? null
+        : incidentSchema.parse(storedIncident);
       const incident = incidentSchema.parse({
         schemaVersion: "1.0",
         incidentId: eventIncidentId,
@@ -369,7 +418,7 @@ export async function evaluateInspection(input: unknown, context: Context) {
         status: event === "opened" ? "open" : "resolved",
         openedAt: event === "opened"
           ? plan.capturedAt
-          : (priorIncident.data?.openedAt ?? plan.capturedAt),
+          : (priorIncident?.openedAt ?? plan.capturedAt),
         resolvedAt: event === "resolved" ? plan.capturedAt : null,
         latestInspectionRef: inspection.inspectionId,
         authority: noAuthority,
@@ -403,6 +452,9 @@ export async function evaluateInspection(input: unknown, context: Context) {
       await context.writeResource(output.spec, output.name, output.data),
     );
   }
+  context.logger?.info("Evaluated inspection {inspectionId}", {
+    inspectionId: inspection.inspectionId,
+  });
   return { dataHandles: handles };
 }
 
@@ -447,7 +499,7 @@ export const model = {
     prepareInspection: {
       description:
         "Persist a deterministic plan before adapters collect source snapshots",
-      arguments: z.strictObject({}),
+      arguments: z.object({}),
       execute: async (_args: unknown, context: Context) => ({
         dataHandles: (await prepareInspection(context)).handles,
       }),
@@ -455,7 +507,7 @@ export const model = {
     evaluateInspection: {
       description:
         "Evaluate supplied adapter snapshots without network, delivery, remediation, or mutation",
-      arguments: z.strictObject({
+      arguments: z.object({
         sourceSnapshots: z.array(z.unknown()).max(20).default([]),
       }),
       execute: evaluateInspection,

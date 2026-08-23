@@ -87,9 +87,14 @@ Deno.test("two-phase transition-only watchdog opens and resolves exactly once", 
     "persists incident outputs before the transition replay marker",
   );
   const duplicatePlan = (await prepareInspection(h.context)).value;
+  const writesBeforeReplay = h.writes.length;
   await evaluateInspection({
     sourceSnapshots: [source(duplicatePlan, "down")],
   }, h.context);
+  assert(
+    h.writes.length === writesBeforeReplay,
+    "unchanged inspection replay produces no writes",
+  );
   assert(
     h.writes.filter((write) => write.spec === "alertIntent").length === 1,
     "retry does not re-deliver an intent",
@@ -147,7 +152,17 @@ Deno.test("rejects malformed and duplicate snapshots before any evaluation write
   const h = harness();
   const plan = (await prepareInspection(h.context)).value;
   const writesBefore = h.writes.length;
-  for (const snapshots of [[{}], [source(plan, "up"), source(plan, "up")]]) {
+  const duplicateObservation = source(plan, "up");
+  duplicateObservation.observations.push(duplicateObservation.observations[0]);
+  const unknownAdapter = { ...source(plan, "up"), adapterKey: "unknown" };
+  for (
+    const snapshots of [
+      [{}],
+      [source(plan, "up"), source(plan, "up")],
+      [duplicateObservation],
+      [unknownAdapter],
+    ]
+  ) {
     let rejected = false;
     try {
       await evaluateInspection({ sourceSnapshots: snapshots }, h.context);
@@ -157,6 +172,32 @@ Deno.test("rejects malformed and duplicate snapshots before any evaluation write
     assert(rejected);
     assert(h.writes.length === writesBefore, "validation must precede writes");
   }
+});
+
+Deno.test("one stale required observation makes all subject evidence unknown", async () => {
+  const h = harness();
+  h.context.globalArgs = {
+    ...policy,
+    sourceAdapters: [
+      ...policy.sourceAdapters,
+      { adapterKey: "secondary", healthyStatuses: ["up"], required: true },
+    ],
+  };
+  const plan = (await prepareInspection(h.context)).value;
+  const primary = source(plan, "down");
+  const secondary = {
+    ...source(plan, "down"),
+    adapterKey: "secondary",
+    observations: [{
+      subjectKey: "api",
+      status: "down",
+      observedAt: "2026-08-23T11:00:00.000Z",
+    }],
+  };
+  await evaluateInspection({ sourceSnapshots: [primary, secondary] }, h.context);
+  const state = h.writes.find((write) => write.spec === "subjectState");
+  assert(state?.data.state === "unknown");
+  assert(h.writes.every((write) => write.spec !== "alertIntent"));
 });
 
 Deno.test("reads and validates every output before the first evaluation write", async () => {
@@ -195,6 +236,24 @@ Deno.test("reads and validates every output before the first evaluation write", 
   assert(h.writes.length === writesBefore);
 });
 
+Deno.test("malformed persisted subject state fails before evaluation writes", async () => {
+  const h = harness();
+  const plan = (await prepareInspection(h.context)).value;
+  h.stored["subject-api"] = { state: "invented" };
+  const writesBefore = h.writes.length;
+  let rejected = false;
+  try {
+    await evaluateInspection(
+      { sourceSnapshots: [source(plan, "down")] },
+      h.context,
+    );
+  } catch {
+    rejected = true;
+  }
+  assert(rejected);
+  assert(h.writes.length === writesBefore);
+});
+
 Deno.test("evaluation rejects caller plans and stale persisted policy", async () => {
   const h = harness();
   const plan = (await prepareInspection(h.context)).value;
@@ -219,9 +278,10 @@ Deno.test("evaluation rejects caller plans and stale persisted policy", async ()
   assert(rejected, "persisted plans must bind the current global policy");
 });
 
-Deno.test("prepareInspection arguments are strict", () => {
+Deno.test("prepareInspection ignores evaluator-injected global arguments", () => {
   assert(
-    !model.methods.prepareInspection.arguments.safeParse({ bypass: true })
-      .success,
+    Object.keys(
+      model.methods.prepareInspection.arguments.parse({ bypass: true }),
+    ).length === 0,
   );
 });
