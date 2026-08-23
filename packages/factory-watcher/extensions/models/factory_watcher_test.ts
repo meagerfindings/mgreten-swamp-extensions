@@ -25,7 +25,7 @@ const categories = [
   "factory_improvement",
 ] as const;
 const source = (id: string) => ({
-  schemaVersion: "1.0",
+  schemaVersion: "1.0" as const,
   sourceId: id,
   source: { system: "synthetic", resourceType: "transition", resourceId: id },
   provenance: {
@@ -42,7 +42,7 @@ const source = (id: string) => ({
   sensitivity: "internal" as const,
 });
 const fixture = () => ({
-  schemaVersion: "1.0",
+  schemaVersion: "1.0" as const,
   watchId: "watch-1",
   evaluatedAt: "2026-08-23T12:00:00Z",
   policy: {
@@ -118,18 +118,68 @@ Deno.test("stale evidence and incomplete availability declarations fail closed",
   );
 });
 
+Deno.test("evidence collected after evaluation and malformed input fail closed", () => {
+  const futureCollection = fixture();
+  futureCollection.evidence[0].sourceReference.provenance.collectedAt =
+    "2026-08-23T12:00:01Z";
+  rejects(() => watchFactory(futureCollection), "collected by evaluatedAt");
+
+  rejects(
+    () => watchFactory({ ...fixture(), unexpected: true }),
+    "Unrecognized key",
+  );
+  rejects(
+    () =>
+      watchFactory({
+        ...fixture(),
+        observations: [{
+          ...fixture().observations[0],
+          evidenceIds: ["missing"],
+        }],
+      }),
+    "unknown evidenceId",
+  );
+});
+
+Deno.test("recommendation provenance is chronologically ordered across offsets", () => {
+  const input = fixture();
+  input.observations = [
+    {
+      ...input.observations[0],
+      observationId: "later",
+      signalKey: "offset",
+      occurredAt: "2026-08-23T03:00:00+01:00",
+    },
+    {
+      ...input.observations[1],
+      observationId: "earlier",
+      signalKey: "offset",
+      occurredAt: "2026-08-23T01:30:00Z",
+    },
+  ];
+  const result = watchFactory(input);
+  assert(
+    result.recommendations[0].observationIds.join(",") === "earlier,later",
+  );
+});
+
 Deno.test("model persists one recommendation-only result with no authority to act", async () => {
   const writes: unknown[][] = [];
+  const logs: string[] = [];
   const result = await model.methods.watch.execute({
     requestId: "watch-1",
     input: fixture(),
   }, {
+    logger: {
+      info: (message: string) => logs.push(message),
+    },
     writeResource: async (...args: unknown[]) => {
       writes.push(args);
       return { name: args[1] };
     },
   });
   assert(writes.length === 1 && writes[0][0] === "watch");
+  assert(logs.length === 2);
   assert(
     JSON.stringify(result) ===
       JSON.stringify({ dataHandles: [{ name: "watch-watch-1" }] }),
@@ -150,6 +200,7 @@ Deno.test("requestId is bound to input watchId", async () => {
   let rejected = false;
   try {
     await model.methods.watch.execute({ requestId: "other", input: fixture() }, {
+      logger: { info: () => {} },
       writeResource: () => Promise.resolve({}),
     });
   } catch (error) { rejected = String(error).includes("exactly match"); }

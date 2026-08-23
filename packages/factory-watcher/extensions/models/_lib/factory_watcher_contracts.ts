@@ -99,6 +99,15 @@ export const factoryWatcherInputSchema = z.strictObject({
       );
     }
     if (
+      Date.parse(evidence.sourceReference.provenance.collectedAt) >
+        Date.parse(input.evaluatedAt)
+    ) {
+      issue(
+        ["evidence", index, "sourceReference", "provenance", "collectedAt"],
+        "evidence must be collected by evaluatedAt",
+      );
+    }
+    if (
       Date.parse(evidence.sourceReference.freshness.expiresAt) <
         Date.parse(input.evaluatedAt)
     ) {
@@ -208,7 +217,7 @@ export function watchFactory(raw: unknown): FactoryWatcherOutput {
     )!;
     if (observations.length < threshold.minimumOccurrences) return [];
     const ordered = [...observations].sort((a, b) =>
-      a.occurredAt.localeCompare(b.occurredAt) ||
+      Date.parse(a.occurredAt) - Date.parse(b.occurredAt) ||
       a.observationId.localeCompare(b.observationId)
     );
     return [{

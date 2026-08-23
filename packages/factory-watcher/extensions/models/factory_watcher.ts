@@ -1,5 +1,6 @@
 import { z } from "npm:zod@4";
 import {
+  factoryWatcherInputSchema,
   factoryWatcherOutputSchema,
   watchFactory,
 } from "./_lib/factory_watcher_contracts.ts";
@@ -8,9 +9,12 @@ import {
 export const globalArgumentsSchema = z.strictObject({});
 const argumentsSchema = z.strictObject({
   requestId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/),
-  input: z.unknown(),
+  input: factoryWatcherInputSchema,
 });
 type Context = {
+  logger: {
+    info: (message: string, properties: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -40,11 +44,14 @@ export const model = {
         args: z.infer<typeof argumentsSchema>,
         context: Context,
       ) => {
+        context.logger.info("Evaluating factory watch {requestId}", {
+          requestId: args.requestId,
+        });
         const output = watchFactory(args.input);
         if (output.watchId !== args.requestId) {
           throw new TypeError("requestId must exactly match input.watchId");
         }
-        return {
+        const result = {
           dataHandles: [
             await context.writeResource(
               "watch",
@@ -53,6 +60,14 @@ export const model = {
             ),
           ],
         };
+        context.logger.info(
+          "Persisted factory watch {requestId} with {recommendationCount} recommendations",
+          {
+            requestId: args.requestId,
+            recommendationCount: output.recommendations.length,
+          },
+        );
+        return result;
       },
     },
   },
