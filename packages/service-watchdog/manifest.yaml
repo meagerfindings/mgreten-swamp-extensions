@@ -1,0 +1,13 @@
+manifestVersion: 1
+name: "@mgreten/service-watchdog"
+version: 2026.08.23.1
+description: "Provider-neutral, transition-only service watchdog with no delivery capability."
+repository: "https://github.com/meagerfindings/swamp-service-watchdog"
+models:
+  - service_watchdog.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+  - extensions/models/watchdog_evaluation_contracts.ts
+  - extensions/models/watchdog_evaluation_contracts_test.ts
+dependencies: []
