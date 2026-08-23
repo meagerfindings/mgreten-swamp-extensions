@@ -1,0 +1,84 @@
+id: 7e27da20-3c21-4aff-b494-2831a4c0124c
+name: "@mgreten/bounded-operating-context"
+description: >-
+  Compile durable policy context and a time-bounded operating packet from
+  minimized cited entries. It does not invoke providers, call the network, or
+  take an external side effect.
+tags:
+  capability: bounded-operating-context
+  boundary: reference-only-no-provider-no-side-effect
+inputs:
+  properties:
+    packetId: { type: string, minLength: 1 }
+    generatedAt: { type: string, format: date-time }
+    expiresAt: { type: string, format: date-time }
+    contextCompilerModel: { type: string, minLength: 1 }
+    compileConstitutionMethod: { type: string, minLength: 1 }
+    compileOperatingPacketMethod: { type: string, minLength: 1 }
+    entries:
+      type: array
+      minItems: 1
+      maxItems: 100
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          entryId: { type: string, minLength: 1, maxLength: 200 }
+          kind: { type: string, minLength: 1, maxLength: 100 }
+          summary: { type: string, minLength: 1, maxLength: 2000 }
+          confidence: { enum: [low, medium, high] }
+          sensitivity: { enum: [public, internal, confidential, restricted] }
+          observedAt: { type: string, format: date-time }
+          expiresAt: { type: string, format: date-time }
+          sourceRef: { type: string, minLength: 1, maxLength: 2000 }
+          cited: { const: true }
+          minimized: { const: true }
+        required: [entryId, kind, summary, confidence, sensitivity, observedAt, expiresAt, sourceRef, cited, minimized]
+    contentAttestation: { const: minimized-no-secrets-no-private-content }
+  required: [packetId, generatedAt, expiresAt, contextCompilerModel, compileConstitutionMethod, compileOperatingPacketMethod, entries, contentAttestation]
+jobs:
+  - name: compile-operating-context
+    description: Compile durable policy context independently before compiling the current bounded packet.
+    steps:
+      - name: validate-packet-chronology
+        description: Require a future packet expiry and fresh minimized cited entries.
+        task:
+          type: assert
+          expr: timestamp(inputs.generatedAt) < timestamp(inputs.expiresAt) && inputs.entries.all(item, item.cited && item.minimized && timestamp(item.observedAt) <= timestamp(inputs.generatedAt) && timestamp(inputs.generatedAt) < timestamp(item.expiresAt))
+          message: Packet and entry chronology, citation, and minimization must be valid.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: constitution
+        description: Persist only the compact durable policy artifact defined by the configured compiler.
+        task:
+          type: model_method
+          modelIdOrName: '${{ inputs.contextCompilerModel }}'
+          methodName: '${{ inputs.compileConstitutionMethod }}'
+          inputs: {}
+        dependsOn:
+          - step: validate-packet-chronology
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+      - name: operating-packet
+        description: Compile the fresh, cited current packet from caller-provided minimized entries.
+        task:
+          type: model_method
+          modelIdOrName: '${{ inputs.contextCompilerModel }}'
+          methodName: '${{ inputs.compileOperatingPacketMethod }}'
+          inputs:
+            packetId: '${{ inputs.packetId }}'
+            generatedAt: '${{ inputs.generatedAt }}'
+            expiresAt: '${{ inputs.expiresAt }}'
+            entries: '${{ inputs.entries }}'
+            contentAttestation: '${{ inputs.contentAttestation }}'
+        dependsOn:
+          - step: constitution
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

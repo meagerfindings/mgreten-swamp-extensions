@@ -1,0 +1,112 @@
+id: 5182399c-5f44-4e2e-9078-db1dbc70dbf6
+name: "@mgreten/bounded-reference-context"
+description: >-
+  Compile a fresh, role-bounded context manifest from registry metadata and
+  candidate references only. It does not invoke providers, read source content,
+  call the network, or take an external side effect.
+tags:
+  capability: bounded-reference-context
+  boundary: reference-only-no-provider-no-side-effect
+inputs:
+  properties:
+    manifestId: { type: string, minLength: 1 }
+    packId: { type: string, minLength: 1 }
+    purpose: { type: string, minLength: 1 }
+    role: { type: string, minLength: 1 }
+    roleTaxonomy:
+      type: array
+      minItems: 1
+      items: { type: string, minLength: 1 }
+    evaluatedAt: { type: string, format: date-time }
+    freshnessMaxAgeSeconds: { type: integer, minimum: 1 }
+    maxTokens: { type: integer, minimum: 1 }
+    sourceRegistryModel: { type: string, minLength: 1 }
+    sourceRegistryMethod: { type: string, minLength: 1 }
+    sourceRegistryRecordName: { type: string, minLength: 1 }
+    contextCompilerModel: { type: string, minLength: 1 }
+    compileMethod: { type: string, minLength: 1 }
+    candidates:
+      type: array
+      minItems: 1
+      maxItems: 100
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          sourceId: { type: string, minLength: 1, maxLength: 200 }
+          tokenEstimate: { type: integer, minimum: 1 }
+          evidence:
+            type: object
+            additionalProperties: false
+            properties:
+              reference: { type: string, minLength: 1, maxLength: 2000 }
+              observedAt: { type: string, format: date-time }
+              expiresAt: { type: string, format: date-time }
+              cited: { const: true }
+              minimized: { const: true }
+            required: [reference, observedAt, expiresAt, cited, minimized]
+        required: [sourceId, tokenEstimate, evidence]
+  required: [manifestId, packId, purpose, role, roleTaxonomy, evaluatedAt, freshnessMaxAgeSeconds, maxTokens, sourceRegistryModel, sourceRegistryMethod, sourceRegistryRecordName, contextCompilerModel, compileMethod, candidates]
+jobs:
+  - name: compile-context
+    description: Validate role membership, catalog reference metadata, then compile one bounded context manifest.
+    steps:
+      - name: validate-role
+        description: Require the requested role to be present in the caller-supplied taxonomy.
+        task:
+          type: assert
+          expr: inputs.roleTaxonomy.exists(item, item == inputs.role)
+          message: The requested role must belong to roleTaxonomy.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: catalog-registry
+        description: Read the configured metadata-only source registry; the registry must contain no source content or credentials.
+        task:
+          type: model_method
+          modelIdOrName: '${{ inputs.sourceRegistryModel }}'
+          methodName: '${{ inputs.sourceRegistryMethod }}'
+          inputs: {}
+        dependsOn:
+          - step: validate-candidate-chronology
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+      - name: validate-candidate-chronology
+        description: Require cited, minimized evidence to be fresh at evaluation.
+        task:
+          type: assert
+          expr: inputs.candidates.all(item, item.evidence.cited && item.evidence.minimized && timestamp(item.evidence.observedAt) <= timestamp(inputs.evaluatedAt) && timestamp(inputs.evaluatedAt) < timestamp(item.evidence.expiresAt))
+          message: Every candidate must be minimized, cited, observed by evaluatedAt, and unexpired.
+          severity: high
+        dependsOn:
+          - step: validate-role
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+      - name: compile
+        description: Ask the compatible compiler to enforce provenance, freshness, eligibility, stable ordering, and the token budget using references only.
+        task:
+          type: model_method
+          modelIdOrName: '${{ inputs.contextCompilerModel }}'
+          methodName: '${{ inputs.compileMethod }}'
+          inputs:
+            manifestId: '${{ inputs.manifestId }}'
+            packId: '${{ inputs.packId }}'
+            purpose: '${{ inputs.purpose }}'
+            role: '${{ inputs.role }}'
+            roleTaxonomy: '${{ inputs.roleTaxonomy }}'
+            evaluatedAt: '${{ inputs.evaluatedAt }}'
+            freshnessMaxAgeSeconds: '${{ inputs.freshnessMaxAgeSeconds }}'
+            maxTokens: '${{ inputs.maxTokens }}'
+            registry: '${{ data.latest(inputs.sourceRegistryModel, inputs.sourceRegistryRecordName).attributes }}'
+            candidates: '${{ inputs.candidates }}'
+        dependsOn:
+          - step: catalog-registry
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

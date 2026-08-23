@@ -1,0 +1,18 @@
+packetId: example-operating-packet
+generatedAt: "2026-08-23T12:00:00Z"
+expiresAt: "2026-08-23T13:00:00Z"
+contextCompilerModel: example-context-compiler
+compileConstitutionMethod: compileConstitution
+compileOperatingPacketMethod: compileOperatingPacket
+entries:
+  - entryId: example-current-phase
+    kind: current-phase
+    summary: Synthetic demonstration entry; not production information.
+    confidence: high
+    sensitivity: public
+    observedAt: "2026-08-23T11:45:00Z"
+    expiresAt: "2026-08-23T13:00:00Z"
+    sourceRef: repository://example/operating-state/v1
+    cited: true
+    minimized: true
+contentAttestation: minimized-no-secrets-no-private-content

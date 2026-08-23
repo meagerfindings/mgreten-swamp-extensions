@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: "@mgreten/bounded-context-workflows"
+version: 2026.08.23.1
+description: >-
+  Reusable, reference-only Swamp workflows for compiling bounded context and
+  operating packets from caller-configured model instances.
+repository: "https://github.com/meagerfindings/swamp-bounded-context-workflows"
+workflows:
+  - workflow-bounded-reference-context.yaml
+  - workflow-bounded-operating-context.yaml
+models: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - examples/reference-context-inputs.yaml
+  - examples/operating-context-inputs.yaml
+dependencies:
+  - "@mgreten/context-compiler"

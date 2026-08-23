@@ -1,0 +1,25 @@
+manifestId: example-context-manifest
+packId: example-product-pack
+purpose: Prepare a bounded product-review context.
+role: reviewer
+roleTaxonomy:
+  - reviewer
+  - planner
+  - operator
+evaluatedAt: "2026-08-23T12:00:00Z"
+freshnessMaxAgeSeconds: 3600
+maxTokens: 800
+sourceRegistryModel: example-source-registry
+sourceRegistryMethod: catalog
+sourceRegistryRecordName: current
+contextCompilerModel: example-context-compiler
+compileMethod: compileRegistered
+candidates:
+  - sourceId: example:roadmap
+    evidence:
+      reference: repository://example/roadmap/v1
+      observedAt: "2026-08-23T11:45:00Z"
+      expiresAt: "2026-08-23T12:45:00Z"
+      cited: true
+      minimized: true
+    tokenEstimate: 180
