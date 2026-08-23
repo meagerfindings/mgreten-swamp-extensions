@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/feature-idea-gate"
+version: 2026.08.23.1
+description: >
+  A generic, deterministic, evidence-gated feature-idea recommendation model.
+  It is read-only and never approves, plans, executes, invokes tools, or creates side effects.
+repository: "https://github.com/meagerfindings/swamp-feature-idea-gate"
+models:
+  - feature_idea_gate.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - docs/contracts.md
+dependencies: []
