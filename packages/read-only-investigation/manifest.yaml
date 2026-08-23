@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@mgreten/read-only-investigation"
+version: 2026.08.23.1
+description: >
+  Creates deterministic, bounded authorization plans for read-only
+  investigations without executing queries, invoking providers, or mutating
+  production systems.
+repository: "https://github.com/meagerfindings/swamp-read-only-investigation"
+paths:
+  base: manifest
+models:
+  - extensions/models/read_only_investigation.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+platforms: []
+labels:
+  - safety
+  - read-only
+  - authorization
+  - investigation
