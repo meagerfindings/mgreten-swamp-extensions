@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/factory-watcher"
+version: 2026.08.23.1
+description: >
+  Deterministic, decision-only analysis of caller-supplied factory observations.
+  Produces persisted recommendations and never mutates a factory or calls a provider.
+repository: "https://github.com/meagerfindings/swamp-factory-watcher"
+models:
+  - factory_watcher.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - docs/decision-contract.md
+dependencies: []
