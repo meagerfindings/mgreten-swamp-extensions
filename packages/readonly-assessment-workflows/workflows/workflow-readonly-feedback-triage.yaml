@@ -1,0 +1,121 @@
+id: 135fed50-b533-4365-8999-1fa0417714cf
+name: "@mgreten/readonly-feedback-triage"
+description: >-
+  Deterministically normalize and redact feedback before a bounded,
+  recommendation-only readonly triage, then fail closed on invalid evidence or
+  authority-bearing output.
+tags:
+  capability: readonly-feedback-triage
+  authority: none
+inputs:
+  properties:
+    requestId:
+      type: string
+      minLength: 1
+      maxLength: 90
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_-]*$
+    assessmentModel:
+      type: string
+      minLength: 1
+    providerModel:
+      type: string
+      minLength: 1
+    envelopes:
+      type: array
+      minItems: 1
+      maxItems: 50
+      items:
+        type: object
+    policy:
+      type: object
+  required: [requestId, assessmentModel, providerModel, envelopes, policy]
+jobs:
+  - name: triage
+    description: Redact raw feedback deterministically before any provider sees it.
+    steps:
+      - name: assert-policy-contract
+        description: Fail before feedback processing unless the caller declares the minimum readonly policy contract.
+        task: { type: assert, expr: 'has(inputs.policy.tools) && inputs.policy.tools.mode == "readonly" && has(inputs.policy.sandbox) && inputs.policy.sandbox.required == true && inputs.policy.sandbox.credentialAccess == "provider" && has(inputs.policy.network) && (inputs.policy.network.mode == "deny" || inputs.policy.network.mode == "allowlist")', message: Policy must declare readonly tools, a required sandbox, provider-only credentials, and bounded network mode., severity: high }
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: normalize-and-redact
+        description: Convert untrusted envelopes into bounded redacted artifacts without agent or provider tools.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.assessmentModel }}"
+          methodName: normalize
+          inputs:
+            requestId: "${{ inputs.requestId }}"
+            envelopes: "${{ inputs.envelopes }}"
+            policy: "${{ inputs.policy }}"
+        dependsOn: [{ step: assert-policy-contract, condition: { type: succeeded } }]
+        weight: 0
+        allowFailure: false
+      - name: prepare
+        description: Reject artifacts that violate redaction, bounds, or readonly policy.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.assessmentModel }}"
+          methodName: prepare
+          inputs:
+            requestId: "${{ inputs.requestId }}"
+            artifacts: '${{ data.latest(inputs.assessmentModel, "normalized-" + inputs.requestId).attributes.artifacts }}'
+            policy: "${{ inputs.policy }}"
+        dependsOn:
+          - step: normalize-and-redact
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+      - name: assert-request-contract
+        description: Require the prepared request and launch-binding fields.
+        task: { type: assert, expr: 'has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.prompt) && has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.promptHash) && has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.cwd) && size(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.prompt) > 0', message: Prepared request resource is missing required launch binding., severity: high }
+        dependsOn: [{ step: prepare, condition: { type: succeeded } }]
+        weight: 0
+        allowFailure: false
+      - name: invoke-readonly-provider
+        description: Invoke only the prepared redacted prompt in the required sandbox.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.providerModel }}"
+          methodName: invokeAndParse
+          inputs:
+            prompt: '${{ data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.prompt }}'
+            invocationId: "${{ inputs.requestId }}"
+            policy: "${{ inputs.policy }}"
+            request: '${{ data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes }}'
+        dependsOn:
+          - step: assert-request-contract
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+      - name: assert-invocation-contract
+        description: Require persisted invocation and launch claim binding and authority fields.
+        task: { type: assert, expr: 'data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.invocationId == inputs.requestId && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.success == true && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.promptHash == data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.promptHash && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.cwd == data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.cwd && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.provider) && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.model) && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.parsedResponse.authority) && has(data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.operation) && has(data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.toolProfile) && has(data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.sandbox)', message: Invocation or launch claim is missing required binding or authority fields., severity: high }
+        dependsOn: [{ step: invoke-readonly-provider, condition: { type: succeeded } }]
+        weight: 0
+        allowFailure: false
+      - name: validate
+        description: Verify redaction, invocation binding, evidence grounding, and zero authority.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.assessmentModel }}"
+          methodName: validate
+          inputs:
+            requestId: "${{ inputs.requestId }}"
+            request: '${{ data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes }}'
+            agentOutput: '${{ data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.parsedResponse }}'
+            invocation: '${{ data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes }}'
+            invocationClaim: '${{ data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes }}'
+            policy: "${{ inputs.policy }}"
+        dependsOn:
+          - step: assert-invocation-contract
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

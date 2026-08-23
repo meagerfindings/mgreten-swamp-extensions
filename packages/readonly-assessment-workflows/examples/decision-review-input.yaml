@@ -1,0 +1,25 @@
+requestId: decision-2026-q3-01
+assessmentModel: decision-review
+providerModel: readonly-provider
+input:
+  question: Should the team run experiment X?
+  constraints:
+    - No production changes during the assessment.
+  evidence:
+    - id: customer-interview-17
+      source: interview
+      summary: Customers describe the same onboarding friction.
+policy:
+  personas:
+    - skeptic
+    - customer-advocate
+  redaction:
+    profile: strict
+    removeDirectIdentifiers: true
+  tools:
+    mode: readonly
+  network:
+    mode: deny
+  sandbox:
+    required: true
+    credentialAccess: provider

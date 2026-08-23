@@ -1,0 +1,22 @@
+# Synthetic compatibility fixture for the workflow-level assert steps.
+policy:
+  tools: { mode: readonly }
+  network: { mode: deny }
+  sandbox: { required: true, credentialAccess: provider }
+request:
+  prompt: "Review synthetic evidence and return an advisory only."
+  promptHash: "synthetic-sha256"
+  cwd: "/synthetic/isolated/request-1"
+invocation:
+  invocationId: request-1
+  provider: synthetic-provider
+  model: synthetic-model
+  promptHash: "synthetic-sha256"
+  cwd: "/synthetic/isolated/request-1"
+  success: true
+  parsedResponse:
+    authority: { disposition: recommendation_only, sideEffects: none }
+launchClaim:
+  operation: invokeAndParse
+  toolProfile: readonly
+  sandbox: required

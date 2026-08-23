@@ -1,0 +1,29 @@
+manifestVersion: 1
+name: "@mgreten/readonly-assessment-workflows"
+version: "2026.08.23.1"
+description: >-
+  Generic, bounded, recommendation-only Swamp workflows for decision review,
+  feedback triage, cross-source evidence, and quarterly idea gates.
+repository: "https://github.com/meagerfindings/swamp-readonly-assessment-workflows"
+models: []
+workflows:
+  - workflow-readonly-decision-review.yaml
+  - workflow-readonly-feedback-triage.yaml
+  - workflow-readonly-cross-source-evidence.yaml
+  - workflow-readonly-quarterly-idea-gate.yaml
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - docs/CONTRACT.md
+  - examples/decision-review-input.yaml
+  - examples/synthetic-contract-fixture.yaml
+dependencies:
+  - "@mgreten/cli-agent"
+  - "@mgreten/decision-review"
+  - "@mgreten/feedback-triage"
+  - "@mgreten/cross-source-evidence"
+  - "@mgreten/feature-idea-gate"
