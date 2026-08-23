@@ -13,6 +13,9 @@ export const evaluateArgumentsSchema = z.strictObject({
 });
 
 type PersistenceContext = {
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -42,15 +45,24 @@ export const model = {
       execute: async (
         args: z.infer<typeof evaluateArgumentsSchema>,
         context: PersistenceContext,
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "diagnostics",
-            `diagnostics-${args.requestId}`,
-            evaluateApprovalPacket(args.packet),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger.info("Evaluating approval packet {requestId}", {
+          requestId: args.requestId,
+        });
+        const diagnostics = evaluateApprovalPacket(args.packet);
+        const dataHandle = await context.writeResource(
+          "diagnostics",
+          `diagnostics-${args.requestId}`,
+          diagnostics,
+        );
+        context.logger.info("Recorded approval diagnostics {requestId}", {
+          requestId: args.requestId,
+          requirementsSatisfied:
+            diagnostics.recommendation.requirementsSatisfied,
+          diagnosticCount: diagnostics.diagnostics.length,
+        });
+        return { dataHandles: [dataHandle] };
+      },
     },
   },
 };

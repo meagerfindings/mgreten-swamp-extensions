@@ -58,4 +58,8 @@ An evaluation produces diagnostics with no operational authority:
 }
 ```
 
+The persisted diagnostic also echoes the caller-supplied `gateId`, complete
+policy provenance, and exact requested action kind/scope pairs. These values are
+identifiers for retained evidence only; their presence conveys no authority.
+
 Licensed under the MIT License. See [LICENSE](LICENSE).

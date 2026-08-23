@@ -2,8 +2,8 @@ import { z } from "npm:zod@4";
 
 export const APPROVAL_GATE_SCHEMA_VERSION = "1.0" as const;
 
-const Id = z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/);
-const Version = z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/);
+const Id = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/);
+const Version = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/);
 const Digest = z.string().regex(/^[0-9a-f]{64}$/);
 const Timestamp = z.iso.datetime({ offset: true });
 
@@ -96,11 +96,13 @@ export const approvalDiagnosticsSchema = z.strictObject({
   evaluatedAt: Timestamp,
   subject: subjectSchema,
   subjectDigest: Digest,
+  requestedActions: z.array(actionSchema).min(1).max(100),
   gateArtifact: z.strictObject({
     gateId: Id,
     artifactId: Id,
     artifactVersion: Version,
     artifactHash: Digest,
+    policy: policyProvenanceSchema,
   }),
   recommendation: z.strictObject({
     requirementsSatisfied: z.boolean(),
@@ -122,7 +124,10 @@ type Input = z.infer<typeof approvalPacketInputSchema>;
 type Diagnostic = z.infer<typeof diagnosticSchema>;
 type Action = z.infer<typeof actionSchema>;
 
-const key = (action: Action) => `${action.actionKind}:${action.actionScope}`;
+const key = (action: Action) =>
+  JSON.stringify([action.actionKind, action.actionScope]);
+const label = (action: Action) =>
+  `${action.actionKind} (${action.actionScope})`;
 const sameSubject = (left: Input["subject"], right: Input["subject"]) =>
   left.subjectId === right.subjectId &&
   left.subjectVersion === right.subjectVersion &&
@@ -186,12 +191,19 @@ export function evaluateApprovalPacket(raw: unknown): ApprovalDiagnostics {
   }
 
   const gateActionKeys = gate.approvedActions.map(key);
-  for (const requested of actionKeys) {
-    if (!gateActionKeys.includes(requested)) {
+  if (new Set(gateActionKeys).size !== gateActionKeys.length) {
+    add(
+      "duplicate_action",
+      "gateArtifact.approvedActions",
+      "gate-approved action kind and scope must be unique",
+    );
+  }
+  for (const requested of input.requestedActions) {
+    if (!gateActionKeys.includes(key(requested))) {
       add(
         "gate_scope_missing",
         "gateArtifact.approvedActions",
-        `gate artifact does not approve ${requested}`,
+        `gate artifact does not approve ${label(requested)}`,
       );
     }
   }
@@ -227,6 +239,7 @@ export function evaluateApprovalPacket(raw: unknown): ApprovalDiagnostics {
   input.approvals.forEach((approval, index) => {
     const path = `approvals.${index}`;
     const approvalKey = approvalKeys[index];
+    const approvalLabel = label(approval);
     if (!actionKeys.includes(approvalKey)) {
       add(
         "approval_scope_unrequested",
@@ -248,14 +261,14 @@ export function evaluateApprovalPacket(raw: unknown): ApprovalDiagnostics {
       add(
         "approval_rejected",
         `${path}.decision`,
-        `human rejected ${approvalKey}`,
+        `human rejected ${approvalLabel}`,
       );
     }
     if (Date.parse(approval.expiresAt) <= evaluatedAt) {
       add(
         "approval_stale",
         `${path}.expiresAt`,
-        `approval for ${approvalKey} is expired`,
+        `approval for ${approvalLabel} is expired`,
       );
     }
     if (
@@ -278,12 +291,12 @@ export function evaluateApprovalPacket(raw: unknown): ApprovalDiagnostics {
       );
     }
   });
-  for (const requested of actionKeys) {
-    if (!approvalKeys.includes(requested)) {
+  for (const requested of input.requestedActions) {
+    if (!approvalKeys.includes(key(requested))) {
       add(
         "approval_missing",
         "approvals",
-        `missing distinct human approval for ${requested}`,
+        `missing distinct human approval for ${label(requested)}`,
       );
     }
   }
@@ -318,11 +331,13 @@ export function evaluateApprovalPacket(raw: unknown): ApprovalDiagnostics {
     evaluatedAt: input.evaluatedAt,
     subject: input.subject,
     subjectDigest: input.subjectDigest,
+    requestedActions: input.requestedActions,
     gateArtifact: {
       gateId: gate.gateId,
       artifactId: gate.artifactId,
       artifactVersion: gate.artifactVersion,
       artifactHash: gate.artifactHash,
+      policy: gate.policy,
     },
     recommendation: {
       requirementsSatisfied: diagnostics.length === 0,

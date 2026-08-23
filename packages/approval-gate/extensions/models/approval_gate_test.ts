@@ -76,6 +76,9 @@ Deno.test("strict generic packet is deterministic and remains diagnostics-only",
     !first.authority.providerInvocation && !first.authority.productionMutation,
   );
   assert(first.authority.separateSideEffectAdapterOrHumanActionRequired);
+  assert(first.gateArtifact.gateId === "CHANGE-17");
+  assert(first.gateArtifact.policy.policyId === "CHANGE-17");
+  assert(first.requestedActions[0].actionKind === "deploy");
 });
 
 Deno.test("fails closed for missing, rejected, stale, and cross-subject approvals", () => {
@@ -126,6 +129,54 @@ Deno.test("strictly rejects unknown fields, malformed hashes, and non-human acto
   }
 });
 
+Deno.test("rejects malformed identifiers and avoids ambiguous action-key collisions", () => {
+  const malformed: any = fixture();
+  malformed.gateArtifact.gateId = " invalid ";
+  let rejected = false;
+  try {
+    evaluateApprovalPacket(malformed);
+  } catch {
+    rejected = true;
+  }
+  assert(rejected);
+
+  const packet: any = fixture();
+  packet.requestedActions = [
+    { actionKind: "a:b", actionScope: "c" },
+    { actionKind: "a", actionScope: "b:c" },
+  ];
+  packet.gateArtifact.approvedActions = packet.requestedActions;
+  packet.approvals = packet.requestedActions.map((action: any, index: number) => ({
+    ...packet.approvals[index],
+    approvalId: `collision-proof-${index}`,
+    ...action,
+  }));
+  const result = evaluateApprovalPacket(packet);
+  assert(result.recommendation.requirementsSatisfied);
+  assert(!result.diagnostics.some((item) => item.code === "duplicate_action"));
+});
+
+Deno.test("fails closed for duplicated gate actions and tampered nested digests", () => {
+  const duplicate: any = fixture();
+  duplicate.gateArtifact.approvedActions.push(
+    duplicate.gateArtifact.approvedActions[0],
+  );
+  const duplicateResult = evaluateApprovalPacket(duplicate);
+  assert(!duplicateResult.recommendation.requirementsSatisfied);
+  assert(duplicateResult.diagnostics.some((item) =>
+    item.code === "duplicate_action" &&
+    item.path === "gateArtifact.approvedActions"
+  ));
+
+  const tampered: any = fixture();
+  tampered.gateArtifact.subjectDigest = hash("c");
+  const tamperedResult = evaluateApprovalPacket(tampered);
+  assert(!tamperedResult.recommendation.requirementsSatisfied);
+  assert(tamperedResult.diagnostics.some((item) =>
+    item.code === "gate_subject_mismatch"
+  ));
+});
+
 Deno.test("reports compact gate, policy, chronology, and scope contract branches", () => {
   const cases: Array<[(packet: any) => void, string]> = [
     [(packet) => packet.gateArtifact.status = "pending", "gate_not_satisfied"],
@@ -168,10 +219,14 @@ Deno.test("reports compact gate, policy, chronology, and scope contract branches
 
 Deno.test("model writes one diagnostic resource and accepts no unexpected arguments", async () => {
   const writes: unknown[][] = [];
+  const logs: Array<[string, Record<string, unknown>?]> = [];
   const result = await model.methods.evaluate.execute({
     requestId: "req-1",
     packet: fixture(),
   }, {
+    logger: {
+      info: (message, properties) => logs.push([message, properties]),
+    },
     writeResource: async (...args: unknown[]) => {
       writes.push(args);
       return { name: args[1] };
@@ -185,6 +240,7 @@ Deno.test("model writes one diagnostic resource and accepts no unexpected argume
     (writes[0][2] as any).authority.execution === false &&
       result.dataHandles.length === 1,
   );
+  assert(logs.length === 2);
   assert(
     !model.methods.evaluate.arguments.safeParse({
       requestId: "req-1",
