@@ -120,6 +120,16 @@ export const decisionReviewLensContractSchema = z.strictObject({
     });
   }
 
+  for (const field of ["constraints", "requiredGates"] as const) {
+    if (new Set(contract.input[field]).size !== contract.input[field].length) {
+      context.addIssue({
+        code: "custom",
+        path: ["input", field],
+        message: `${field} must not contain duplicates`,
+      });
+    }
+  }
+
   const evidenceIds = new Set<string>();
   contract.input.evidence.forEach((evidence, index) => {
     if (evidenceIds.has(evidence.evidenceId)) {

@@ -25,10 +25,12 @@ swamp model create @mgreten/decision-review decision-review
 ## Prepare a request
 
 The `prepare` method validates the input, produces a deterministic prompt and
-SHA-256 hash, and records a `/tmp` workspace path for the separately managed
-invocation. Preparation does not create files or directories. The input names the
-review's target audience with the existing `targetFamily` field for contract
-compatibility; it may contain any audience description.
+SHA-256 integrity hashes, and records a workspace beneath the configurable
+absolute `agentCwd` root for the separately managed invocation. Preparation
+does not create files or directories. Evidence is fresh for 90 days by default;
+set `maxEvidenceAgeDays` on the model to adopt a different explicit policy. The
+input names the review's target audience with the existing `targetFamily` field
+for contract compatibility; it may contain any audience description.
 
 ```sh
 swamp model method run decision-review prepare \

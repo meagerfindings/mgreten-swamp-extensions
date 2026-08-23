@@ -15,6 +15,7 @@ import {
 export const DECISION_REVIEW_MODEL_VERSION = "2026.08.23.1" as const;
 const DEFAULT_AGENT_CWD = "/tmp/decision-review-agent";
 const DEFAULT_MAX_PROMPT_BYTES = 120_000;
+const DEFAULT_MAX_EVIDENCE_AGE_DAYS = 90;
 const SafeId = z.string().regex(
   /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/,
   "must be a stable safe ID",
@@ -33,18 +34,19 @@ export const globalArgumentsSchema = z.strictObject({
         });
       }
       if (
-        !(path === "/tmp" || path.startsWith("/tmp/")) ||
-        path.split("/").includes("..")
+        path === "/" || path.endsWith("/") || path.split("/").includes("..")
       ) {
         context.addIssue({
           code: "custom",
-          message: "agentCwd must be under /tmp",
+          message: "agentCwd must be a bounded absolute workspace root",
         });
       }
     },
   ),
   maxPromptBytes: z.number().int().positive().max(DEFAULT_MAX_PROMPT_BYTES)
     .default(DEFAULT_MAX_PROMPT_BYTES),
+  maxEvidenceAgeDays: z.number().int().positive().max(3650)
+    .default(DEFAULT_MAX_EVIDENCE_AGE_DAYS),
 });
 
 /** Deterministic request returned by the `prepare` method. */
@@ -54,8 +56,10 @@ export const preparedRequestSchema = z.strictObject({
   input: contractInputSchema,
   prompt: z.string().min(1),
   promptHash: z.string().regex(/^[a-f0-9]{64}$/),
-  agentCwd: z.string().startsWith("/tmp/"),
+  agentCwd: z.string().startsWith("/"),
   createdAt: Timestamp,
+  evidenceNotBefore: Timestamp,
+  requestHash: z.string().regex(/^[a-f0-9]{64}$/),
 }).superRefine((request, context) => {
   if (request.input.reviewId !== request.reviewId) {
     context.addIssue({
@@ -165,6 +169,12 @@ export async function sha256(value: string): Promise<string> {
   ).join("");
 }
 
+function requestIntegrityPayload(
+  request: Omit<PreparedRequest, "requestHash">,
+): string {
+  return JSON.stringify(request);
+}
+
 /** Validate input and construct a bounded deterministic review request. */
 export async function prepareRequest(
   reviewId: string,
@@ -185,7 +195,7 @@ export async function prepareRequest(
       `Prompt exceeds ${parsedGlobals.maxPromptBytes} byte budget (${bytes})`,
     );
   }
-  return preparedRequestSchema.parse({
+  const request = {
     schemaVersion: DECISION_REVIEW_LENS_SCHEMA_VERSION,
     reviewId,
     input,
@@ -193,6 +203,13 @@ export async function prepareRequest(
     promptHash: await sha256(prompt),
     agentCwd: `${parsedGlobals.agentCwd}/review-${reviewId}`,
     createdAt: now.toISOString(),
+    evidenceNotBefore: new Date(
+      now.getTime() - parsedGlobals.maxEvidenceAgeDays * 86_400_000,
+    ).toISOString(),
+  };
+  return preparedRequestSchema.parse({
+    ...request,
+    requestHash: await sha256(requestIntegrityPayload(request)),
   });
 }
 
@@ -218,6 +235,13 @@ export async function validateAgentResult(
   if (request.promptHash !== await sha256(request.prompt)) {
     fail("Prepared prompt hash is invalid");
   }
+  const { requestHash, ...requestPayload } = request;
+  if (requestHash !== await sha256(requestIntegrityPayload(requestPayload))) {
+    fail("Prepared request integrity hash is invalid");
+  }
+  if (Date.parse(request.createdAt) > now.getTime()) {
+    fail("Prepared request createdAt cannot be in the future");
+  }
   if (invocation.provider !== "amp") fail("Invocation provider must be amp");
   if (!invocation.success) fail("Invocation was not successful");
   if (
@@ -241,6 +265,19 @@ export async function validateAgentResult(
   }
   if (Date.parse(contract.output.generatedAt) > now.getTime()) {
     fail("Review generatedAt cannot be in the future");
+  }
+  if (Date.parse(contract.output.generatedAt) < Date.parse(request.createdAt)) {
+    fail("Review generatedAt cannot predate the prepared request");
+  }
+  for (const evidence of contract.input.evidence) {
+    if (
+      Date.parse(evidence.provenance.collectedAt) <
+        Date.parse(request.evidenceNotBefore)
+    ) {
+      fail(
+        `Evidence ${evidence.evidenceId} is older than the freshness policy`,
+      );
+    }
   }
   return validatedReviewSchema.parse({
     schemaVersion: DECISION_REVIEW_LENS_SCHEMA_VERSION,
@@ -268,6 +305,9 @@ type Context = {
     data: Record<string, unknown>,
   ) => Promise<unknown>;
   now?: () => Date;
+  logger?: {
+    info: (message: string, properties: Record<string, unknown>) => void;
+  };
 };
 
 /** Swamp model definition for preparing and validating decision reviews. */
@@ -298,6 +338,9 @@ export const model = {
         args: z.infer<typeof prepareArgumentsSchema>,
         context: Context,
       ) => {
+        context.logger?.info("Preparing decision review {reviewId}", {
+          reviewId: args.reviewId,
+        });
         const prepared = await prepareRequest(
           args.reviewId,
           args.input,
@@ -309,6 +352,9 @@ export const model = {
           `request-${args.reviewId}`,
           prepared,
         );
+        context.logger?.info("Prepared decision review {reviewId}", {
+          reviewId: args.reviewId,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -319,6 +365,9 @@ export const model = {
         args: z.infer<typeof validateArgumentsSchema>,
         context: Context,
       ) => {
+        context.logger?.info("Validating decision review {reviewId}", {
+          reviewId: args.reviewId,
+        });
         const review = await validateAgentResult(
           args.reviewId,
           args.request,
@@ -332,6 +381,9 @@ export const model = {
           `review-${args.reviewId}`,
           review,
         );
+        context.logger?.info("Validated decision review {reviewId}", {
+          reviewId: args.reviewId,
+        });
         return { dataHandles: [handle] };
       },
     },

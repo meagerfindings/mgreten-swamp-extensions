@@ -106,6 +106,9 @@ Deno.test("rejects synthetic evidence, authority, and gate edge cases", () => {
       value.output.lenses.dreamer.findings[0].gatesRequired = [],
     (value: typeof fixture) =>
       value.output.lenses.skeptic.findings[0].evidenceIds = ["missing"],
+    (value: typeof fixture) => value.input.constraints.push("stay private"),
+    (value: typeof fixture) =>
+      (value.output.authority as Record<string, unknown>).unexpected = true,
   ];
   for (const mutate of mutations) {
     const invalid = copy(fixture);
