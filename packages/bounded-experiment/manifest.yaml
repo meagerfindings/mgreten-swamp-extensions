@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: "@mgreten/bounded-experiment"
+version: 2026.08.23.1
+description: >
+  Deterministic, recommendation-only bounded experiment proposals with
+  provenance-backed fresh evidence, caller-policy downside limits, explicit
+  stop-and-review conditions, and not-requested approval records.
+repository: "https://github.com/meagerfindings/swamp-bounded-experiment"
+paths:
+  base: manifest
+models:
+  - bounded_experiment.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - USAGE.md
+  - LICENSE
+  - examples/README.md
