@@ -82,11 +82,19 @@ export const agentSystemReviewInputSchema = z.strictObject({
     }
   }
   const evidenceIds = new Set<string>();
+  const sourceIds = new Set<string>();
   input.evidence.forEach((evidence, index) => {
     if (evidenceIds.has(evidence.evidenceId)) {
       issue(["evidence", index, "evidenceId"], "duplicate evidenceId");
     }
     evidenceIds.add(evidence.evidenceId);
+    if (sourceIds.has(evidence.sourceReference.sourceId)) {
+      issue(
+        ["evidence", index, "sourceReference", "sourceId"],
+        "duplicate sourceId",
+      );
+    }
+    sourceIds.add(evidence.sourceReference.sourceId);
     const freshness = evidence.sourceReference.freshness;
     if (Date.parse(freshness.asOf) > Date.parse(input.evaluatedAt)) {
       issue(["evidence", index], "evidence is not yet available");
@@ -185,6 +193,10 @@ export type AgentSystemReviewOutput = z.infer<
   typeof agentSystemReviewOutputSchema
 >;
 
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function reviewAgentSystem(raw: unknown): AgentSystemReviewOutput {
   const input = agentSystemReviewInputSchema.parse(raw);
   const candidates = input.measurements.flatMap((measurement) => {
@@ -219,9 +231,9 @@ export function reviewAgentSystem(raw: unknown): AgentSystemReviewOutput {
       },
     }];
   }).sort((a, b) =>
-    b.score - a.score || a.metric.localeCompare(b.metric) ||
-    a.target.type.localeCompare(b.target.type) ||
-    a.target.id.localeCompare(b.target.id)
+    b.score - a.score || compareText(a.metric, b.metric) ||
+    compareText(a.target.type, b.target.type) ||
+    compareText(a.target.id, b.target.id)
   );
   const proposals = candidates.slice(0, input.policy.maximumProposals);
   return agentSystemReviewOutputSchema.parse({
@@ -234,7 +246,7 @@ export function reviewAgentSystem(raw: unknown): AgentSystemReviewOutput {
       metric: x.metric,
       reason: x.unavailableReason!,
       evidenceIds: [...x.evidenceIds].sort(),
-    })).sort((a, b) => a.metric.localeCompare(b.metric)),
+    })).sort((a, b) => compareText(a.metric, b.metric)),
     authority: {
       disposition: "proposal_only",
       selfModification: false,

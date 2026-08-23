@@ -54,6 +54,13 @@ export const sourceReferenceSchema = z.strictObject({
       message: "collectedAt must be at or after observedAt",
     });
   }
+  if (collectedAt > asOf) {
+    context.addIssue({
+      code: "custom",
+      path: ["provenance", "collectedAt"],
+      message: "collectedAt must be at or before asOf",
+    });
+  }
 });
 
 export type SourceReference = z.infer<typeof sourceReferenceSchema>;

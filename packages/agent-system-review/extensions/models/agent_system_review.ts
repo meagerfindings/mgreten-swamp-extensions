@@ -11,6 +11,9 @@ const argumentsSchema = z.strictObject({
   input: z.unknown(),
 });
 type Context = {
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -44,15 +47,23 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: Context,
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "review",
-            `review-${args.requestId}`,
-            reviewAgentSystem(args.input),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger.info("Reviewing supplied agent-system evidence", {
+          requestId: args.requestId,
+        });
+        const review = reviewAgentSystem(args.input);
+        const dataHandle = await context.writeResource(
+          "review",
+          `review-${args.requestId}`,
+          review,
+        );
+        context.logger.info("Persisted agent-system review", {
+          requestId: args.requestId,
+          reviewId: review.reviewId,
+          proposalCount: review.proposals.length,
+        });
+        return { dataHandles: [dataHandle] };
+      },
     },
   },
 };

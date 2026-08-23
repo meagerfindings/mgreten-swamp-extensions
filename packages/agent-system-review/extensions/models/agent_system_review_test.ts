@@ -126,6 +126,22 @@ Deno.test("strict contract rejects bounded-evidence edge cases", () => {
     () => reviewAgentSystem(ambiguous),
     "unavailable metric requires only unavailableReason",
   );
+  const duplicateSource = fixture();
+  duplicateSource.evidence[1].sourceReference.sourceId =
+    duplicateSource.evidence[0].sourceReference.sourceId;
+  rejects(() => reviewAgentSystem(duplicateSource), "duplicate sourceId");
+  const futureCollection = fixture();
+  futureCollection.evidence[0].sourceReference.provenance.collectedAt =
+    "2026-08-23T11:00:00Z";
+  rejects(() => reviewAgentSystem(futureCollection), "at or before asOf");
+  const malformedHash = fixture();
+  malformedHash.policy.policyHash = "sha256:not-a-digest";
+  rejects(() => reviewAgentSystem(malformedHash), "policyHash");
+  const tamperedShape = fixture() as ReturnType<typeof fixture> & {
+    authority?: string;
+  };
+  tamperedShape.authority = "approved";
+  rejects(() => reviewAgentSystem(tamperedShape), "Unrecognized key");
 });
 
 Deno.test("minimum samples and maximum proposals are enforced deterministically", () => {
@@ -142,20 +158,31 @@ Deno.test("minimum samples and maximum proposals are enforced deterministically"
 
 Deno.test("model exposes one persistence-only write", async () => {
   const writes: unknown[][] = [];
-  const result = await model.methods.review.execute({
+  const logs: unknown[][] = [];
+  const args = {
     requestId: "synthetic-1",
     input: fixture(),
-  }, {
-    writeResource: async (...args: unknown[]) => {
-      writes.push(args);
-      return { name: args[1] };
+  };
+  const context = {
+    logger: {
+      info: (...args: unknown[]) => logs.push(args),
     },
-  });
-  assert(writes.length === 1 && writes[0][0] === "review");
+    writeResource: (...args: unknown[]) => {
+      writes.push(args);
+      return Promise.resolve({ name: args[1] });
+    },
+  };
+  const result = await model.methods.review.execute(args, context);
+  const repeated = await model.methods.review.execute(args, context);
+  assert(writes.length === 2 && writes.every((write) => write[0] === "review"));
+  assert(writes[0][1] === writes[1][1]);
+  assert(JSON.stringify(writes[0][2]) === JSON.stringify(writes[1][2]));
+  assert(logs.length === 4);
   assert(
     JSON.stringify(result) ===
       JSON.stringify({ dataHandles: [{ name: "review-synthetic-1" }] }),
   );
+  assert(JSON.stringify(repeated) === JSON.stringify(result));
   assert(
     JSON.stringify(Object.keys(model.methods)) === JSON.stringify(["review"]) &&
       !("files" in model),
