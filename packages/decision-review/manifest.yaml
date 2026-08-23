@@ -1,0 +1,17 @@
+manifestVersion: 1
+name: "@mgreten/decision-review"
+version: "2026.08.23.1"
+description: "A bounded, auditable three-lens decision review that produces recommendations without authority or side effects."
+repository: "https://github.com/meagerfindings/swamp-decision-review"
+models:
+  - decision_review.ts
+include:
+  - _lib/decision_review_lens_contracts.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+platforms: []
+labels:
+  - decision-review
+  - recommendations
+  - safety
