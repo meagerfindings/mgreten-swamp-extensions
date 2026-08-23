@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@mgreten/post-release-outcome-review"
+version: 2026.08.23.1
+description: >
+  Records deterministic, evidence-bound post-release outcome recommendations
+  without collecting data, executing recommendations, or affecting production.
+repository: "https://github.com/meagerfindings/swamp-post-release-outcome-review"
+models:
+  - post_release_outcome_review.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+dependencies: []
