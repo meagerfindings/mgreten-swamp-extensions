@@ -7,6 +7,7 @@ import {
   start,
   status,
   stop,
+  validateWorkingDirectory,
 } from "./dev_server_core.ts";
 
 const result = (code: number, stdout = "", stderr = ""): CommandResult => ({
@@ -108,6 +109,32 @@ Deno.test("schemas reject unknown configuration fields", () => {
   assertEquals(parsed.success, false);
 });
 
+Deno.test("health URLs reject non-HTTP protocols and embedded credentials", () => {
+  for (
+    const url of [
+      "file://localhost/tmp/health",
+      "http://user:password@localhost:3000/health",
+      "http://example.com:3000/health",
+    ]
+  ) {
+    const parsed = GlobalArgsSchema.safeParse({
+      startCommand: "start",
+      stopCommand: "stop",
+      healthCheck: { url },
+    });
+    assertEquals(parsed.success, false);
+  }
+});
+
+Deno.test("working directories are confined to the repository", async () => {
+  assertEquals(await validateWorkingDirectory("/tmp", "/tmp"), "/tmp");
+  await assertRejects(
+    () => validateWorkingDirectory("/tmp", "/"),
+    Error,
+    "workingDirectory must be",
+  );
+});
+
 Deno.test("health fetch receives an abort signal bounded by the health deadline", async () => {
   let receivedSignal: AbortSignal | undefined;
   const dependencies = mockedLifecycle({}, []);
@@ -176,6 +203,56 @@ Deno.test("status supports health-only configurations", async () => {
 
   assertEquals(outcome.running, true);
   assertEquals(outcome.commandExitCode, null);
+});
+
+Deno.test("start fails when configured readiness checks do not become healthy", async () => {
+  const dependencies = mockedLifecycle({
+    start: result(0),
+    check: result(0),
+  }, [503]);
+  await assertRejects(
+    () =>
+      start(
+        {
+          startCommand: "start",
+          stopCommand: "stop",
+          statusCommand: "check",
+          healthCheck: {
+            url: "http://localhost:3000/health",
+            expectedStatus: 200,
+            timeoutMs: 1,
+            intervalMs: 1,
+          },
+          certificate: { strategy: "none" },
+        },
+        "/tmp",
+        dependencies,
+      ),
+    Error,
+    "health check failed",
+  );
+});
+
+Deno.test("stop fails when the supervisor still reports running", async () => {
+  const dependencies = mockedLifecycle({
+    stop: result(0),
+    check: result(0),
+  }, []);
+  await assertRejects(
+    () =>
+      stop(
+        {
+          startCommand: "start",
+          stopCommand: "stop",
+          statusCommand: "check",
+          certificate: { strategy: "none" },
+        },
+        "/tmp",
+        dependencies,
+      ),
+    Error,
+    "still running",
+  );
 });
 
 Deno.test("real command runner terminates hung children", async () => {

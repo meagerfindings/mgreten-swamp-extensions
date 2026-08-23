@@ -3,13 +3,17 @@ import { z } from "npm:zod@4";
 const loopbackUrl = (value: string): boolean => {
   try {
     const url = new URL(value);
-    return ["127.0.0.1", "::1", "localhost"].includes(url.hostname);
+    return ["http:", "https:"].includes(url.protocol) &&
+      ["127.0.0.1", "::1", "localhost"].includes(url.hostname) &&
+      url.username === "" && url.password === "";
   } catch {
     return false;
   }
 };
 
 export const GlobalArgsSchema = z.object({
+  authority: z.literal("local-development").default("local-development")
+    .describe("Fixed authority boundary; production control is not supported"),
   workingDirectory: z.string().optional().describe(
     "Local directory in which lifecycle commands run; defaults to the Swamp repository root",
   ),
@@ -60,6 +64,26 @@ export type GlobalArgs =
     certificate: z.output<typeof GlobalArgsSchema>["certificate"];
   };
 export type ServerStatus = z.infer<typeof StatusSchema>;
+
+/** Ensure configured commands cannot escape the current local Swamp repository. */
+export async function validateWorkingDirectory(
+  repoDir: string,
+  workingDirectory: string,
+): Promise<string> {
+  const [repository, candidate] = await Promise.all([
+    Deno.realPath(repoDir),
+    Deno.realPath(workingDirectory),
+  ]);
+  const separator = Deno.build.os === "windows" ? "\\" : "/";
+  if (
+    candidate !== repository && !candidate.startsWith(repository + separator)
+  ) {
+    throw new Error(
+      "workingDirectory must be the Swamp repository root or one of its subdirectories",
+    );
+  }
+  return candidate;
+}
 
 export interface CommandResult {
   readonly code: number;
@@ -283,9 +307,18 @@ export async function start(
       }`,
     );
   }
+  const observed = await status(config, workingDirectory, dependencies);
+  if (config.healthCheck && observed.health !== "healthy") {
+    throw new Error(
+      "startCommand completed but the loopback health check failed",
+    );
+  }
+  if (config.statusCommand && !observed.running) {
+    throw new Error("startCommand completed but statusCommand reports stopped");
+  }
   return {
     command,
-    status: await status(config, workingDirectory, dependencies),
+    status: observed,
   };
 }
 
@@ -305,8 +338,14 @@ export async function stop(
       `stopCommand exited with ${command.code}: ${safeFailureContext(command)}`,
     );
   }
+  const observed = await status(config, workingDirectory, dependencies);
+  if (observed.running || observed.health === "healthy") {
+    throw new Error(
+      "stopCommand completed but the local server is still running",
+    );
+  }
   return {
     command,
-    status: await status(config, workingDirectory, dependencies),
+    status: observed,
   };
 }

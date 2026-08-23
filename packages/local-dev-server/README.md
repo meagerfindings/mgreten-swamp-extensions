@@ -10,7 +10,8 @@ or another project-specific development process manager.
 The model never backgrounds a process, guesses a PID, sends signals, installs
 dependencies, edits an application, or contacts a non-loopback health endpoint.
 It runs each configured lifecycle command in the selected local working
-directory with configurable `commandTimeoutMs` and `commandOutputMaxBytes`
+directory (which must be the Swamp repository or a subdirectory) with
+configurable `commandTimeoutMs` and `commandOutputMaxBytes`
 bounds, terminates timed-out children, and records only the returned server
 status, not command stdout or stderr. Failure errors include a short,
 credential-pattern-redacted excerpt for diagnosis. An optional health check is restricted to `localhost`, `127.0.0.1`, or
@@ -50,6 +51,9 @@ swamp model method run docs stop
 optional `statusCommand` exit code plus the optional loopback health check. If
 no status command is supplied, a healthy health check is the running signal. Use
 `certificate.strategy: command` only for a local inspection command that prints
-one ISO-8601 timestamp.
+one ISO-8601 timestamp. Health URLs must use HTTP(S), may not contain
+credentials, and must resolve syntactically to a loopback hostname. This model's
+fixed authority is `local-development`; it has no production or deployment
+operation.
 
 Licensed under the MIT License. See [LICENSE](LICENSE).
