@@ -97,3 +97,12 @@ selected method may mutate an external system. The read-only and redaction
 claims therefore require adapters whose reviewed contracts enforce bounded
 reads, source non-mutation, and safe output schemas. The workflows never inspect
 or sanitize arbitrary artifact fields themselves.
+
+These contracts define a protocol, not an automatic adapter for other method
+schemas. A product workflow with prepare-before-read planning, multiple source
+collectors, optional source failures, or differently shaped digest/evaluator
+inputs should remain the product composition root. It may reuse a child
+boundary only after a strict bridge maps native artifacts to that child's exact
+schema. Arbitrary input maps and caller-authored field-mapping expressions are
+outside this package because they would bypass method-input validation and
+weaken the exact artifact boundary.

@@ -27,6 +27,29 @@ After a registry release exists, consumers may instead pull the package by
 name. Install compatible `@mgreten/notification-outbox` and
 `@mgreten/notification-outbox-workflows` sources before enabling delivery.
 
+## Compatibility boundary
+
+This package is generic over the method and artifact protocols documented in
+[`docs/contracts.md`](docs/contracts.md). It does not adapt arbitrary model
+method schemas and is not a drop-in parent workflow for every observability
+package. A consumer's selected models must implement the matching protocol, or
+the consumer must retain a product-specific composition workflow and use a
+small, strict bridge for compatible child boundaries.
+
+| Capability | Required protocol | Known standalone package status |
+| --- | --- | --- |
+| Read | `request: { selector, window, options }` and one selected artifact spec | No bundled implementation |
+| Normalize | `observations` plus selector/window/policy inputs and one selected normalized spec | `@mgreten/operational-triage` uses its stricter native `{ snapshot }` contract; not directly compatible |
+| Digest | `observations` plus selector/window/policy inputs | `@mgreten/daily-operational-digest` uses six explicit neutral sections; not directly compatible |
+| Transitions | `observations` plus selector/window/policy inputs and exact outbox-shaped intents | `@mgreten/service-watchdog` requires prepare-before-read and `{ sourceSnapshots }`; not directly compatible |
+| Delivery | `{ workItem, event, urgency, era, payload }` | Compatible with `@mgreten/notification-outbox` and `@mgreten/notification-outbox-workflows` |
+
+Do not weaken model schemas to opaque maps merely to make a workflow validate.
+Keep provider credentials, product policy, multi-source planning, and optional
+source behavior in the consumer's composition root. Bridge models should only
+perform deterministic, zero-authority shape conversion and must not re-fetch
+sources or duplicate transition state.
+
 The delivery path interoperates with `@mgreten/notification-outbox` and
 `@mgreten/notification-outbox-workflows`, using their `enqueueNotification` and
 `drainNotifications` lifecycle. Read, normalization, digest, and
