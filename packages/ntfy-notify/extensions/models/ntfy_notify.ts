@@ -23,6 +23,39 @@ const NotificationSchema = z.object({
   success: z.boolean(),
 });
 
+const OutboxPayloadSchema = z.object({
+  title: z.string().min(1).max(200),
+  message: z.string().min(1).max(4096),
+}).strict().meta({ sensitive: true });
+
+const OutboxOptionsSchema = z.object({
+  topic: z.string().min(1).max(256).optional(),
+  priority: z.number().int().min(1).max(5).optional(),
+  tags: z.array(z.string().min(1).max(64)).max(20).optional(),
+  actions: z.array(
+    z.object({
+      action: z.string().min(1).max(32),
+      label: z.string().min(1).max(100),
+      url: z.string().url().max(2048),
+    }).strict(),
+  ).max(3).optional(),
+}).strict();
+
+const OutboxTransportArgumentsSchema = z.object({
+  payload: OutboxPayloadSchema,
+  idempotencyKey: z.string().min(1).max(256),
+  options: OutboxOptionsSchema,
+}).strict();
+
+type SendArguments = {
+  topic?: string;
+  title: string;
+  message: string;
+  priority?: number;
+  tags?: string[];
+  actions?: Array<{ action: string; label: string; url: string }>;
+};
+
 type MethodContext = {
   globalArgs: z.infer<typeof GlobalArgsSchema>;
   logger: {
@@ -37,11 +70,87 @@ type MethodContext = {
   ) => Promise<Record<string, unknown>>;
 };
 
+async function sendNotification(
+  args: SendArguments,
+  context: MethodContext,
+): Promise<{ dataHandles: Record<string, unknown>[] }> {
+  const topic = args.topic || context.globalArgs.defaultTopic;
+  const priority = args.priority ?? 3;
+  const ntfyUrl = `${context.globalArgs.ntfyUrl}/${topic}`;
+
+  context.logger.info("Sending NTFY notification to topic {topic}", { topic });
+
+  const headers: Record<string, string> = {
+    "Title": args.title,
+    "Priority": String(priority),
+  };
+  if (args.tags && args.tags.length > 0) headers["Tags"] = args.tags.join(",");
+  if (args.actions && args.actions.length > 0) {
+    headers["Actions"] = args.actions
+      .map((action) => `${action.action}, ${action.label}, ${action.url}`)
+      .join("; ");
+  }
+
+  let httpStatus = 0;
+  let success = false;
+
+  try {
+    const response = await fetch(ntfyUrl, {
+      method: "POST",
+      headers,
+      body: args.message,
+    });
+    httpStatus = response.status;
+    success = response.ok;
+
+    if (success) {
+      context.logger.info("Notification sent successfully (HTTP {status})", {
+        status: httpStatus,
+      });
+    } else {
+      const responseBody = await response.text();
+      context.logger.warning("NTFY returned HTTP {status}: {body}", {
+        status: httpStatus,
+        body: responseBody.slice(0, 500),
+      });
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    context.logger.error("Failed to send NTFY notification: {error}", {
+      error: errorMsg,
+    });
+  }
+
+  const handle = await context.writeResource(
+    "notification",
+    `notification-${Date.now()}`,
+    {
+      topic,
+      title: args.title,
+      message: args.message,
+      priority,
+      tags: args.tags,
+      sentAt: new Date().toISOString(),
+      httpStatus,
+      success,
+    },
+  );
+
+  return { dataHandles: [handle] };
+}
+
 /** Swamp model for sending push notifications via ntfy.sh. */
 export const model = {
   type: "@mgreten/ntfy-notify",
-  version: "2026.07.16.1",
+  version: "2026.08.23.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.08.23.1",
+      description: "Add the generic outbox transport compatibility method",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     notification: {
       description: "Record of a sent NTFY notification",
@@ -74,86 +183,25 @@ export const model = {
         ),
       }),
       execute: async (
-        args: {
-          topic?: string;
-          title: string;
-          message: string;
-          priority?: number;
-          tags?: string[];
-          actions?: Array<{ action: string; label: string; url: string }>;
-        },
+        args: SendArguments,
         context: MethodContext,
-      ) => {
-        const topic = args.topic || context.globalArgs.defaultTopic;
-        const priority = args.priority ?? 3;
-        const ntfyUrl = `${context.globalArgs.ntfyUrl}/${topic}`;
-
-        context.logger.info("Sending NTFY notification to {url}", {
-          url: ntfyUrl,
-        });
-
-        const headers: Record<string, string> = {
-          "Title": args.title,
-          "Priority": String(priority),
-        };
-        if (args.tags && args.tags.length > 0) {
-          headers["Tags"] = args.tags.join(",");
-        }
-        if (args.actions && args.actions.length > 0) {
-          headers["Actions"] = args.actions
-            .map((a) => `${a.action}, ${a.label}, ${a.url}`)
-            .join("; ");
-        }
-
-        let httpStatus = 0;
-        let success = false;
-
-        try {
-          const response = await fetch(ntfyUrl, {
-            method: "POST",
-            headers,
-            body: args.message,
-          });
-          httpStatus = response.status;
-          success = response.ok;
-
-          if (success) {
-            context.logger.info(
-              "Notification sent successfully (HTTP {status})",
-              { status: httpStatus },
-            );
-          } else {
-            const responseBody = await response.text();
-            context.logger.warning("NTFY returned HTTP {status}: {body}", {
-              status: httpStatus,
-              body: responseBody.slice(0, 500),
-            });
-          }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          context.logger.error("Failed to send NTFY notification: {error}", {
-            error: errorMsg,
-          });
-        }
-
-        const notification = {
-          topic,
-          title: args.title,
-          message: args.message,
-          priority,
-          tags: args.tags,
-          sentAt: new Date().toISOString(),
-          httpStatus,
-          success,
-        };
-
-        const handle = await context.writeResource(
-          "notification",
-          `notification-${Date.now()}`,
-          notification as unknown as Record<string, unknown>,
+      ) => await sendNotification(args, context),
+    },
+    sendOutboxTransport: {
+      description:
+        "Send a generic notification-outbox payload through NTFY (at-least-once)",
+      arguments: OutboxTransportArgumentsSchema,
+      execute: async (
+        args: z.infer<typeof OutboxTransportArgumentsSchema>,
+        context: MethodContext,
+      ): Promise<{ dataHandles: Record<string, unknown>[] }> => {
+        context.logger.info(
+          "Sending outbox notification through NTFY (idempotency is caller-managed)",
         );
-
-        return { dataHandles: [handle] };
+        return await sendNotification(
+          { ...args.payload, ...args.options },
+          context,
+        );
       },
     },
   },

@@ -1,9 +1,9 @@
 # @mgreten/ntfy-notify
 
 Send push notifications via [ntfy.sh](https://ntfy.sh) from any swamp model or
-workflow. Works with the public ntfy.sh service or any self-hosted ntfy instance.
-One method, one purpose: fire a notification with a title, message, priority, and
-optional tags.
+workflow. Works with the public ntfy.sh service or any self-hosted ntfy
+instance. Use the direct `send` method or the explicitly named generic outbox
+transport adapter.
 
 ## Installation
 
@@ -40,10 +40,10 @@ swamp model method run ntfy-notify send \
 
 ## Global Arguments
 
-| Argument       | Type   | Default          | Description                         |
-| -------------- | ------ | ---------------- | ----------------------------------- |
-| `ntfyUrl`      | string | `https://ntfy.sh`| Base URL of your ntfy server        |
-| `defaultTopic` | string | *(required)*     | Default topic for notifications     |
+| Argument       | Type   | Default           | Description                     |
+| -------------- | ------ | ----------------- | ------------------------------- |
+| `ntfyUrl`      | string | `https://ntfy.sh` | Base URL of your ntfy server    |
+| `defaultTopic` | string | _(required)_      | Default topic for notifications |
 
 ## Method: `send`
 
@@ -52,21 +52,52 @@ swamp model method run ntfy-notify send \
 | `topic`    | string   | no       | Override the default topic               |
 | `title`    | string   | yes      | Notification title                       |
 | `message`  | string   | yes      | Notification body                        |
-| `priority` | number   | no       | 1 (min) to 5 (max), default 3           |
+| `priority` | number   | no       | 1 (min) to 5 (max), default 3            |
 | `tags`     | string[] | no       | Emoji/tag strings (e.g. `["checkmark"]`) |
+
+## Method: `sendOutboxTransport`
+
+Compatibility adapter for notification outbox workflows. Its strict contract is:
+
+```ts
+{
+  payload: { title: string; message: string }; // 1..200 and 1..4096 chars
+  idempotencyKey: string;                      // 1..256 chars
+  options: {
+    topic?: string;                            // 1..256 chars
+    priority?: 1 | 2 | 3 | 4 | 5;
+    tags?: string[];                           // at most 20, 1..64 chars each
+    actions?: Array<{                         // at most 3
+      action: string;                          // 1..32 chars
+      label: string;                           // 1..100 chars
+      url: string;                             // valid URL, at most 2048 chars
+    }>;
+  };
+}
+```
+
+Unknown fields are rejected. The payload is marked sensitive so workflow tooling
+can redact its title and message. The result is the standard model-method shape
+`{ dataHandles: [...] }`, pointing to the notification delivery record.
+
+`idempotencyKey` satisfies the caller contract but is not sent to ntfy, logged,
+or persisted. ntfy has no verified server-side deduplication guarantee here, so
+a replay calls ntfy again. The outbox/caller must own deduplication; delivery is
+at least once and duplicates remain possible after retries or ambiguous
+failures.
 
 ## How It Works
 
 The model sends an HTTP POST to `{ntfyUrl}/{topic}` with a JSON body containing
 the title, message, priority, and tags. Each notification is recorded as a
-`notification` resource with the HTTP status, success flag, and timestamp — useful
-for auditing delivery in workflows or debugging connectivity to self-hosted
-instances.
+`notification` resource with the HTTP status, success flag, and timestamp —
+useful for auditing delivery in workflows or debugging connectivity to
+self-hosted instances.
 
-No authentication is built in. If your ntfy server requires auth, configure it at
-the server level or use an access token in the URL (ntfy supports query-param
-tokens). The model uses the standard `fetch` API — no external dependencies beyond
-Zod.
+No authentication is built in. If your ntfy server requires auth, configure it
+at the server level or use an access token in the URL (ntfy supports query-param
+tokens). The model uses the standard `fetch` API — no external dependencies
+beyond Zod.
 
 ## License
 
