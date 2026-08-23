@@ -138,6 +138,13 @@ export const decisionContextInputSchema = z.strictObject({
       );
     }
   });
+  input.safeClaims.forEach((item, index) => {
+    unique(
+      item.evidenceIds,
+      ["safeClaims", index, "evidenceIds"],
+      "duplicate evidenceId reference",
+    );
+  });
   input.evidence.forEach((item, index) => {
     if (Date.parse(item.observedAt) > Date.parse(input.evaluatedAt)) {
       issue(["evidence", index, "observedAt"], "evidence is from the future");
@@ -216,16 +223,22 @@ export function compileDecisionContext(raw: unknown) {
   const now = Date.parse(input.evaluatedAt);
   const bindings = [...input.bindings].sort((a, b) =>
     a.kind.localeCompare(b.kind) || a.artifactId.localeCompare(b.artifactId) ||
-    a.version.localeCompare(b.version)
+    a.version.localeCompare(b.version) ||
+    a.contentHash.localeCompare(b.contentHash) ||
+    a.observedAt.localeCompare(b.observedAt) ||
+    a.expiresAt.localeCompare(b.expiresAt) ||
+    Number(a.approved) - Number(b.approved)
   );
   const evidence = [...input.evidence].sort((a, b) =>
     a.evidenceId.localeCompare(b.evidenceId)
   );
-  const safeClaims = [...input.safeClaims].sort((a, b) =>
-    a.claimId.localeCompare(b.claimId)
-  );
+  const safeClaims = input.safeClaims.map((claim) => ({
+    ...claim,
+    evidenceIds: [...claim.evidenceIds].sort(),
+  })).sort((a, b) => a.claimId.localeCompare(b.claimId));
   const outcomes = [...input.outcomes].sort((a, b) =>
-    a.domain.localeCompare(b.domain) || a.outcome.localeCompare(b.outcome)
+    a.domain.localeCompare(b.domain) || a.outcome.localeCompare(b.outcome) ||
+    canonical(a.dimensions).localeCompare(canonical(b.dimensions))
   );
   for (
     const kind of [

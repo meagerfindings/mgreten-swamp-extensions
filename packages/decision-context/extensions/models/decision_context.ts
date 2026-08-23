@@ -35,8 +35,17 @@ export const model = {
             name: string,
             attributes: unknown,
           ) => Promise<unknown>;
+          logger: {
+            info: (
+              message: string,
+              properties: Record<string, unknown>,
+            ) => void;
+          };
         },
       ) => {
+        context.logger.info("Compiling decision context {packetId}", {
+          packetId: args.packetId,
+        });
         const packet = compileDecisionContext(args);
         const existing = await context.readResource(packet.packetId);
         if (existing) {
@@ -44,6 +53,9 @@ export const model = {
           if (JSON.stringify(parsed) !== JSON.stringify(packet)) {
             throw new Error(`Conflicting replay for packet ${packet.packetId}`);
           }
+          context.logger.info("Decision context replay matched {packetId}", {
+            packetId: packet.packetId,
+          });
           return { dataHandles: [] };
         }
         const handle = await context.writeResource(
@@ -51,6 +63,9 @@ export const model = {
           packet.packetId,
           packet,
         );
+        context.logger.info("Compiled decision context {packetId}", {
+          packetId: packet.packetId,
+        });
         return { dataHandles: [handle] };
       },
     },
