@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/decision-dossier"
+version: 2026.08.23.1
+description: >
+  Generic, persistence-only decision dossiers with evidence provenance,
+  versioned subject binding, and no execution authority.
+repository: "https://github.com/meagerfindings/swamp-decision-dossier"
+models:
+  - decision_dossier.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - examples/decision-dossier.json
+dependencies: []
