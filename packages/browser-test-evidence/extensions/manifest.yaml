@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@mgreten/browser-test-evidence"
+version: 2026.08.23.1
+description: >
+  Normalize Playwright JSON reports into versioned, structured browser test
+  evidence with test metadata, retry outcomes, cleanup annotations, and CI
+  provenance.
+repository: "https://github.com/meagerfindings/swamp-browser-test-evidence"
+models:
+  - browser_test_evidence.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - docs/playwright-json-example.json
+dependencies: []
