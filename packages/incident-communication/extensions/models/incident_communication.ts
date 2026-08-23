@@ -35,6 +35,9 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: {
+          logger: {
+            info(message: string, properties: Record<string, unknown>): void;
+          };
           readResource(name: string): Promise<Record<string, unknown> | null>;
           writeResource(
             spec: string,
@@ -43,6 +46,12 @@ export const model = {
           ): Promise<unknown>;
         },
       ) => {
+        context.logger.info(
+          "Validating incident communication draft {packetId}",
+          {
+            packetId: args.packetId,
+          },
+        );
         const result = validateIncidentCommunicationPacket(args.packet);
         if (!result.valid) {
           throw new TypeError(
@@ -60,12 +69,22 @@ export const model = {
           if (JSON.stringify(parsed) !== JSON.stringify(result.value)) {
             throw new Error(`Conflicting replay for packet ${args.packetId}`);
           }
+          context.logger.info(
+            "Incident communication draft {packetId} already recorded",
+            { packetId: args.packetId },
+          );
           return { dataHandles: [] };
         }
         const handle = await context.writeResource(
           "packet",
           args.packetId,
           result.value,
+        );
+        context.logger.info(
+          "Recorded incident communication draft {packetId}",
+          {
+            packetId: args.packetId,
+          },
         );
         return { dataHandles: [handle] };
       },

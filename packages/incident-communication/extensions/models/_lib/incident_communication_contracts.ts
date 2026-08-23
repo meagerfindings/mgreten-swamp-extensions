@@ -281,6 +281,40 @@ export const incidentCommunicationPacketSchema = z.strictObject({
       message: "none cannot be combined with another sensitivity",
     });
   }
+  if (
+    new Set(packet.draft.sensitivity).size !== packet.draft.sensitivity.length
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["draft", "sensitivity"],
+      message: "sensitivity values must be unique",
+    });
+  }
+  const privacyRank = {
+    public: 0,
+    internal: 1,
+    confidential: 2,
+    restricted: 3,
+  } as const;
+  for (const statement of statements) {
+    for (const reference of statement.evidenceIds) {
+      const referencedEvidence = packet.evidence.find((item) =>
+        item.evidenceId === reference
+      );
+      if (
+        referencedEvidence &&
+        privacyRank[referencedEvidence.sensitivity] >
+          privacyRank[packet.draft.privacy]
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["sections", statement.statementId],
+          message:
+            "draft privacy must be at least as restrictive as referenced evidence",
+        });
+      }
+    }
+  }
   packet.timeline.forEach((entry, index) => {
     if (!statementSet.has(entry.statementId)) {
       context.addIssue({

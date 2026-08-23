@@ -1,7 +1,7 @@
 # Swamp Incident Communication
 
-`@mgreten/incident-communication` is a generic, persistence-only Swamp model
-for recording incident communication **drafts**. It accepts a strict,
+`@mgreten/incident-communication` is a generic, persistence-only Swamp model for
+recording incident communication **drafts**. It accepts a strict,
 evidence-linked packet and writes exactly one `packet` resource when the packet
 is valid. It has no external clients, credentials, webhooks, network access, or
 delivery integrations.
@@ -31,17 +31,18 @@ swamp model method run incident-drafts record --input packetId=packet-1 --input 
 ```
 
 `packetId` must exactly equal `packet.packetId`. Retrying the exact same valid
-packet is idempotent. Changed content under an existing ID is rejected, preserving
-the packet's immutable identity; neither path emits a side effect beyond persistence.
+packet is idempotent. Changed content under an existing ID is rejected,
+preserving the packet's immutable identity; neither path emits a side effect
+beyond persistence.
 
 ## Contract guarantees
 
 The packet contract is schema version `1.0` and is strict: unknown fields are
 rejected. It validates timestamp chronology, deterministic ordering, evidence
 references, evidence freshness and availability for every evidence-bearing
-section, timeline references, and the
-unapproved/no-authority boundary. The model validates the whole packet before
-calling `writeResource`, so invalid data produces no write.
+section, privacy at least as restrictive as referenced evidence, timeline
+references, and the unapproved/no-authority boundary. The model validates the
+whole packet before calling `writeResource`, so invalid data produces no write.
 
 The model exposes one resource (`packet`) and one method (`record`). It contains
 no approval method and no send, deliver, publish, remediate, or production

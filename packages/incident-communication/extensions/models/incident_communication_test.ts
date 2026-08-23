@@ -13,6 +13,9 @@ async function rejects(fn: () => unknown | Promise<unknown>, text: string) {
   }
   throw new Error(`expected rejection: ${text}`);
 }
+const logger = {
+  info: (_message: string, _properties: Record<string, unknown>) => {},
+};
 const evidence = (evidenceId: string) => ({
   evidenceId,
   version: "v1",
@@ -52,7 +55,7 @@ const packet = () => ({
     kind: "incident-update",
     audience: "Affected customers",
     channel: "Status page",
-    privacy: "public",
+    privacy: "internal",
     sensitivity: ["none"],
   },
   approval: {
@@ -156,6 +159,7 @@ Deno.test("rejects ordering, chronology, authority, approval, and extra fields",
 Deno.test("model validates before its sole persistence side effect", async () => {
   const writes: unknown[] = [];
   const context = {
+    logger,
     readResource: () => Promise.resolve(null),
     writeResource: async (...args: unknown[]) => {
       writes.push(args);
@@ -193,6 +197,7 @@ Deno.test("exact retries are idempotent and conflicting packet retries fail", as
   const writes: unknown[][] = [];
   let stored: Record<string, unknown> | null = null;
   const context = {
+    logger,
     readResource: () => Promise.resolve(stored),
     writeResource: async (...args: unknown[]) => {
       writes.push(args);
@@ -216,7 +221,11 @@ Deno.test("exact retries are idempotent and conflicting packet retries fail", as
   const changed = packet();
   changed.draft.audience = "Different audience";
   await rejects(
-    () => model.methods.record.execute({ packetId: "packet-1", packet: changed }, context),
+    () =>
+      model.methods.record.execute(
+        { packetId: "packet-1", packet: changed },
+        context,
+      ),
     "Conflicting replay",
   );
   assert(Object.keys(model.methods).join(",") === "record");
@@ -227,11 +236,79 @@ Deno.test("every evidence-bearing section requires available fresh evidence", ()
   for (const section of ["hypotheses", "mitigation", "followUp"] as const) {
     const candidate = packet();
     if (section === "mitigation") {
-      candidate.sections.mitigation = { availability: "available", unavailableReason: null, items: [{ statementId: "s-3", type: "mitigation", text: "Synthetic mitigation.", evidenceIds: ["e-1"], status: "proposed", owner: "Owner" }] } as never;
+      candidate.sections.mitigation = {
+        availability: "available",
+        unavailableReason: null,
+        items: [{
+          statementId: "s-3",
+          type: "mitigation",
+          text: "Synthetic mitigation.",
+          evidenceIds: ["e-1"],
+          status: "proposed",
+          owner: "Owner",
+        }],
+      } as never;
     } else if (section === "followUp") {
       candidate.sections.followUp.items[0].evidenceIds = ["e-1"] as never;
     }
     candidate.evidence[0].status = "withdrawn";
     assert(!validateIncidentCommunicationPacket(candidate).valid, section);
+  }
+});
+
+Deno.test("rejects privacy downgrade, duplicate sensitivity, and malformed input", () => {
+  const privacyDowngrade = packet();
+  privacyDowngrade.evidence[0].sensitivity = "restricted";
+  privacyDowngrade.draft.privacy = "public";
+  assert(!validateIncidentCommunicationPacket(privacyDowngrade).valid);
+
+  const duplicateSensitivity = packet();
+  duplicateSensitivity.draft.sensitivity = ["security", "security"] as never;
+  assert(!validateIncidentCommunicationPacket(duplicateSensitivity).valid);
+  assert(!validateIncidentCommunicationPacket(null).valid);
+  assert(!validateIncidentCommunicationPacket({ packetId: "packet-1" }).valid);
+});
+
+Deno.test("tampered stored packets fail closed without writes", async () => {
+  const writes: unknown[] = [];
+  const tampered = {
+    ...packet(),
+    authority: { ...packet().authority, maySend: true },
+  };
+  await rejects(
+    () =>
+      model.methods.record.execute(
+        { packetId: "packet-1", packet: packet() },
+        {
+          logger,
+          readResource: () => Promise.resolve(tampered as never),
+          writeResource: (...args: unknown[]) => {
+            writes.push(args);
+            return Promise.resolve({});
+          },
+        },
+      ),
+    "Invalid input",
+  );
+  assert(writes.length === 0);
+});
+
+Deno.test("published model has no approval or delivery authority", () => {
+  const source = Deno.readTextFileSync(
+    new URL("./incident_communication.ts", import.meta.url),
+  );
+  assert(Object.keys(model.methods).join(",") === "record");
+  for (
+    const forbidden of [
+      "fetch(",
+      "Deno.Command",
+      "maySend: true",
+      "mayPublish: true",
+    ]
+  ) {
+    assert(
+      !source.includes(forbidden),
+      `forbidden delivery surface: ${forbidden}`,
+    );
   }
 });
