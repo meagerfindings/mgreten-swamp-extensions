@@ -1,6 +1,7 @@
 import {
   buildFeedbackResponse,
   feedbackResponseInputSchema,
+  feedbackResponseOutputSchema,
   model,
 } from "./feedback_response_core.ts";
 import type { FeedbackResponseInput } from "./feedback_response_core.ts";
@@ -60,6 +61,10 @@ function fixture(): FeedbackResponseInput {
   };
 }
 
+const logger = {
+  info: (_message: string, _properties?: Record<string, unknown>) => {},
+};
+
 Deno.test("classifies synthetic redacted input and emits a generic bounded draft", async () => {
   const result = await buildFeedbackResponse(fixture());
   assert(result.classification.severity === "medium");
@@ -98,8 +103,17 @@ Deno.test("rejects privacy-risk, promise-like, malformed, and contradictory inpu
     }
     assert(rejected, text);
   }
-  const missingLimitation = fixture() as any;
-  missingLimitation.artifact.redaction.limitations = "redaction is complete";
+  const valid = fixture();
+  const missingLimitation = {
+    ...valid,
+    artifact: {
+      ...valid.artifact,
+      redaction: {
+        ...valid.artifact.redaction,
+        limitations: "redaction is complete",
+      },
+    },
+  };
   assert(!feedbackResponseInputSchema.safeParse(missingLimitation).success);
   const contradictory = fixture();
   contradictory.assessment.praiseOnly = true;
@@ -116,9 +130,10 @@ Deno.test("performs exactly one persistence write after successful validation", 
   const writes: unknown[][] = [];
   await model.methods.classifyAndDraft.execute(fixture(), {
     readResource: () => Promise.resolve(null),
-    writeResource: async (...args: unknown[]) => {
+    logger,
+    writeResource: (...args: unknown[]) => {
       writes.push(args);
-      return { name: args[1] };
+      return Promise.resolve({ name: args[1] });
     },
   });
   assert(writes.length === 1 && writes[0][0] === "response");
@@ -140,11 +155,77 @@ Deno.test("performs exactly one persistence write after successful validation", 
 
 Deno.test("same responseId replay is idempotent and conflicting content is rejected", async () => {
   const stored = await buildFeedbackResponse(fixture());
-  const context = { readResource: () => Promise.resolve(stored), writeResource: () => Promise.resolve({}) };
-  const replay = await model.methods.classifyAndDraft.execute(fixture(), context);
+  let writes = 0;
+  const context = {
+    readResource: () => Promise.resolve(stored),
+    logger,
+    writeResource: () => {
+      writes++;
+      return Promise.resolve({});
+    },
+  };
+  const replay = await model.methods.classifyAndDraft.execute(
+    fixture(),
+    context,
+  );
   assert(replay.dataHandles.length === 0);
-  const changed = fixture(); changed.assessment.blocksCoreUse = false;
+  assert(writes === 0);
+  const changed = fixture();
+  changed.assessment.blocksCoreUse = false;
   let rejected = false;
-  try { await model.methods.classifyAndDraft.execute(changed, context); } catch (error) { rejected = String(error).includes("Conflicting replay"); }
+  try {
+    await model.methods.classifyAndDraft.execute(changed, context);
+  } catch (error) {
+    rejected = String(error).includes("Conflicting replay");
+  }
   assert(rejected);
+  assert(writes === 0);
+});
+
+Deno.test("is deterministic and rejects tampered or malformed persisted packets", async () => {
+  const first = await buildFeedbackResponse(fixture());
+  const second = await buildFeedbackResponse(structuredClone(fixture()));
+  assert(JSON.stringify(first) === JSON.stringify(second));
+
+  const tampered = structuredClone(first);
+  tampered.classification.draftDisposition = "no-draft";
+  assert(!feedbackResponseOutputSchema.safeParse(tampered).success);
+
+  const malformed = { ...fixture(), unexpected: true };
+  assert(!feedbackResponseInputSchema.safeParse(malformed).success);
+});
+
+Deno.test("validation and persistence failures grant no authority and leave no partial write", async () => {
+  const state = { writes: 0 };
+  const invalid = fixture();
+  invalid.artifact.normalizedText = "synthetic@example.test";
+  try {
+    await model.methods.classifyAndDraft.execute(invalid, {
+      readResource: () => Promise.resolve(null),
+      logger,
+      writeResource: () => {
+        state.writes++;
+        return Promise.resolve({});
+      },
+    });
+  } catch {
+    // Expected validation failure.
+  }
+  assert(state.writes === 0);
+
+  let failed = false;
+  try {
+    await model.methods.classifyAndDraft.execute(fixture(), {
+      readResource: () => Promise.resolve(null),
+      logger,
+      writeResource: () => {
+        state.writes++;
+        return Promise.reject(new Error("synthetic persistence failure"));
+      },
+    });
+  } catch (error) {
+    failed = String(error).includes("synthetic persistence failure");
+  }
+  assert(failed);
+  assert(Number(state.writes) === 1);
 });

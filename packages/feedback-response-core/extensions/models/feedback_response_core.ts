@@ -216,6 +216,17 @@ export const feedbackResponseOutputSchema = z.strictObject({
       sha256: Hash,
     }),
   }).nullable(),
+}).superRefine((output, context) => {
+  const suppressesDraft = output.classification.draftDisposition ===
+      "hold-for-specialist" ||
+    output.classification.draftDisposition === "no-draft";
+  if (suppressesDraft !== (output.draft === null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["draft"],
+      message: "draft presence must match the draft disposition",
+    });
+  }
 });
 
 /** Validated input accepted by the classify-and-draft method. */
@@ -268,7 +279,7 @@ function canonical(value: unknown): string {
   if (value !== null && typeof value === "object") {
     return `{${
       Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-        a.localeCompare(b)
+        a < b ? -1 : a > b ? 1 : 0
       ).map(([key, nested]) => `${JSON.stringify(key)}:${canonical(nested)}`)
         .join(",")
     }}`;
@@ -414,6 +425,9 @@ export const model = {
         args: FeedbackResponseInput,
         context: {
           readResource(name: string): Promise<Record<string, unknown> | null>;
+          logger: {
+            info(message: string, properties?: Record<string, unknown>): void;
+          };
           writeResource(
             spec: string,
             name: string,
@@ -421,6 +435,9 @@ export const model = {
           ): Promise<unknown>;
         },
       ) => {
+        context.logger.info("Classifying feedback response {responseId}", {
+          responseId: args.responseId,
+        });
         const response = await buildFeedbackResponse(args);
         const existing = await context.readResource(args.responseId);
         if (existing) {
@@ -432,13 +449,20 @@ export const model = {
               `Conflicting replay for response ${args.responseId}`,
             );
           }
+          context.logger.info("Reused feedback response {responseId}", {
+            responseId: args.responseId,
+          });
           return { dataHandles: [] };
         }
-        return {
-          dataHandles: [
-            await context.writeResource("response", args.responseId, response),
-          ],
-        };
+        const handle = await context.writeResource(
+          "response",
+          args.responseId,
+          response,
+        );
+        context.logger.info("Stored feedback response {responseId}", {
+          responseId: args.responseId,
+        });
+        return { dataHandles: [handle] };
       },
     },
   },
