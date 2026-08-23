@@ -1,9 +1,10 @@
 import { model, normalizePlaywrightReport } from "./browser_test_evidence.ts";
+import { createModelTestContext } from "jsr:@swamp-club/swamp-testing@0.20260823.31";
 
 const args = {
   reportPath: "unused.json",
   runId: "123",
-  sha: "abc123",
+  sha: "abc1234",
   branch: "feature/browser-evidence",
   pullRequest: "42",
   runUrl: "https://github.com/example/repo/actions/runs/123",
@@ -122,17 +123,91 @@ Deno.test("normalization is deterministic and model writes run-specific resource
   const path = await Deno.makeTempFile();
   try {
     await Deno.writeTextFile(path, JSON.stringify(report()));
-    const writes: unknown[][] = [];
-    await model.methods.importPlaywrightJson.execute({ ...args, reportPath: path }, {
-      writeResource: (...values: unknown[]) => {
-        writes.push(values);
-        return Promise.resolve({ name: values[1] as string });
-      },
+    const { context, getLogs, getWrittenResources } = createModelTestContext({
+      methodName: "importPlaywrightJson",
     });
-    if (writes.length !== 1 || writes[0][1] !== "browser-ci-123") {
+    await model.methods.importPlaywrightJson.execute(
+      { ...args, reportPath: path },
+      context,
+    );
+    const writes = getWrittenResources();
+    if (writes.length !== 1 || writes[0].name !== "browser-ci-123") {
       throw new Error(JSON.stringify(writes));
     }
+    const value = writes[0].data as Record<string, unknown>;
+    if (
+      value.authority !== "recording-only" || typeof value.reportSha256 !== "string"
+    ) {
+      throw new Error(`Missing integrity controls: ${JSON.stringify(value)}`);
+    }
+    if (getLogs().length !== 2) throw new Error("expected entry and completion logs");
   } finally {
     await Deno.remove(path);
+  }
+});
+
+Deno.test("replay is idempotent and conflicting reuse is rejected", async () => {
+  const path = await Deno.makeTempFile();
+  try {
+    await Deno.writeTextFile(path, JSON.stringify(report()));
+    const first = createModelTestContext({ methodName: "importPlaywrightJson" });
+    await model.methods.importPlaywrightJson.execute(
+      { ...args, reportPath: path },
+      first.context,
+    );
+    const recorded = first.getWrittenResources()[0].data;
+    const replay = createModelTestContext({
+      methodName: "importPlaywrightJson",
+      storedResources: { "browser-ci-123": recorded },
+    });
+    const result = await model.methods.importPlaywrightJson.execute(
+      { ...args, reportPath: path },
+      replay.context,
+    );
+    if (result.dataHandles.length !== 0 || replay.getWrittenResources().length !== 0) {
+      throw new Error("replay wrote duplicate evidence");
+    }
+    await Deno.writeTextFile(
+      path,
+      JSON.stringify({
+        ...report(),
+        stats: {
+          startTime: "2026-08-23T10:01:00.000Z",
+        },
+      }),
+    );
+    let rejected = false;
+    try {
+      await model.methods.importPlaywrightJson.execute(
+        { ...args, reportPath: path },
+        replay.context,
+      );
+    } catch {
+      rejected = true;
+    }
+    if (!rejected) throw new Error("conflicting identity reuse was accepted");
+  } finally {
+    await Deno.remove(path);
+  }
+});
+
+Deno.test("rejects unsafe identities and privacy-leaking URLs", () => {
+  for (
+    const override of [
+      { runId: "same/id" },
+      { environment: "ci/prod" },
+      { runUrl: "https://ci.example.test/run?token=secret" },
+      { artifactUrl: "https://user:secret@ci.example.test/artifact" },
+    ]
+  ) {
+    let rejected = false;
+    try {
+      normalizePlaywrightReport(report(), { ...args, ...override });
+    } catch {
+      rejected = true;
+    }
+    if (!rejected) {
+      throw new Error(`unsafe input accepted: ${JSON.stringify(override)}`);
+    }
   }
 });

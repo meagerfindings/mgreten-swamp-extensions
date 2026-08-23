@@ -1,13 +1,22 @@
 /** Normalize Playwright JSON reports into structured browser-test evidence. */
 import { z } from "npm:zod@4";
 
+const MAX_REPORT_BYTES = 5_000_000;
+const MAX_TESTS = 10_000;
+const SafeIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/);
+const BoundedTextSchema = z.string().min(1).max(500);
+const PublicUrlSchema = z.string().url().refine((value) => {
+  const url = new URL(value);
+  return !url.username && !url.password && !url.search && !url.hash;
+}, "URL must not contain credentials, query parameters, or fragments");
+
 const BrowserTestSchema = z.strictObject({
-  name: z.string(),
-  tags: z.array(z.string()),
-  project: z.string(),
-  browserEngine: z.string(),
-  viewportProfile: z.string(),
-  viewport: z.string(),
+  name: BoundedTextSchema,
+  tags: z.array(z.string().min(1).max(100)).max(100),
+  project: BoundedTextSchema,
+  browserEngine: BoundedTextSchema,
+  viewportProfile: BoundedTextSchema,
+  viewport: BoundedTextSchema,
   status: z.enum([
     "passed",
     "failed",
@@ -18,7 +27,6 @@ const BrowserTestSchema = z.strictObject({
   ]),
   durationMs: z.number().int().nonnegative(),
   retries: z.number().int().nonnegative(),
-  failureMessage: z.string().optional(),
   cleanupOutcome: z.enum([
     "completed",
     "failed",
@@ -29,18 +37,20 @@ const BrowserTestSchema = z.strictObject({
 
 const BrowserRunSchema = z.strictObject({
   runAt: z.iso.datetime({ offset: true }),
-  runId: z.string(),
-  sha: z.string(),
-  branch: z.string(),
-  pullRequest: z.string().optional(),
-  deployment: z.string().optional(),
-  runUrl: z.string().url(),
-  environment: z.string(),
-  trigger: z.string(),
-  appUrl: z.string().url(),
+  runId: SafeIdSchema,
+  sha: z.string().regex(/^[a-fA-F0-9]{7,64}$/),
+  branch: BoundedTextSchema,
+  pullRequest: BoundedTextSchema.optional(),
+  deployment: BoundedTextSchema.optional(),
+  runUrl: PublicUrlSchema,
+  environment: SafeIdSchema,
+  trigger: BoundedTextSchema,
+  appUrl: PublicUrlSchema,
+  reportSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  authority: z.literal("recording-only"),
   artifact: z.strictObject({
-    name: z.string(),
-    url: z.string().url(),
+    name: BoundedTextSchema,
+    url: PublicUrlSchema,
   }),
   totals: z.strictObject({
     total: z.number().int().nonnegative(),
@@ -49,23 +59,23 @@ const BrowserRunSchema = z.strictObject({
     flaky: z.number().int().nonnegative(),
     skipped: z.number().int().nonnegative(),
   }),
-  tests: z.array(BrowserTestSchema),
+  tests: z.array(BrowserTestSchema).max(MAX_TESTS),
 });
 
 /** Strict provenance and local-report arguments accepted by the import method. */
 export const ImportArgumentsSchema = z.strictObject({
   reportPath: z.string().min(1),
-  runId: z.string().min(1),
-  sha: z.string().min(1),
-  branch: z.string().min(1),
-  pullRequest: z.string().optional(),
-  deployment: z.string().optional(),
-  runUrl: z.string().url(),
-  environment: z.string().min(1),
-  trigger: z.string().min(1),
-  appUrl: z.string().url(),
-  artifactName: z.string().min(1),
-  artifactUrl: z.string().url(),
+  runId: SafeIdSchema,
+  sha: z.string().regex(/^[a-fA-F0-9]{7,64}$/),
+  branch: BoundedTextSchema,
+  pullRequest: BoundedTextSchema.optional(),
+  deployment: BoundedTextSchema.optional(),
+  runUrl: PublicUrlSchema,
+  environment: SafeIdSchema,
+  trigger: BoundedTextSchema,
+  appUrl: PublicUrlSchema,
+  artifactName: BoundedTextSchema,
+  artifactUrl: PublicUrlSchema,
 });
 
 type ImportArguments = z.infer<typeof ImportArgumentsSchema>;
@@ -125,6 +135,10 @@ const PlaywrightReportSchema = z.strictObject({
 
 type ResourceHandle = { name: string };
 type ImportContext = {
+  logger: {
+    info: (message: string, values?: Record<string, unknown>) => void;
+  };
+  readResource: (name: string) => Promise<unknown | null>;
   writeResource: (
     specName: string,
     name: string,
@@ -168,6 +182,7 @@ function finalStatus(results: PlaywrightResult[]): BrowserTest["status"] {
 export function normalizePlaywrightReport(
   raw: unknown,
   args: ImportArguments,
+  reportSha256 = "0".repeat(64),
 ): BrowserRun {
   const argsValue = ImportArgumentsSchema.parse(args);
   const report = PlaywrightReportSchema.parse(raw);
@@ -183,13 +198,15 @@ export function normalizePlaywrightReport(
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
         const results = test.results;
-        const last = results.at(-1);
         const projectName = test.projectName;
         const project = projects.get(projectName);
         if (!project) {
           throw new TypeError(`Unknown Playwright project: ${projectName}`);
         }
         const metadata = project.metadata;
+        if (tests.length >= MAX_TESTS) {
+          throw new TypeError(`Playwright report exceeds ${MAX_TESTS} tests`);
+        }
         tests.push({
           name: spec.title,
           tags: tagsFor(spec.title, spec.tags),
@@ -203,7 +220,6 @@ export function normalizePlaywrightReport(
             0,
           ),
           retries: Math.max(...results.map((result) => result.retry)),
-          failureMessage: last?.error?.message,
           cleanupOutcome: cleanupOutcome(test.annotations),
         });
       }
@@ -226,6 +242,8 @@ export function normalizePlaywrightReport(
     environment: argsValue.environment,
     trigger: argsValue.trigger,
     appUrl: argsValue.appUrl,
+    reportSha256,
+    authority: "recording-only",
     artifact: { name: argsValue.artifactName, url: argsValue.artifactUrl },
     totals: {
       total: tests.length,
@@ -265,13 +283,46 @@ export const model = {
         args: ImportArguments,
         context: ImportContext,
       ): Promise<{ dataHandles: ResourceHandle[] }> => {
-        const raw = JSON.parse(await Deno.readTextFile(args.reportPath));
-        const run = normalizePlaywrightReport(raw, args);
-        const name = `browser-${args.environment}-${args.runId}`.replace(
-          /[^a-zA-Z0-9_-]/g,
-          "-",
-        );
+        const parsedArgs = ImportArgumentsSchema.parse(args);
+        context.logger.info("Importing browser evidence for run {runId}", {
+          runId: parsedArgs.runId,
+        });
+        const stat = await Deno.stat(parsedArgs.reportPath);
+        if (!stat.isFile || stat.size > MAX_REPORT_BYTES) {
+          throw new TypeError(
+            `Playwright report must be a file no larger than ${MAX_REPORT_BYTES} bytes`,
+          );
+        }
+        const bytes = await Deno.readFile(parsedArgs.reportPath);
+        const reportSha256 = Array.from(
+          new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+          (byte) => byte.toString(16).padStart(2, "0"),
+        ).join("");
+        const raw = JSON.parse(new TextDecoder().decode(bytes));
+        const run = normalizePlaywrightReport(raw, parsedArgs, reportSha256);
+        const name = `browser-${parsedArgs.environment}-${parsedArgs.runId}`;
+        const existing = await context.readResource(name);
+        if (existing !== null) {
+          const prior = BrowserRunSchema.safeParse(existing);
+          if (
+            !prior.success || JSON.stringify(prior.data) !== JSON.stringify(run)
+          ) {
+            throw new TypeError(
+              `Run identity ${parsedArgs.environment}/${parsedArgs.runId} already records different evidence`,
+            );
+          }
+          context.logger.info(
+            "Browser evidence for run {runId} already recorded",
+            {
+              runId: parsedArgs.runId,
+            },
+          );
+          return { dataHandles: [] };
+        }
         const handle = await context.writeResource("browser-run", name, run);
+        context.logger.info("Recorded browser evidence for run {runId}", {
+          runId: parsedArgs.runId,
+        });
         return { dataHandles: [handle] };
       },
     },
