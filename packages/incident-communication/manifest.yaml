@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/incident-communication"
+version: 2026.08.23.1
+description: >
+  Persist validated, explicitly unapproved incident communication drafts without
+  collecting evidence, approving content, delivering messages, publishing, or
+  accessing production systems.
+repository: "https://github.com/meagerfindings/swamp-incident-communication"
+models:
+  - incident_communication.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+platforms: []
