@@ -10,6 +10,9 @@ export const recordArgumentsSchema = z.strictObject({
 });
 
 type Context = {
+  logger: {
+    info(message: string, properties: Record<string, unknown>): void;
+  };
   readResource(name: string): Promise<Record<string, unknown> | null>;
   writeResource(
     spec: string,
@@ -34,14 +37,57 @@ function same(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function canonicalize(dossier: DecisionDossier): DecisionDossier {
+  const value = structuredClone(dossier);
+  const by = <T>(items: T[], key: (item: T) => string) =>
+    items.sort((left, right) => key(left).localeCompare(key(right)));
+  const strings = (items: string[]) => items.sort((a, b) => a.localeCompare(b));
+  value.options.forEach((item) => strings(item.evidenceIds));
+  value.economics.estimates.forEach((item) => {
+    strings(item.evidenceIds);
+    strings(item.assumptions);
+  });
+  value.risks.forEach((item) => strings(item.evidenceIds));
+  value.expectedOutcomes.forEach((item) => strings(item.metricIds));
+  strings(value.problem.evidenceIds);
+  strings(value.affectedSegment.evidenceIds);
+  strings(value.confidence.evidenceIds);
+  strings(value.strategicFit.principleIds);
+  strings(value.strategicFit.evidenceIds);
+  strings(value.recommendation.evidenceIds);
+  strings(value.effort.evidenceIds);
+  strings(value.effort.assumptions);
+  by(value.evidence, (item) => item.evidenceId);
+  by(value.options, (item) => item.optionId);
+  by(value.economics.estimates, (item) => item.estimateId);
+  by(value.risks, (item) => item.riskId);
+  by(value.expectedOutcomes, (item) => item.outcomeId);
+  by(value.measurementPlan.metrics, (item) => item.metricId);
+  by(value.measurementPlan.windows, (item) => item.windowId);
+  return value;
+}
+
 /** Validates and persists an input dossier. It never makes, approves, or executes decisions. */
 export async function persistDossier(input: unknown, context: Context) {
-  const { dossier } = recordArgumentsSchema.parse(input);
+  const dossier = canonicalize(recordArgumentsSchema.parse(input).dossier);
   const name = await resourceName(dossier.dossierId);
+  context.logger.info("Recording decision dossier {dossierId}", {
+    dossierId: dossier.dossierId,
+    version: dossier.version,
+  });
   const priorRaw = await context.readResource(name);
   if (priorRaw) {
-    const prior = DecisionDossier.parse(priorRaw);
-    if (same(prior, dossier)) return { dataHandles: [] };
+    const prior = canonicalize(DecisionDossier.parse(priorRaw));
+    if (same(prior, dossier)) {
+      context.logger.info(
+        "Decision dossier replay already recorded {dossierId}",
+        {
+          dossierId: dossier.dossierId,
+          version: dossier.version,
+        },
+      );
+      return { dataHandles: [] };
+    }
     if (prior.dossierId !== dossier.dossierId) {
       throw new Error("Decision dossier resource identity collision");
     }
@@ -52,7 +98,9 @@ export async function persistDossier(input: unknown, context: Context) {
     }
     if (
       prior.subject.kind !== dossier.subject.kind ||
-      prior.subject.id !== dossier.subject.id
+      prior.subject.id !== dossier.subject.id ||
+      prior.subject.version !== dossier.subject.version ||
+      prior.subject.sha256 !== dossier.subject.sha256
     ) {
       throw new Error(
         `Dossier ${dossier.dossierId} cannot change its subject identity`,
@@ -64,8 +112,13 @@ export async function persistDossier(input: unknown, context: Context) {
       );
     }
   }
+  const handle = await context.writeResource("dossier", name, dossier);
+  context.logger.info("Recorded decision dossier {dossierId}", {
+    dossierId: dossier.dossierId,
+    version: dossier.version,
+  });
   return {
-    dataHandles: [await context.writeResource("dossier", name, dossier)],
+    dataHandles: [handle],
   };
 }
 

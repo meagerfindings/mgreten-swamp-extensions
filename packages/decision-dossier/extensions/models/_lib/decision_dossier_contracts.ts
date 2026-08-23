@@ -2,9 +2,13 @@ import { z } from "npm:zod@4";
 
 export const DECISION_DOSSIER_SCHEMA_VERSION = "1.0" as const;
 
-const id = z.string().trim().min(1);
-const text = z.string().trim().min(1);
+const MAX_ID_LENGTH = 512;
+const MAX_TEXT_LENGTH = 10_000;
+const MAX_ITEMS = 100;
+const id = z.string().trim().min(1).max(MAX_ID_LENGTH);
+const text = z.string().trim().min(1).max(MAX_TEXT_LENGTH);
 const timestamp = z.iso.datetime({ offset: true });
+const list = <T extends z.ZodType>(item: T) => z.array(item).max(MAX_ITEMS);
 
 function unique(message: string) {
   return (values: string[], context: z.RefinementCtx) => {
@@ -92,7 +96,7 @@ export const ArtifactSubject = z.strictObject({
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
-const evidenceIds = z.array(id).superRefine(unique("duplicate evidenceId"));
+const evidenceIds = list(id).superRefine(unique("duplicate evidenceId"));
 const Evidence = z.strictObject({
   evidenceId: id,
   claim: text,
@@ -112,7 +116,7 @@ const Effort = z.strictObject({
   unit: text,
   rationale: text,
   evidenceIds,
-  assumptions: z.array(text),
+  assumptions: list(text),
 }).superRefine((value, context) => {
   if (value.status === "observed" && value.evidenceIds.length === 0) {
     context.addIssue({
@@ -137,7 +141,7 @@ const EstimateBase = z.strictObject({
   status: z.enum(["observed", "hypothetical"]),
   asOf: timestamp,
   evidenceIds,
-  assumptions: z.array(text),
+  assumptions: list(text),
   sourceReference: SourceReference.optional(),
 });
 const EconomicEstimate = z.discriminatedUnion("valueType", [
@@ -211,13 +215,13 @@ export const DecisionDossier = z.strictObject({
   strategicFit: z.strictObject({
     alignment: z.enum(["aligned", "neutral", "conflict"]),
     rationale: text,
-    principleIds: z.array(id).min(1).superRefine(
+    principleIds: list(id).min(1).superRefine(
       unique("duplicate principleId"),
     ),
     evidenceIds,
   }),
-  evidence: z.array(Evidence).min(1),
-  options: z.array(Option).min(2),
+  evidence: list(Evidence).min(1),
+  options: list(Option).min(2),
   recommendation: z.strictObject({
     optionId: id,
     rationale: text,
@@ -225,10 +229,10 @@ export const DecisionDossier = z.strictObject({
   }),
   effort: Effort,
   economics: z.strictObject({
-    estimates: z.array(EconomicEstimate),
+    estimates: list(EconomicEstimate),
     summary: text,
   }),
-  risks: z.array(
+  risks: list(
     z.strictObject({
       riskId: id,
       description: text,
@@ -244,16 +248,16 @@ export const DecisionDossier = z.strictObject({
     authorityBasis: text,
     decisionDueAt: timestamp,
   }),
-  expectedOutcomes: z.array(
+  expectedOutcomes: list(
     z.strictObject({
       outcomeId: id,
       statement: text,
-      metricIds: z.array(id).min(1).superRefine(unique("duplicate metricId")),
+      metricIds: list(id).min(1).superRefine(unique("duplicate metricId")),
     }),
   ).min(1),
   measurementPlan: z.strictObject({
-    metrics: z.array(Metric).min(1),
-    windows: z.array(
+    metrics: list(Metric).min(1),
+    windows: list(
       z.strictObject({ windowId: id, purpose: text, window: Window }),
     ).min(1),
     ownerId: id,

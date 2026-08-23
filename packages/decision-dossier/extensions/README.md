@@ -16,7 +16,12 @@ It preserves the public model type `@mgreten/decision-dossier` and validates the
 - **Caller-supplied evidence:** provenance is validated, but never collected,
   refreshed, fetched, or independently verified.
 - **Version safety:** exact replay is idempotent. Changed content requires a
-  greater version, a later `createdAt`, and unchanged subject `kind` and `id`.
+  greater version, a later `createdAt`, and an unchanged subject identity
+  (`kind`, `id`, `version`, and `sha256`).
+- **Bounded input:** identifiers, text, and collections have explicit limits;
+  malformed, oversized, or tampered stored dossiers fail closed before writes.
+- **Deterministic persistence:** set-like collections are sorted by stable IDs,
+  so equivalent input ordering has the same replay identity and stored form.
 
 The package contains no host-application names, application-specific
 integrations, credentials, external dependencies, or execution-capable methods.

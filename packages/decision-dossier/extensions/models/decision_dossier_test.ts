@@ -20,6 +20,7 @@ function context(prior: Record<string, unknown> | null = null) {
   return {
     writes,
     api: {
+      logger: { info: () => undefined },
       readResource: () => Promise.resolve(prior),
       writeResource: (
         spec: string,
@@ -53,6 +54,18 @@ Deno.test("is idempotent for replays and fails closed for invalid updates", asyn
     replay.api,
   );
   assert(result.dataHandles.length === 0 && replay.writes.length === 0);
+  const reordered = structuredClone(syntheticDossier);
+  reordered.options.reverse();
+  reordered.economics.estimates.reverse();
+  const reorderedReplay = context(structuredClone(syntheticDossier));
+  const reorderedResult = await persistDossier(
+    { dossier: reordered },
+    reorderedReplay.api,
+  );
+  assert(
+    reorderedResult.dataHandles.length === 0 &&
+      reorderedReplay.writes.length === 0,
+  );
   const changed = structuredClone(syntheticDossier);
   changed.problem.statement = "Changed without a new version";
   await rejects(
@@ -88,6 +101,16 @@ Deno.test("requires monotonic version, stable subject identity, and chronology",
       ),
     "cannot change its subject identity",
   );
+  const changedArtifact = structuredClone(next);
+  changedArtifact.subject.sha256 = "b".repeat(64);
+  await rejects(
+    () =>
+      persistDossier(
+        { dossier: changedArtifact },
+        context(syntheticDossier).api,
+      ),
+    "cannot change its subject identity",
+  );
   const stale = structuredClone(next);
   stale.createdAt = syntheticDossier.createdAt;
   await rejects(
@@ -100,4 +123,16 @@ Deno.test("exposes persistence only; no decision or action method exists", () =>
   assert(Object.keys(model.methods).join() === "record");
   assert(Object.keys(model.resources).join() === "dossier");
   assert(model.type === "@mgreten/decision-dossier");
+});
+
+Deno.test("fails closed for malformed or tampered stored state", async () => {
+  const next = structuredClone(syntheticDossier);
+  next.version = 2;
+  next.createdAt = "2026-01-04T12:00:00Z";
+  const tampered = context({ dossierId: "tampered" });
+  await rejects(
+    () => persistDossier({ dossier: next }, tampered.api),
+    "Invalid input",
+  );
+  assert(tampered.writes.length === 0);
 });

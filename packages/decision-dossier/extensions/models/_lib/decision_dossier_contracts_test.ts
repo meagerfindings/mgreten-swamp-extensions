@@ -88,3 +88,18 @@ Deno.test("validates temporal boundaries and emits stable sorted diagnostics", (
       ),
   );
 });
+
+Deno.test("bounds identifiers, text, and collections", () => {
+  const longId = copy(syntheticDossier);
+  longId.dossierId = "x".repeat(513);
+  assert(!validateDecisionDossier(longId).success);
+  const longText = copy(syntheticDossier);
+  longText.problem.statement = "x".repeat(10_001);
+  assert(!validateDecisionDossier(longText).success);
+  const tooMany = copy(syntheticDossier);
+  tooMany.problem.evidenceIds = Array.from(
+    { length: 101 },
+    (_, index) => `e${index}`,
+  );
+  assert(!validateDecisionDossier(tooMany).success);
+});
