@@ -4,6 +4,14 @@ expiresAt: "2026-08-23T13:00:00Z"
 contextCompilerModel: example-context-compiler
 compileConstitutionMethod: compileConstitution
 compileOperatingPacketMethod: compileOperatingPacket
+constitution:
+  artifactId: example-constitution
+  version: v1
+  policyRef: repository://example/policy/v1
+  observedAt: "2026-08-23T11:30:00Z"
+  contentDigest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  cited: true
+  minimized: true
 entries:
   - entryId: example-current-phase
     kind: current-phase
@@ -13,6 +21,9 @@ entries:
     observedAt: "2026-08-23T11:45:00Z"
     expiresAt: "2026-08-23T13:00:00Z"
     sourceRef: repository://example/operating-state/v1
+    sourceVersion: v1
     cited: true
     minimized: true
 contentAttestation: minimized-no-secrets-no-private-content
+replayPolicy: reject-conflicting-replay
+authorityAttestation: reference-only-advisory-no-authority

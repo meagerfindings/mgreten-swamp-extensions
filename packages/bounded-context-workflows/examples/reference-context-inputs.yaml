@@ -14,8 +14,11 @@ sourceRegistryMethod: catalog
 sourceRegistryRecordName: current
 contextCompilerModel: example-context-compiler
 compileMethod: compileRegistered
+replayPolicy: reject-conflicting-replay
+authorityAttestation: reference-only-advisory-no-authority
 candidates:
   - sourceId: example:roadmap
+    sourceVersion: v1
     evidence:
       reference: repository://example/roadmap/v1
       observedAt: "2026-08-23T11:45:00Z"

@@ -32,9 +32,10 @@ Provide `sourceRegistryModel`, `sourceRegistryMethod`, and
 `contextCompilerModel` and `compileMethod` for the compatible compiler. The
 `roleTaxonomy` is checked before compilation; `role` must be one of its values.
 Each candidate must be explicitly cited and minimized and include observed and
-expiry timestamps enclosing `evaluatedAt`. `freshnessMaxAgeSeconds` is passed as
-a declared compiler constraint, while `maxTokens` is the packet budget the
-configured compiler is required to enforce.
+expiry timestamps enclosing `evaluatedAt`; the workflow also enforces
+`freshnessMaxAgeSeconds`. Registry output is projected to `sourceIds`,
+`generatedAt`, and `provenance`, so unrelated registry fields cannot enter the
+compiler. `maxTokens` is the packet budget the configured compiler must enforce.
 
 ```sh
 swamp workflow run @mgreten/bounded-reference-context \
@@ -48,6 +49,11 @@ policy and the current packet. It accepts entries explicitly marked minimized
 and cited. The
 caller supplies generation and expiry timestamps, so freshness remains explicit
 and auditable rather than being inferred from execution time.
+Both workflows require an advisory/no-authority attestation and a
+reject-conflicting-replay policy. Compatible compiler methods must implement
+that policy idempotently: an identical artifact identifier and payload may
+return the existing artifact, while a conflicting payload must fail without
+overwriting it.
 
 ```sh
 swamp workflow run @mgreten/bounded-operating-context \

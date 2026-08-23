@@ -8,13 +8,27 @@ tags:
   capability: bounded-operating-context
   boundary: reference-only-no-provider-no-side-effect
 inputs:
+  type: object
+  additionalProperties: false
   properties:
-    packetId: { type: string, minLength: 1 }
+    packetId: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$' }
     generatedAt: { type: string, format: date-time }
     expiresAt: { type: string, format: date-time }
-    contextCompilerModel: { type: string, minLength: 1 }
-    compileConstitutionMethod: { type: string, minLength: 1 }
-    compileOperatingPacketMethod: { type: string, minLength: 1 }
+    contextCompilerModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$' }
+    compileConstitutionMethod: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$' }
+    compileOperatingPacketMethod: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$' }
+    constitution:
+      type: object
+      additionalProperties: false
+      properties:
+        artifactId: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$' }
+        version: { type: string, minLength: 1, maxLength: 200 }
+        policyRef: { type: string, minLength: 1, maxLength: 2000 }
+        observedAt: { type: string, format: date-time }
+        contentDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        cited: { const: true }
+        minimized: { const: true }
+      required: [artifactId, version, policyRef, observedAt, contentDigest, cited, minimized]
     entries:
       type: array
       minItems: 1
@@ -31,23 +45,38 @@ inputs:
           observedAt: { type: string, format: date-time }
           expiresAt: { type: string, format: date-time }
           sourceRef: { type: string, minLength: 1, maxLength: 2000 }
+          sourceVersion: { type: string, minLength: 1, maxLength: 200 }
           cited: { const: true }
           minimized: { const: true }
-        required: [entryId, kind, summary, confidence, sensitivity, observedAt, expiresAt, sourceRef, cited, minimized]
+        required: [entryId, kind, summary, confidence, sensitivity, observedAt, expiresAt, sourceRef, sourceVersion, cited, minimized]
     contentAttestation: { const: minimized-no-secrets-no-private-content }
-  required: [packetId, generatedAt, expiresAt, contextCompilerModel, compileConstitutionMethod, compileOperatingPacketMethod, entries, contentAttestation]
+    replayPolicy: { const: reject-conflicting-replay }
+    authorityAttestation: { const: reference-only-advisory-no-authority }
+  required: [packetId, generatedAt, expiresAt, contextCompilerModel, compileConstitutionMethod, compileOperatingPacketMethod, constitution, entries, contentAttestation, replayPolicy, authorityAttestation]
 jobs:
   - name: compile-operating-context
     description: Compile durable policy context independently before compiling the current bounded packet.
     steps:
+      - name: validate-dynamic-identifiers
+        description: Reject identifiers containing whitespace, traversal, or expression syntax before method dispatch.
+        task:
+          type: assert
+          expr: inputs.contextCompilerModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$') && inputs.compileConstitutionMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$') && inputs.compileOperatingPacketMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$')
+          message: Dynamic model and method identifiers must use the bounded safe identifier syntax.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
       - name: validate-packet-chronology
         description: Require a future packet expiry and fresh minimized cited entries.
         task:
           type: assert
-          expr: timestamp(inputs.generatedAt) < timestamp(inputs.expiresAt) && inputs.entries.all(item, item.cited && item.minimized && timestamp(item.observedAt) <= timestamp(inputs.generatedAt) && timestamp(inputs.generatedAt) < timestamp(item.expiresAt))
+          expr: timestamp(inputs.generatedAt) < timestamp(inputs.expiresAt) && inputs.constitution.cited && inputs.constitution.minimized && timestamp(inputs.constitution.observedAt) <= timestamp(inputs.generatedAt) && inputs.entries.all(item, item.cited && item.minimized && timestamp(item.observedAt) <= timestamp(inputs.generatedAt) && timestamp(inputs.generatedAt) < timestamp(item.expiresAt))
           message: Packet and entry chronology, citation, and minimization must be valid.
           severity: high
-        dependsOn: []
+        dependsOn:
+          - step: validate-dynamic-identifiers
+            condition: { type: succeeded }
         weight: 0
         allowFailure: false
       - name: constitution
@@ -56,7 +85,10 @@ jobs:
           type: model_method
           modelIdOrName: '${{ inputs.contextCompilerModel }}'
           methodName: '${{ inputs.compileConstitutionMethod }}'
-          inputs: {}
+          inputs:
+            constitution: '${{ inputs.constitution }}'
+            replayPolicy: '${{ inputs.replayPolicy }}'
+            authorityAttestation: '${{ inputs.authorityAttestation }}'
         dependsOn:
           - step: validate-packet-chronology
             condition: { type: succeeded }
@@ -74,6 +106,8 @@ jobs:
             expiresAt: '${{ inputs.expiresAt }}'
             entries: '${{ inputs.entries }}'
             contentAttestation: '${{ inputs.contentAttestation }}'
+            replayPolicy: '${{ inputs.replayPolicy }}'
+            authorityAttestation: '${{ inputs.authorityAttestation }}'
         dependsOn:
           - step: constitution
             condition: { type: succeeded }
