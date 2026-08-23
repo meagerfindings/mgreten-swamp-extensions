@@ -1,4 +1,8 @@
-import { detectConflicts, model } from "./context_conflict_detector.ts";
+import {
+  detectConflicts,
+  inputSchema,
+  model,
+} from "./context_conflict_detector.ts";
 
 const assert: (value: unknown) => asserts value = (value) => {
   if (!value) throw new Error("assertion failed");
@@ -34,8 +38,8 @@ const fixture = () => ({
   evaluatedAt: "2026-08-17T00:00:00Z",
   references: [record("reference-1", "active")],
   decisions: [record("decision-b", "stopped"), record("decision-a", "active")],
-  plans: [],
-  proposals: [],
+  plans: [] as ReturnType<typeof record>[],
+  proposals: [] as ReturnType<typeof record>[],
   availability: ["reference", "decision", "plan", "proposal"].map((
     category,
   ) => ({ category, status: "available", reason: null })),
@@ -54,6 +58,7 @@ const fixture = () => ({
   },
   ordering: "severity_desc_code_asc_conflict_key_asc_record_ids_asc",
 });
+type Fixture = ReturnType<typeof fixture>;
 
 Deno.test("synthetic conflicts are deterministic and blocked without authority", () => {
   const first = detectConflicts(fixture());
@@ -69,7 +74,7 @@ Deno.test("synthetic conflicts are deterministic and blocked without authority",
 Deno.test("ordering and malformed input are deterministic failures", () => {
   const output = detectConflicts(fixture());
   assert(output.diagnostics[0].severity === "escalation");
-  const input: any = fixture();
+  const input = fixture();
   input.references[0].authority.humanAuthority = false;
   let failed = false;
   try {
@@ -80,7 +85,7 @@ Deno.test("ordering and malformed input are deterministic failures", () => {
   assert(failed);
 });
 Deno.test("diagnostics are sorted before a truthful 500-item cap", () => {
-  const input: any = fixture();
+  const input = fixture();
   input.references = Array.from(
     { length: 100 },
     (_, i) => record(`reference-${String(i).padStart(3, "0")}`, "active"),
@@ -126,13 +131,13 @@ Deno.test("truncated is false when no diagnostics are omitted", () => {
   assert(output.truncated === false);
 });
 Deno.test("freshness expiring exactly at evaluation is stale", () => {
-  const input: any = fixture();
+  const input = fixture();
   input.references[0].freshness.expiresAt = input.evaluatedAt;
   const output = detectConflicts(input);
   assert(output.diagnostics.some((item) => item.code === "expired_freshness"));
 });
 Deno.test("duplicate recordId and version pairs are rejected across categories", () => {
-  const input: any = fixture();
+  const input = fixture();
   input.proposals = [record("reference-1", "active")];
   let failed = false;
   try {
@@ -145,16 +150,56 @@ Deno.test("duplicate recordId and version pairs are rejected across categories",
   input.proposals[0].version = 2;
   detectConflicts(input);
 });
+Deno.test("strict schemas reject unknown fields and ambiguous declarations", () => {
+  const unknown = { ...fixture(), injectedAuthority: true };
+  assert(!inputSchema.safeParse(unknown).success);
+
+  const duplicateClaim = fixture();
+  duplicateClaim.references[0].claims.push({
+    conflictKey: "delivery.status",
+    value: "stopped",
+  });
+  assert(!inputSchema.safeParse(duplicateClaim).success);
+
+  const duplicateRule = fixture();
+  duplicateRule.conflictRules.push({ ...duplicateRule.conflictRules[0] });
+  assert(!inputSchema.safeParse(duplicateRule).success);
+});
+Deno.test("diagnostic ordering is invariant to caller array ordering", () => {
+  const original = fixture();
+  const reordered: Fixture = {
+    ...fixture(),
+    decisions: fixture().decisions.reverse(),
+    references: fixture().references.reverse(),
+    availability: fixture().availability.reverse(),
+  };
+  assert(
+    JSON.stringify(detectConflicts(original)) ===
+      JSON.stringify(detectConflicts(reordered)),
+  );
+});
+Deno.test("output binds replay evidence to caller-declared record digests", () => {
+  const original = detectConflicts(fixture());
+  const tampered = fixture();
+  tampered.references[0].sha256 = "b".repeat(64);
+  const replay = detectConflicts(tampered);
+  assert(JSON.stringify(original) !== JSON.stringify(replay));
+  assert(
+    replay.recordDigests.find((item) => item.recordId === "reference-1")
+      ?.sha256 === "b".repeat(64),
+  );
+});
 Deno.test("model persists exactly one evaluation", async () => {
   const writes: unknown[][] = [];
   await model.methods.evaluate.execute({
     requestId: "request-1",
     input: fixture(),
   }, {
-    writeResource: async (...args: unknown[]) => {
+    writeResource: (...args: unknown[]) => {
       writes.push(args);
-      return { name: args[1] };
+      return Promise.resolve({ name: args[1] });
     },
+    logger: { info: () => undefined },
   });
   assert(writes.length === 1 && writes[0][0] === "evaluation");
 });

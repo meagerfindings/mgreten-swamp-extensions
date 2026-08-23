@@ -28,6 +28,18 @@ const Record = z.strictObject({
   freshness: z.strictObject({ asOf: Timestamp, expiresAt: Timestamp }),
   reviewAt: Timestamp,
   claims: z.array(z.strictObject({ conflictKey: Id, value: Text })).max(50),
+}).superRefine((record, ctx) => {
+  const seen = new Set<string>();
+  record.claims.forEach((claim, index) => {
+    if (seen.has(claim.conflictKey)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["claims", index, "conflictKey"],
+        message: "a record may declare each conflict key only once",
+      });
+    }
+    seen.add(claim.conflictKey);
+  });
 });
 const Rule = z.strictObject({
   ruleId: Id,
@@ -36,6 +48,33 @@ const Rule = z.strictObject({
   contradictoryValuePairs: z.array(z.tuple([Text, Text])).min(1),
   severity: z.enum(["warning", "escalation"]),
   recommendation: Text,
+}).superRefine((rule, ctx) => {
+  if (new Set(rule.appliesTo).size !== rule.appliesTo.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["appliesTo"],
+      message: "appliesTo categories must be unique",
+    });
+  }
+  const pairs = new Set<string>();
+  rule.contradictoryValuePairs.forEach(([left, right], index) => {
+    if (left === right) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["contradictoryValuePairs", index],
+        message: "a value cannot contradict itself",
+      });
+    }
+    const key = [left, right].sort().join("\0");
+    if (pairs.has(key)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["contradictoryValuePairs", index],
+        message: "contradictory value pairs must be unique",
+      });
+    }
+    pairs.add(key);
+  });
 });
 /** Validates an explicit, generic registry snapshot. */
 export const inputSchema = z.strictObject({
@@ -120,6 +159,16 @@ export const inputSchema = z.strictObject({
       }
     });
   }
+  const ruleIds = new Set<string>();
+  x.conflictRules.forEach((rule, index) => {
+    if (ruleIds.has(rule.ruleId)) {
+      fail(
+        ["conflictRules", index, "ruleId"],
+        "ruleId values must be unique",
+      );
+    }
+    ruleIds.add(rule.ruleId);
+  });
 });
 const Diagnostic = z.strictObject({
   severity: z.enum(["escalation", "warning", "information"]),
@@ -144,6 +193,12 @@ export const outputSchema = z.strictObject({
   evaluationId: Id,
   evaluatedAt: Timestamp,
   diagnostics: z.array(Diagnostic).max(500),
+  recordDigests: z.array(z.strictObject({
+    category: Category,
+    recordId: Id,
+    version: z.number().int().positive(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  })).max(400),
   unavailableData: z.array(
     z.strictObject({ category: Category, reason: Text }),
   ),
@@ -253,7 +308,10 @@ export function detectConflicts(raw: unknown): z.infer<typeof outputSchema> {
   diagnostics.sort((a, b) =>
     rank[a.severity] - rank[b.severity] || a.code.localeCompare(b.code) ||
     (a.conflictKey ?? "").localeCompare(b.conflictKey ?? "") ||
-    a.recordIds.join("\0").localeCompare(b.recordIds.join("\0"))
+    a.recordIds.join("\0").localeCompare(b.recordIds.join("\0")) ||
+    (a.ruleId ?? "").localeCompare(b.ruleId ?? "") ||
+    a.message.localeCompare(b.message) ||
+    a.recommendation.localeCompare(b.recommendation)
   );
   const blocked = diagnostics.some((d) =>
     d.severity === "escalation" || d.code === "conflict" ||
@@ -266,6 +324,15 @@ export function detectConflicts(raw: unknown): z.infer<typeof outputSchema> {
     evaluationId: x.evaluationId,
     evaluatedAt: x.evaluatedAt,
     diagnostics: returnedDiagnostics,
+    recordDigests: items.map(({ category, record }) => ({
+      category,
+      recordId: record.recordId,
+      version: record.version,
+      sha256: record.sha256,
+    })).sort((a, b) =>
+      a.category.localeCompare(b.category) ||
+      a.recordId.localeCompare(b.recordId) || a.version - b.version
+    ),
     unavailableData: x.availability.filter((item) =>
       item.status === "unavailable"
     ).map((item) => ({ category: item.category, reason: item.reason! })).sort((
@@ -315,16 +382,30 @@ export const model = {
             name: string,
             data: Record<string, unknown>,
           ): Promise<unknown>;
+          logger: {
+            info(message: string, properties: Record<string, unknown>): void;
+          };
         },
-      ): Promise<{ dataHandles: unknown[] }> => ({
-        dataHandles: [
-          await context.writeResource(
-            "evaluation",
-            `context-conflict-${args.requestId}`,
-            detectConflicts(args.input),
-          ),
-        ],
-      }),
+      ): Promise<{ dataHandles: unknown[] }> => {
+        context.logger.info("Evaluating registry conflicts for {requestId}", {
+          requestId: args.requestId,
+        });
+        const evaluation = detectConflicts(args.input);
+        const handle = await context.writeResource(
+          "evaluation",
+          `context-conflict-${args.requestId}`,
+          evaluation,
+        );
+        context.logger.info(
+          "Persisted registry conflict evaluation {requestId}",
+          {
+            requestId: args.requestId,
+            verdict: evaluation.verdict,
+            diagnosticCount: evaluation.diagnostics.length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
     },
   },
 };

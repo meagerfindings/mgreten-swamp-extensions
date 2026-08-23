@@ -38,7 +38,10 @@ duplicate `recordId` + `version` pairs across any category, inconsistent
 availability, invalid hashes, and missing authority all fail validation.
 Diagnostics are globally sorted and capped at 500; `truncated` is true exactly
 when diagnostics were omitted, while `verdict` always considers the complete
-set. `blocked` is an escalation signal, not authorization to act.
+set. The output also preserves a canonical `recordDigests` list, binding replay
+evidence to every caller-declared record hash; callers remain responsible for
+verifying those hashes against their source records. `blocked` is an escalation
+signal, not authorization to act.
 
 ## Verification
 
