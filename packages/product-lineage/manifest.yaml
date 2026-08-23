@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: "@mgreten/product-lineage"
+version: "2026.08.23.1"
+description: >
+  Validates and persists an immutable, ordered product-delivery lineage from
+  source signal through post-release measurement without creating or inferring
+  producer evidence.
+repository: "https://github.com/meagerfindings/swamp-product-lineage"
+models:
+  - product_lineage.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - CONTRACT.md
+  - extensions/models/product_lineage_test.ts
+  - extensions/models/_lib/product_lineage_contracts_test.ts
+platforms: []

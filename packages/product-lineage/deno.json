@@ -1,0 +1,12 @@
+{
+  "nodeModulesDir": "auto",
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "tasks": {
+    "check": "deno check extensions/models/product_lineage.ts extensions/models/_lib/product_lineage_contracts.ts extensions/models/_lib/source_evidence_contracts.ts extensions/models/product_lineage_test.ts extensions/models/_lib/product_lineage_contracts_test.ts",
+    "test": "deno test extensions/models/product_lineage_test.ts extensions/models/_lib/product_lineage_contracts_test.ts"
+  }
+}
