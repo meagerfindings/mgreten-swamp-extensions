@@ -1,0 +1,12 @@
+manifestVersion: 1
+name: "@mgreten/product-behavior-summary"
+version: "2026.08.23.1"
+description: "Validate and persist structurally aggregate-only product behavior rate summaries from a bounded consumer-declared outcome catalog."
+repository: "https://github.com/meagerfindings/swamp-product-behavior-summary"
+models:
+  - product_behavior_summary.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+  - CONTRACT_BOUNDARY.md
+platforms: []
