@@ -1,0 +1,12 @@
+{
+  "nodeModulesDir": "auto",
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "tasks": {
+    "check": "deno check extensions/models/bottleneck_ranking.ts extensions/models/bottleneck_ranking_test.ts",
+    "test": "deno test extensions/models/bottleneck_ranking_test.ts"
+  }
+}

@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@mgreten/bottleneck-ranking"
+version: "2026.08.23.1"
+description: "Deterministically ranks caller-supplied bottleneck candidates with explicit scales, weights, normalization, evidence, and missing-data policy."
+repository: "https://github.com/meagerfindings/swamp-bottleneck-ranking"
+models:
+  - bottleneck_ranking.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+  - deno.json
+  - docs/ALGORITHM.md
+  - examples/rank.json
+  - extensions/models/bottleneck_ranking_test.ts
+platforms: []
