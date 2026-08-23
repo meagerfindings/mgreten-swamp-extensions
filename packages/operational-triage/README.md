@@ -71,7 +71,9 @@ work:
 ```
 
 Successful normalization writes `snapshot-<snapshotId>` with a 30-day
-lifetime. Validation failures write nothing and include stable diagnostics.
+lifetime. Replaying the identical snapshot is a no-op; reusing a snapshot ID
+with different content fails closed. Validation failures write nothing and
+include stable diagnostics.
 
 ## Allowlist requirements
 

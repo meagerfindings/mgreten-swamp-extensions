@@ -199,6 +199,22 @@ export const operationalTriageSnapshotSchema = z.strictObject({
   if (snapshot.records.length > snapshot.limits.rowsRead) {
     issue(["records"], "record count cannot exceed rowsRead");
   }
+  if (snapshot.filtering.includedCount !== snapshot.records.length) {
+    issue(
+      ["filtering", "includedCount"],
+      "includedCount must equal the persisted record count",
+    );
+  }
+  if (
+    snapshot.limits.truncated &&
+    snapshot.limits.rowsRead < snapshot.limits.maxRows &&
+    snapshot.limits.bytesRead < snapshot.limits.maxBytes
+  ) {
+    issue(
+      ["limits", "truncated"],
+      "truncated requires that a row or byte limit was reached",
+    );
+  }
   if (
     snapshot.filtering.excludedCount !==
       snapshot.filtering.excludedByReason.identityNotAllowed +
@@ -219,6 +235,12 @@ export const operationalTriageSnapshotSchema = z.strictObject({
       issue(
         ["records", index, "sourceReference", "freshness", "asOf"],
         "source freshness cannot be after generatedAt",
+      );
+    }
+    if (Date.parse(record.sourceReference.provenance.collectedAt) > generated) {
+      issue(
+        ["records", index, "sourceReference", "provenance", "collectedAt"],
+        "source collection cannot be after generatedAt",
       );
     }
     if (Date.parse(record.sourceReference.freshness.expiresAt) < generated) {
@@ -278,7 +300,18 @@ const forbiddenText = [
 
 function leakageDiagnostics(input: unknown): OperationalTriageDiagnostic[] {
   const diagnostics: OperationalTriageDiagnostic[] = [];
+  const visited = new WeakSet<object>();
+  let visitedValues = 0;
   const visit = (value: unknown, path: string[]) => {
+    visitedValues += 1;
+    if (visitedValues > OPERATIONAL_TRIAGE_HARD_LIMITS.rows * 20) {
+      diagnostics.push({
+        path: path.join("."),
+        code: "input_too_complex",
+        message: "input exceeds the bounded validation traversal",
+      });
+      return;
+    }
     if (
       typeof value === "string" &&
       forbiddenText.some((pattern) => pattern.test(value))
@@ -288,19 +321,30 @@ function leakageDiagnostics(input: unknown): OperationalTriageDiagnostic[] {
         code: "forbidden_content",
         message: "private or credential content is forbidden after redaction",
       });
-    } else if (Array.isArray(value)) {
-      value.forEach((item, index) => visit(item, [...path, String(index)]));
     } else if (value && typeof value === "object") {
-      Object.entries(value).forEach(([key, item]) => {
-        if (forbiddenKey.test(key)) {
-          diagnostics.push({
-            path: [...path, key].join("."),
-            code: "forbidden_field",
-            message: "raw logs or sensitive fields are forbidden",
-          });
-        }
-        visit(item, [...path, key]);
-      });
+      if (visited.has(value)) {
+        diagnostics.push({
+          path: path.join("."),
+          code: "cyclic_input",
+          message: "cyclic input is forbidden",
+        });
+        return;
+      }
+      visited.add(value);
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => visit(item, [...path, String(index)]));
+      } else {
+        Object.entries(value).forEach(([key, item]) => {
+          if (forbiddenKey.test(key)) {
+            diagnostics.push({
+              path: [...path, key].join("."),
+              code: "forbidden_field",
+              message: "raw logs or sensitive fields are forbidden",
+            });
+          }
+          visit(item, [...path, key]);
+        });
+      }
     }
   };
   visit(input, []);

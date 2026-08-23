@@ -22,13 +22,15 @@ async function rejects(fn: () => unknown | Promise<unknown>, text: string) {
   throw new Error(`expected rejection: ${text}`);
 }
 
-function harness() {
+function harness(existing: Record<string, unknown> | null = null) {
   const writes: Array<
     { spec: string; name: string; data: Record<string, unknown> }
   > = [];
   return {
     writes,
     context: {
+      logger: { info: (_message: string, _properties: Record<string, unknown>) => {} },
+      readResource: async (_name: string) => existing,
       writeResource: async (
         spec: string,
         name: string,
@@ -150,6 +152,58 @@ Deno.test("stale evidence is rejected before persistence", async () => {
   equal(writes.length, 0);
 });
 
+Deno.test("identical replay is idempotent and tampered replay fails closed", async () => {
+  const snapshot = syntheticRedactedSnapshot();
+  const identical = harness(snapshot);
+  const replay = await model.methods.normalizeSnapshot.execute(
+    { snapshot: syntheticRedactedSnapshot() },
+    identical.context,
+  );
+  equal(replay.dataHandles, []);
+  equal(identical.writes.length, 0);
+
+  const tampered = syntheticRedactedSnapshot();
+  tampered.records[0].summary = "Different synthetic state";
+  const conflict = harness(tampered);
+  await rejects(
+    () => model.methods.normalizeSnapshot.execute({ snapshot }, conflict.context),
+    "Conflicting replay",
+  );
+  equal(conflict.writes.length, 0);
+});
+
+Deno.test("attestation counts, truncation, and collection time are consistent", async () => {
+  const mutations = [
+    (snapshot: ReturnType<typeof syntheticRedactedSnapshot>) => {
+      snapshot.filtering.includedCount = 0;
+    },
+    (snapshot: ReturnType<typeof syntheticRedactedSnapshot>) => {
+      snapshot.limits.truncated = true;
+    },
+    (snapshot: ReturnType<typeof syntheticRedactedSnapshot>) => {
+      snapshot.records[0].sourceReference.provenance.collectedAt =
+        "2026-08-23T11:00:01Z";
+    },
+  ];
+  for (const mutate of mutations) {
+    const snapshot = syntheticRedactedSnapshot();
+    mutate(snapshot);
+    await rejects(
+      () => model.methods.normalizeSnapshot.execute({ snapshot }, harness().context),
+      "Invalid operational triage snapshot",
+    );
+  }
+});
+
+Deno.test("malformed cyclic input is rejected deterministically", async () => {
+  const cyclic: Record<string, unknown> = {};
+  cyclic.self = cyclic;
+  await rejects(
+    () => model.methods.normalizeSnapshot.execute({ snapshot: cyclic }, harness().context),
+    "cyclic_input",
+  );
+});
+
 Deno.test("model has zero operational authority", () => {
   equal(Object.keys(model.methods), ["normalizeSnapshot"]);
   equal(syntheticRedactedSnapshot().authority, {
@@ -166,7 +220,6 @@ Deno.test("model has zero operational authority", () => {
       "Deno.Command",
       "deleteResource",
       "createFileWriter",
-      "readResource",
       "vault",
       "credential",
     ]

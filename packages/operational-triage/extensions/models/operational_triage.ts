@@ -18,6 +18,10 @@ export const normalizeSnapshotArgumentsSchema = z.object({
 });
 
 type WriteContext = {
+  logger: {
+    info(message: string, properties: Record<string, unknown>): void;
+  };
+  readResource: (name: string) => Promise<Record<string, unknown> | null>;
   writeResource: (
     spec: string,
     name: string,
@@ -61,12 +65,31 @@ export const model = {
         args: z.infer<typeof normalizeSnapshotArgumentsSchema>,
         context: WriteContext,
       ) => {
+        context.logger.info("Validating operational snapshot", {});
         const snapshot = validatedSnapshot(args.snapshot);
+        const name = `snapshot-${snapshot.snapshotId}`;
+        const existing = await context.readResource(name);
+        if (existing) {
+          const prior = operationalTriageSnapshotSchema.parse(existing);
+          if (JSON.stringify(prior) !== JSON.stringify(snapshot)) {
+            throw new Error(
+              `Conflicting replay for operational snapshot ${snapshot.snapshotId}`,
+            );
+          }
+          context.logger.info(
+            "Operational snapshot {snapshotId} already recorded",
+            { snapshotId: snapshot.snapshotId },
+          );
+          return { dataHandles: [] };
+        }
         const handle = await context.writeResource(
           "snapshot",
-          `snapshot-${snapshot.snapshotId}`,
+          name,
           snapshot,
         );
+        context.logger.info("Recorded operational snapshot {snapshotId}", {
+          snapshotId: snapshot.snapshotId,
+        });
         return { dataHandles: [handle] };
       },
     },
