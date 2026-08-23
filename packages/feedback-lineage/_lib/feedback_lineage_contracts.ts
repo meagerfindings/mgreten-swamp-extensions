@@ -151,6 +151,16 @@ export const FeedbackLineageLink = z.strictObject({
     });
   }
   const endpointIds = new Set([link.from.artifactId, link.to.artifactId]);
+  if (
+    new Set(link.provenance.inputArtifactIds).size !==
+      link.provenance.inputArtifactIds.length
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["provenance", "inputArtifactIds"],
+      message: "provenance inputs must be unique",
+    });
+  }
   link.provenance.inputArtifactIds.forEach((id, index) => {
     if (!endpointIds.has(id)) {
       context.addIssue({
@@ -160,6 +170,29 @@ export const FeedbackLineageLink = z.strictObject({
       });
     }
   });
+  if (
+    !Array.from(endpointIds).every((id) =>
+      link.provenance.inputArtifactIds.includes(id)
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["provenance", "inputArtifactIds"],
+      message: "provenance inputs must name both relationship endpoints",
+    });
+  }
+  const sortedInputs = [...link.provenance.inputArtifactIds].sort();
+  if (
+    sortedInputs.some((id, index) =>
+      id !== link.provenance.inputArtifactIds[index]
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["provenance", "inputArtifactIds"],
+      message: "provenance inputs must use ascending deterministic order",
+    });
+  }
 });
 
 /** Immutable record containing fresh, source-preserving lineage links. */
@@ -179,6 +212,7 @@ export const FeedbackLineageRecord = z.strictObject({
 }).superRefine((record, context) => {
   const ids = new Set<string>();
   const semantic = new Set<string>();
+  const artifactDigests = new Map<string, string>();
   record.links.forEach((link, index) => {
     if (Date.parse(link.linkedAt) > Date.parse(record.generatedAt)) {
       context.addIssue({
@@ -206,6 +240,19 @@ export const FeedbackLineageRecord = z.strictObject({
       });
     }
     ids.add(link.linkId);
+    for (const endpoint of [link.from, link.to]) {
+      const identity =
+        `${endpoint.kind}\u0000${endpoint.artifactId}\u0000${endpoint.version}`;
+      const priorDigest = artifactDigests.get(identity);
+      if (priorDigest !== undefined && priorDigest !== endpoint.sha256) {
+        context.addIssue({
+          code: "custom",
+          path: ["links", index],
+          message: "an immutable artifact version cannot have multiple digests",
+        });
+      }
+      artifactDigests.set(identity, endpoint.sha256);
+    }
     const key = [
       link.relationship,
       link.from.kind,
@@ -226,6 +273,14 @@ export const FeedbackLineageRecord = z.strictObject({
     }
     semantic.add(key);
   });
+  const sortedLinkIds = record.links.map((link) => link.linkId).sort();
+  if (sortedLinkIds.some((id, index) => id !== record.links[index].linkId)) {
+    context.addIssue({
+      code: "custom",
+      path: ["links"],
+      message: "links must use ascending linkId order",
+    });
+  }
 });
 
 /** A validated feedback-lineage record. */

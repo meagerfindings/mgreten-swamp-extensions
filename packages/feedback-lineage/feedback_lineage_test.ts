@@ -141,6 +141,24 @@ Deno.test("rejects chronology, freshness, provenance, duplicate, and bounded-inp
     "unrelated-artifact",
   ];
 
+  const incompleteProvenance = mutableFixture();
+  nested(linkOf(incompleteProvenance), "provenance").inputArtifactIds = [
+    "feedback-alpha",
+  ];
+
+  const duplicateProvenance = mutableFixture();
+  nested(linkOf(duplicateProvenance), "provenance").inputArtifactIds = [
+    "feedback-alpha",
+    "feedback-alpha",
+    "feedback-beta",
+  ];
+
+  const unorderedProvenance = mutableFixture();
+  nested(linkOf(unorderedProvenance), "provenance").inputArtifactIds = [
+    "feedback-beta",
+    "feedback-alpha",
+  ];
+
   const duplicateRelationship = mutableFixture();
   duplicateRelationship.links.push({
     ...copy(linkOf(duplicateRelationship)),
@@ -160,6 +178,9 @@ Deno.test("rejects chronology, freshness, provenance, duplicate, and bounded-inp
       linkedBeforeObserved,
       staleAtGeneration,
       unboundProvenance,
+      incompleteProvenance,
+      duplicateProvenance,
+      unorderedProvenance,
       duplicateRelationship,
       tooManyLinks,
     ]
@@ -199,7 +220,13 @@ Deno.test("rejects canonicalization rather than silently changing source identit
 Deno.test("writes once, accepts an identical replay, and rejects conflicting replays", async () => {
   let stored: Record<string, unknown> | null = null;
   let writes = 0;
+  const messages: string[] = [];
   const context = {
+    logger: {
+      info: (message: string): void => {
+        messages.push(message);
+      },
+    },
     readResource: (): Promise<Record<string, unknown> | null> =>
       Promise.resolve(stored),
     writeResource: (
@@ -214,13 +241,13 @@ Deno.test("writes once, accepts an identical replay, and rejects conflicting rep
   };
 
   const first = await persistFeedbackLineage(
-    { persistenceId: "synthetic-replay-1", record: fixture },
+    { persistenceId: "synthetic-lineage-1", record: fixture },
     context,
   );
   assert(first.dataHandles.length === 1 && writes === 1);
 
   const replay = await persistFeedbackLineage(
-    { persistenceId: "synthetic-replay-1", record: fixture },
+    { persistenceId: "synthetic-lineage-1", record: fixture },
     context,
   );
   assert(replay.dataHandles.length === 0 && writes === 1);
@@ -230,10 +257,48 @@ Deno.test("writes once, accepts an identical replay, and rejects conflicting rep
   await rejects(
     () =>
       persistFeedbackLineage(
-        { persistenceId: "synthetic-replay-1", record: conflict },
+        { persistenceId: "synthetic-lineage-1", record: conflict },
         context,
       ),
     "Conflicting replay",
   );
+  await rejects(
+    () =>
+      persistFeedbackLineage(
+        { persistenceId: "alternate-record-id", record: fixture },
+        context,
+      ),
+    "persistenceId must exactly match record.recordId",
+  );
+  assert(messages.length === 5);
   assert(Object.keys(model.methods).join() === "record" && !("files" in model));
+});
+
+Deno.test("rejects nondeterministic links and digest equivocation", () => {
+  const unordered = mutableFixture();
+  unordered.links.push({
+    ...copy(linkOf(unordered)),
+    linkId: "a-link",
+    linkSha256: hash("2"),
+    relationship: "related_signal",
+    to: {
+      kind: "signal",
+      artifactId: "signal-alpha",
+      version: "1",
+      sha256: hash("3"),
+    },
+    provenance: {
+      producer: "synthetic-validator",
+      producerVersion: "1",
+      method: "exact-match",
+      inputArtifactIds: ["feedback-alpha", "signal-alpha"],
+    },
+  });
+
+  const equivocation = copy(unordered);
+  equivocation.links[1].linkId = "z-link";
+  (equivocation.links[1].from as MutableLink).sha256 = hash("9");
+
+  assert(!evaluateFeedbackLineage(unordered).valid);
+  assert(!evaluateFeedbackLineage(equivocation).valid);
 });

@@ -59,6 +59,9 @@ export function validateForPersistence(input: unknown): RecordValue {
 
 /** Runtime operations required to implement idempotent persistence. */
 export type FeedbackLineageContext = {
+  logger: {
+    info(message: string, properties?: Record<string, unknown>): void;
+  };
   readResource(name: string): Promise<Record<string, unknown> | null>;
   writeResource(
     spec: string,
@@ -77,15 +80,30 @@ export async function persistFeedbackLineage(
 ): Promise<{ dataHandles: unknown[] }> {
   const args = recordArgumentsSchema.parse(input);
   const record = validateForPersistence(args.record);
+  if (args.persistenceId !== record.recordId) {
+    throw new TypeError("persistenceId must exactly match record.recordId");
+  }
   const name = `feedback-lineage-${args.persistenceId}`;
+  context.logger.info("Recording feedback lineage {recordId}", {
+    recordId: record.recordId,
+  });
   const existing = await context.readResource(name);
   if (existing) {
     if (canonical(existing) !== canonical(record)) {
       throw new Error(`Conflicting replay for ${args.persistenceId}`);
     }
+    context.logger.info(
+      "Accepted identical feedback lineage replay {recordId}",
+      {
+        recordId: record.recordId,
+      },
+    );
     return { dataHandles: [] };
   }
   const handle = await context.writeResource("lineage", name, record);
+  context.logger.info("Recorded feedback lineage {recordId}", {
+    recordId: record.recordId,
+  });
   return { dataHandles: [handle] };
 }
 

@@ -5,8 +5,8 @@ immutable feedback artifacts. It records evidence that one source artifact is
 related to another artifact without treating that relationship as identity
 resolution, a closure instruction, or an operational command. Every feedback
 endpoint retains its own `sourceId` and `sourceRecordId`; relationships carry
-caller-supplied hash assertions, timestamps, provenance, freshness, confidence, and a
-`recommendation-only` disposition.
+caller-supplied hash assertions, timestamps, provenance, freshness, confidence,
+and a `recommendation-only` disposition.
 
 ## Privacy and PII
 
@@ -15,11 +15,15 @@ identifiers, or other PII. Use opaque, non-sensitive artifact and source IDs. Do
 not place private feedback text, direct contact details, authentication
 material, or unpublished business data in `rationale`, IDs, hashes, or test
 fixtures. Hash values are caller assertions used for identity and replay
-comparison. This extension cannot recompute them because canonical source content
-is not supplied, so they do not independently prove content integrity. They are
-not a replacement for access control or a guarantee that sensitive source
-material cannot be inferred. Keep source material in its authorized system and
-grant access separately.
+comparison. This extension cannot recompute them because canonical source
+content is not supplied, so they do not independently prove content integrity.
+They are not a replacement for access control or a guarantee that sensitive
+source material cannot be inferred. Keep source material in its authorized
+system and grant access separately.
+
+Within a record, the same artifact ID and version must always carry the same
+digest. This rejects digest equivocation but does not turn caller assertions
+into independently verified hashes.
 
 ## Boundaries: no contact, no authority
 
@@ -64,13 +68,15 @@ A record is valid only when artifact kinds match the declared relationship;
 feedback has immutable source identity; provenance names its endpoint inputs;
 and the observation, linking, freshness, and record-generation timestamps are
 ordered and current. Duplicate semantic relationships are rejected rather than
-merged. Replaying the same `persistenceId` with byte-equivalent canonical data
-is idempotent; a conflicting replay fails closed.
+merged. Links and provenance inputs must be supplied in deterministic ascending
+order. `persistenceId` must exactly equal `recordId`; replaying that ID with
+byte-equivalent canonical data is idempotent, while alternate-ID and conflicting
+replays fail closed.
 
 ## Development checks
 
 ```sh
-deno test --allow-none feedback_lineage_test.ts
+deno test feedback_lineage_test.ts
 swamp extension fmt manifest.yaml --check --json
 swamp extension quality manifest.yaml --json
 swamp extension push manifest.yaml --dry-run --json

@@ -23,8 +23,9 @@ The synthetic test suite verifies valid source-preserving relationships; rejects
 missing source identity, unsupported artifact pairs, self-links, stale or
 out-of-order evidence, unbound provenance, duplicates, and oversized inputs;
 refuses silent canonicalization; and exercises first-write, identical replay,
-and conflicting-replay behavior. All identifiers, timestamps, rationale text,
-and hashes are synthetic examples.
+alternate-ID replay, conflicting replay, deterministic ordering, complete
+provenance binding, and per-version digest-equivocation behavior. All
+identifiers, timestamps, rationale text, and hashes are synthetic examples.
 
 ## Metadata basis
 
