@@ -40,13 +40,14 @@ const memory = () => {
         maxPromptBytes: 12000,
         sameCauseFailureLimit: 3,
       },
-      ensureWorkspace: async (path: string) => path,
-      readResource: async (name: string) => records.get(name) ?? null,
+      ensureWorkspace: (path: string) => Promise.resolve(path),
+      readResource: (name: string) => Promise.resolve(records.get(name) ?? null),
       writeResource: async (
         _spec: string,
         name: string,
         data: Record<string, unknown>,
       ) => {
+        await Promise.resolve();
         writeCount++;
         if (writeCount === failWrite) throw new Error("injected write failure");
         records.set(name, structuredClone(data));
@@ -180,6 +181,8 @@ Deno.test("records only a provider/model-bound typed result", async () => {
       nextAction: "review",
     },
     audit: {
+      auditId: "audit-1",
+      enforcementAuthority: "trusted-platform",
       invocationId: request.invocationId,
       provider: "provider",
       model: "model-1",
@@ -222,6 +225,8 @@ Deno.test("result is durable before completion and validation resumes after eith
         nextAction: "review",
       },
       audit: {
+        auditId: "audit-1",
+        enforcementAuthority: "trusted-platform",
         invocationId: request.invocationId,
         provider: "provider",
         model: "model-1",
@@ -277,6 +282,8 @@ Deno.test("rejects policy-violating audit and unclaimed evidence", async () => {
         nextAction: "review",
       },
       audit: {
+        auditId: "audit-1",
+        enforcementAuthority: "trusted-platform",
         invocationId: request.invocationId,
         provider: "bad",
         model: "nope",
@@ -291,4 +298,41 @@ Deno.test("rejects policy-violating audit and unclaimed evidence", async () => {
       },
     }, store.context)
   );
+});
+
+Deno.test("rejects malformed policy and non-canonical workspace claims", async () => {
+  for (const globalArgs of [
+    { ...memory().context.globalArgs, modelPattern: "[" },
+    { ...memory().context.globalArgs, modelPattern: "model-.*" },
+    { ...memory().context.globalArgs, workspaceRoot: "/tmp/dispatcher/../escape" },
+    { ...memory().context.globalArgs, allowedProviders: ["provider", "provider"] },
+  ]) {
+    const store = memory();
+    store.context.globalArgs = globalArgs;
+    await assertRejects(() => observe(input(), store.context));
+  }
+
+  const store = memory();
+  await observe(input(), store.context);
+  store.context.ensureWorkspace = () => Promise.resolve("/tmp/other");
+  await assertRejects(() => prepareInvocation({
+    incidentId: incident.incidentId,
+    preparedAt: "2026-08-23T10:01:00Z",
+  }, store.context));
+  assertEquals(store.records.get("lifecycle-api-1")?.status, "queued");
+});
+
+Deno.test("does not accept unreferenced authority or unvalidated completion", async () => {
+  const store = memory();
+  await assertRejects(() => observe(input({ trigger: "authorized-request" }), store.context));
+  assertEquals(store.records.size, 0);
+
+  const life = (await observe(input(), store.context)).value;
+  await assertRejects(() => recordOutcome({
+    incidentId: incident.incidentId,
+    invocationId: life.invocationId,
+    recordedAt: "2026-08-23T10:01:00Z",
+    outcome: "completed",
+  }, store.context));
+  assertEquals(store.records.get("lifecycle-api-1")?.status, "queued");
 });

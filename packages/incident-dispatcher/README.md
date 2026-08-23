@@ -9,6 +9,7 @@ active observations never create a second claim. `prepareInvocation` records a
 small typed request and moves the claim to running. `validateAndRecordInvocation`
 binds retained request, provider audit, and typed output before completing it.
 `recordOutcome` records failures; repeated identical failure causes stop retries.
+Only validated invocation output can complete a lifecycle.
 
 Global policy parameterizes allowed providers, a model-name pattern, workspace
 root, prompt byte limit, and same-cause failure limit. The model retains only
@@ -16,9 +17,10 @@ typed identifiers, opaque evidence references, a bounded prompt, and sanitized
 typed findings; it never retains raw agent output.
 
 `tools: "deny-all"` and `sandbox: "required"` are requested policy claims, not
-enforcement. The invocation platform must enforce and attest no-tools, sandbox,
-credential, and network guarantees. Validation rejects an audit that does not
-attest the required profile.
+enforcement. The invocation platform must enforce the boundary and produce the
+audit; callers must accept audits only from a trusted `enforcementAuthority`.
+This model validates audit bindings and claims but cannot authenticate an audit
+producer or prove no-tools, sandbox, credential, or network enforcement.
 
 ## Configure and observe
 
@@ -36,7 +38,10 @@ globalArguments:
   sameCauseFailureLimit: 3
 ```
 
-Call `observe` with typed references and opaque evidence identifiers. A caller
+Call `observe` with typed references and opaque evidence identifiers. An
+`authorized-request` trigger additionally requires an opaque `authorizationRef`;
+the caller remains responsible for authenticating that external authorization.
+A caller
 must retain the returned lifecycle and use its `invocationId`; inventing a new
 identifier will fail the later identity checks.
 
@@ -59,9 +64,9 @@ identifier will fail the later identity checks.
 
 Next call `prepareInvocation`, execute the resulting request outside this model
 under the stated policy, and pass the unchanged request, typed agent output, and
-platform audit to `validateAndRecordInvocation`. The audit provider, model,
+trusted platform audit to `validateAndRecordInvocation`. The audit provider, model,
 prompt hash, workspace, invocation ID, and execution-policy attestations are all
 validated. `recordOutcome` is for recording a matching active invocation's
-completion or failure; it does not execute work or retry automatically.
+failure; it does not execute work or retry automatically.
 
 Licensed under the MIT License. See [LICENSE](LICENSE).

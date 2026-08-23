@@ -6,12 +6,35 @@ const Time = z.iso.datetime({ offset: true });
 const Id = z.string().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/);
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Ref = z.strictObject({ modelName: Id, resourceName: Id });
+const ModelPattern = z.string().min(1).max(200).superRefine((value, ctx) => {
+  try {
+    new RegExp(value);
+  } catch {
+    ctx.addIssue({ code: "custom", message: "modelPattern is not valid" });
+  }
+  if (!value.startsWith("^") || !value.endsWith("$")) {
+    ctx.addIssue({ code: "custom", message: "modelPattern must be anchored" });
+  }
+  if (/\(\?|\\[1-9]|(?:\*|\+|\})[+*{]/.test(value)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "modelPattern uses unsafe features",
+    });
+  }
+});
+const WorkspaceRoot = z.string().max(240).regex(
+  /^\/tmp\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/,
+  "workspaceRoot must be a canonical path below /tmp",
+);
 const policySchema = z.strictObject({
-  allowedProviders: z.array(Id).min(1).max(20),
-  modelPattern: z.string().min(1).max(200).default(
+  allowedProviders: z.array(Id).min(1).max(20).refine(
+    (providers) => new Set(providers).size === providers.length,
+    "allowedProviders must be unique",
+  ),
+  modelPattern: ModelPattern.default(
     "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
   ),
-  workspaceRoot: z.string().startsWith("/tmp/").max(240).default(
+  workspaceRoot: WorkspaceRoot.default(
     "/tmp/incident-dispatcher",
   ),
   maxPromptBytes: z.number().int().min(1000).max(20000).default(12000),
@@ -36,20 +59,35 @@ const incidentSchema = z.strictObject({
   observedAt: Time,
   evidenceRefs: z.array(Id).min(1).max(40),
 });
+const Trigger = z.enum([
+  "new",
+  "material-change",
+  "retry",
+  "authorized-request",
+]);
 const observeArgs = z.strictObject({
   observedAt: Time,
-  trigger: z.enum(["new", "material-change", "retry", "authorized-request"])
-    .default("new"),
+  trigger: Trigger.default("new"),
   materialEvidenceFingerprint: Hash.nullable().default(null),
   incident: incidentSchema,
   incidentRef: Ref,
   contextRef: Ref,
+  authorizationRef: Id.nullable().default(null),
+}).superRefine((value, ctx) => {
+  if (value.trigger === "authorized-request" && !value.authorizationRef) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["authorizationRef"],
+      message:
+        "authorized-request requires an external authorization reference",
+    });
+  }
 });
 const attempt = z.strictObject({
   attempt: z.number().int().positive(),
   invocationId: Id,
   fingerprint: Hash,
-  trigger: observeArgs.shape.trigger,
+  trigger: Trigger,
   queuedAt: Time,
 });
 /** Schema for the durable eligibility and attempt lifecycle of an incident. */
@@ -132,6 +170,8 @@ const agentOutput = z.strictObject({
   ]),
 });
 const audit = z.strictObject({
+  auditId: Id,
+  enforcementAuthority: Id,
   invocationId: Id,
   provider: Id,
   model: z.string().min(1).max(100),
@@ -160,6 +200,8 @@ const validateArgs = z.strictObject({
 export const resultSchema = agentOutput.extend({
   resultId: Id,
   lifecycleRef: Ref,
+  auditId: Id,
+  enforcementAuthority: Id,
   provider: Id,
   model: z.string(),
   promptHash: Hash,
@@ -174,12 +216,13 @@ const outcomeArgs = z.strictObject({
   incidentId: Id,
   invocationId: Id,
   recordedAt: Time,
-  outcome: z.enum(["completed", "failed"]),
-  failureCause: z.string().min(1).max(500).optional(),
+  outcome: z.literal("failed"),
+  failureCause: z.string().min(1).max(500),
 });
 
 type Context = {
   globalArgs?: Policy;
+  logger?: { info(message: string, values?: Record<string, unknown>): void };
   readResource(name: string): Promise<Record<string, unknown> | null>;
   writeResource(
     spec: string,
@@ -211,10 +254,21 @@ const policy = (ctx: Context) =>
   policySchema.parse(ctx.globalArgs ?? { allowedProviders: ["provider"] });
 const lifeName = (id: string) => `lifecycle-${id}`;
 const requestName = (id: string) => `request-${id}`;
+const runLogged = async <T>(
+  name: string,
+  ctx: Context,
+  operation: () => Promise<T>,
+) => {
+  ctx.logger?.info("Starting {method}", { method: name });
+  const result = await operation();
+  ctx.logger?.info("Completed {method}", { method: name });
+  return result;
+};
 
 /** Evaluates an observation and durably records its gated lifecycle state. */
 export async function observe(raw: unknown, ctx: Context) {
   const a = observeArgs.parse(raw);
+  const p = policy(ctx);
   const parsed = lifecycleSchema.safeParse(
     await ctx.readResource(lifeName(a.incident.incidentId)),
   );
@@ -233,7 +287,7 @@ export async function observe(raw: unknown, ctx: Context) {
   } else if (["queued", "running"].includes(prior.status)) reason = "active";
   else if (
     prior.status === "stopped" &&
-    prior.sameCauseFailures >= policy(ctx).sameCauseFailureLimit
+    prior.sameCauseFailures >= p.sameCauseFailureLimit
   ) reason = "failure-limit";
   else if (a.trigger === "authorized-request") {
     eligible = true;
@@ -352,8 +406,10 @@ export async function prepareInvocation(raw: unknown, ctx: Context) {
   const workspace = ctx.ensureWorkspace
     ? await ctx.ensureWorkspace(requested)
     : requested;
-  if (!workspace.startsWith("/tmp/")) {
-    throw new TypeError("workspace must remain under /tmp");
+  if (workspace !== requested) {
+    throw new TypeError(
+      "workspace platform did not attest the exact requested path",
+    );
   }
   const base = {
     schemaVersion: "1.0" as const,
@@ -408,26 +464,20 @@ export async function recordOutcome(raw: unknown, ctx: Context) {
     prior.invocationId !== a.invocationId ||
     !["queued", "running"].includes(prior.status)
   ) throw new TypeError("outcome does not match active invocation");
-  if (a.outcome === "failed" && !a.failureCause) {
-    throw new TypeError("failed outcome requires failureCause");
-  }
-  const cause = a.failureCause
-    ? await hash(a.failureCause.trim().toLowerCase())
-    : null;
-  const failures = a.outcome === "failed"
-    ? cause === prior.failureCauseFingerprint ? prior.sameCauseFailures + 1 : 1
-    : 0;
-  const stopped = a.outcome === "failed" &&
-    failures >= policy(ctx).sameCauseFailureLimit;
+  const cause = await hash(a.failureCause.trim().toLowerCase());
+  const failures = cause === prior.failureCauseFingerprint
+    ? prior.sameCauseFailures + 1
+    : 1;
+  const stopped = failures >= policy(ctx).sameCauseFailureLimit;
   const value = lifecycleSchema.parse({
     ...prior,
-    status: stopped ? "stopped" : a.outcome,
+    status: stopped ? "stopped" : "failed",
     eligibility: {
       eligible: false,
       reason: stopped ? "failure-limit" : "duplicate",
     },
     sameCauseFailures: failures,
-    failureCauseFingerprint: a.outcome === "failed" ? cause : null,
+    failureCauseFingerprint: cause,
   });
   return {
     value,
@@ -479,6 +529,8 @@ export async function validateAndRecordInvocation(raw: unknown, ctx: Context) {
       modelName: "incident-dispatcher",
       resourceName: lifeName(a.incidentId),
     },
+    auditId: a.audit.auditId,
+    enforcementAuthority: a.audit.enforcementAuthority,
     provider: a.audit.provider,
     model: a.audit.model,
     promptHash: a.audit.promptHash,
@@ -502,13 +554,20 @@ export async function validateAndRecordInvocation(raw: unknown, ctx: Context) {
     );
   }
   if (life.status === "running") {
-    const outcome = await recordOutcome({
-      incidentId: a.incidentId,
-      invocationId: a.invocationId,
-      recordedAt: a.validatedAt,
-      outcome: "completed",
-    }, ctx);
-    handles.push(outcome.handle);
+    const completed = lifecycleSchema.parse({
+      ...life,
+      status: "completed",
+      eligibility: { eligible: false, reason: "duplicate" },
+      sameCauseFailures: 0,
+      failureCauseFingerprint: null,
+    });
+    handles.push(
+      await ctx.writeResource(
+        "lifecycle",
+        lifeName(a.incidentId),
+        completed,
+      ),
+    );
   }
   return {
     value,
@@ -546,33 +605,37 @@ export const model = {
       description:
         "Gate duplicate, active, retry, and validation lifecycle transitions",
       arguments: observeArgs,
-      execute: async (args: unknown, ctx: Context) => ({
-        dataHandles: [(await observe(args, ctx)).handle],
-      }),
+      execute: async (args: unknown, ctx: Context) =>
+        await runLogged("observe", ctx, async () => ({
+          dataHandles: [(await observe(args, ctx)).handle],
+        })),
     },
     prepareInvocation: {
       description:
         "Prepare a minimized policy-bound external invocation request",
       arguments: prepareArgs,
-      execute: async (args: unknown, ctx: Context) => ({
-        dataHandles: (await prepareInvocation(args, ctx)).handles,
-      }),
+      execute: async (args: unknown, ctx: Context) =>
+        await runLogged("prepareInvocation", ctx, async () => ({
+          dataHandles: (await prepareInvocation(args, ctx)).handles,
+        })),
     },
     validateAndRecordInvocation: {
       description:
         "Validate external audit and typed result before completing lifecycle",
       arguments: validateArgs,
-      execute: async (args: unknown, ctx: Context) => ({
-        dataHandles: (await validateAndRecordInvocation(args, ctx)).handles,
-      }),
+      execute: async (args: unknown, ctx: Context) =>
+        await runLogged("validateAndRecordInvocation", ctx, async () => ({
+          dataHandles: (await validateAndRecordInvocation(args, ctx)).handles,
+        })),
     },
     recordOutcome: {
       description:
-        "Record a claimed failure or completion without executing it",
+        "Record a claimed external invocation failure without executing it",
       arguments: outcomeArgs,
-      execute: async (args: unknown, ctx: Context) => ({
-        dataHandles: [(await recordOutcome(args, ctx)).handle],
-      }),
+      execute: async (args: unknown, ctx: Context) =>
+        await runLogged("recordOutcome", ctx, async () => ({
+          dataHandles: [(await recordOutcome(args, ctx)).handle],
+        })),
     },
   },
 };
