@@ -16,6 +16,9 @@ type Context = {
     name: string,
     data: Record<string, unknown>,
   ) => Promise<unknown>;
+  logger: {
+    info: (message: string, properties?: Record<string, unknown>) => void;
+  };
 };
 
 /** Defines the bounded, deterministic repeated-friction evaluator. */
@@ -40,15 +43,27 @@ export const model = {
       execute: async (
         args: z.infer<typeof argumentsSchema>,
         context: Context,
-      ) => ({
-        dataHandles: [
-          await context.writeResource(
-            "evaluation",
-            `evaluation-${args.requestId}`,
-            detectRepeatedFriction(args.input),
-          ),
-        ],
-      }),
+      ) => {
+        context.logger.info(
+          "Evaluating repeated friction request {requestId}",
+          {
+            requestId: args.requestId,
+          },
+        );
+        const output = detectRepeatedFriction(args.input);
+        if (output.evaluationId !== args.requestId) {
+          throw new TypeError("requestId must match input evaluationId");
+        }
+        const handle = await context.writeResource(
+          "evaluation",
+          `evaluation-${args.requestId}`,
+          output,
+        );
+        context.logger.info("Evaluated repeated friction request {requestId}", {
+          requestId: args.requestId,
+        });
+        return { dataHandles: [handle] };
+      },
     },
   },
 };

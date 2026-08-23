@@ -84,6 +84,7 @@ const fixture = () => ({
     freshness: {
       requireAvailableByEvaluation: true,
       requireUnexpiredAtEvaluation: true,
+      allowedSensitivities: ["public", "internal", "confidential"],
     },
     ordering: "category_group_key_ascending",
   },
@@ -176,11 +177,14 @@ Deno.test("strict bounds, identities, category policy, and chronology fail close
 
 Deno.test("persistence-only model writes one bounded evaluation and performs no other effect", async () => {
   const writes: unknown[][] = [];
-  await model.methods.evaluate.execute({ requestId: "r1", input: fixture() }, {
+  const input = fixture();
+  input.evaluationId = "r1";
+  await model.methods.evaluate.execute({ requestId: "r1", input }, {
     writeResource: (...args: unknown[]) => {
       writes.push(args);
       return Promise.resolve({ name: args[1] });
     },
+    logger: { info: () => {} },
   });
   assert(
     writes.length === 1 && writes[0][0] === "evaluation" &&
@@ -192,6 +196,49 @@ Deno.test("persistence-only model writes one bounded evaluation and performs no 
       input: fixture(),
       unexpected: true,
     }).success,
+  );
+});
+
+Deno.test("request identity, privacy policy, and credential-free evidence fail closed", async () => {
+  const restricted = fixture();
+  restricted.signals[0].signal.sourceReference.sensitivity = "restricted";
+  const result = detectRepeatedFriction(restricted);
+  assert(
+    !result.preservedSignals.find((item) =>
+      item.signal.signalId === "signal-2"
+    )!
+      .eligibility.sensitivityAllowed,
+  );
+  assert(result.groups[0].state === "insufficient_evidence");
+
+  const credentialed = fixture();
+  credentialed.signals[0].signal.evidenceLinks = [
+    "https://user:secret@example.test/evidence",
+  ];
+  rejects(
+    () => detectRepeatedFriction(credentialed),
+    "must not contain credentials",
+  );
+
+  const writes: unknown[] = [];
+  let failed = false;
+  try {
+    await model.methods.evaluate.execute({
+      requestId: "other",
+      input: fixture(),
+    }, {
+      writeResource: (...args: unknown[]) => {
+        writes.push(args);
+        return Promise.resolve({});
+      },
+      logger: { info: () => {} },
+    });
+  } catch (error) {
+    failed = String(error).includes("requestId must match");
+  }
+  assert(
+    failed && writes.length === 0,
+    "tampered replay must fail before write",
   );
 });
 

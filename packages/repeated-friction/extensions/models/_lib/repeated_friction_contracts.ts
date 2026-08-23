@@ -10,6 +10,14 @@ export const REPEATED_FRICTION_LIMITS = {
 
 const Id = z.string().trim().min(1).max(200);
 const Timestamp = z.iso.datetime({ offset: true });
+const Sensitivity = z.enum([
+  "public",
+  "internal",
+  "confidential",
+  "restricted",
+]);
+const compare = (left: string, right: string) =>
+  left < right ? -1 : left > right ? 1 : 0;
 const unique = (values: string[], context: z.RefinementCtx) => {
   const seen = new Set<string>();
   values.forEach((value, index) => {
@@ -58,6 +66,9 @@ export const repeatedFrictionInputSchema = z.strictObject({
     freshness: z.strictObject({
       requireAvailableByEvaluation: z.boolean(),
       requireUnexpiredAtEvaluation: z.boolean(),
+      allowedSensitivities: z.array(Sensitivity).min(1).max(4).superRefine(
+        unique,
+      ),
     }),
     ordering: z.literal("category_group_key_ascending"),
   }),
@@ -98,6 +109,15 @@ export const repeatedFrictionInputSchema = z.strictObject({
       );
     }
     if (
+      item.signal.sourceReference.observedAt !==
+        item.signal.recurrence.lastObservedAt
+    ) {
+      add(
+        ["signals", index, "signal", "recurrence", "lastObservedAt"],
+        "lastObservedAt must match the preserved source observation",
+      );
+    }
+    if (
       item.sourceIdentity.sourceRecordId !==
         item.signal.sourceReference.source.resourceId
     ) {
@@ -114,6 +134,7 @@ const preservedSignalSchema = frictionSignalSchema.extend({
     inLookback: z.boolean(),
     available: z.boolean(),
     fresh: z.boolean(),
+    sensitivityAllowed: z.boolean(),
     confidenceMet: z.boolean(),
     eligible: z.boolean(),
   }),
@@ -184,27 +205,31 @@ export function detectRepeatedFriction(raw: unknown): RepeatedFrictionOutput {
       inLookback: observed >= start && observed <= end,
       available: asOf <= evaluatedAt,
       fresh: expires >= evaluatedAt,
+      sensitivityAllowed: input.policy.freshness.allowedSensitivities.includes(
+        item.signal.sourceReference.sensitivity,
+      ),
       confidenceMet:
         item.signal.confidence >= threshold.minimumSignalConfidence,
       eligible: false,
     };
     eligibility.eligible = eligibility.inLookback &&
       eligibility.confidenceMet &&
+      eligibility.sensitivityAllowed &&
       (!input.policy.freshness.requireAvailableByEvaluation ||
         eligibility.available) &&
       (!input.policy.freshness.requireUnexpiredAtEvaluation ||
         eligibility.fresh);
     return { ...item, eligibility };
   }).sort((a, b) =>
-    a.signal.category.localeCompare(b.signal.category) ||
-    a.groupKey.localeCompare(b.groupKey) ||
-    a.experienceId.localeCompare(b.experienceId) ||
-    a.signal.signalId.localeCompare(b.signal.signalId)
+    compare(a.signal.category, b.signal.category) ||
+    compare(a.groupKey, b.groupKey) ||
+    compare(a.experienceId, b.experienceId) ||
+    compare(a.signal.signalId, b.signal.signalId)
   );
   const groups: RepeatedFrictionOutput["groups"] = [];
   for (
     const threshold of [...input.policy.categories].sort((a, b) =>
-      a.category.localeCompare(b.category)
+      compare(a.category, b.category)
     )
   ) {
     const keys = [
@@ -230,8 +255,8 @@ export function detectRepeatedFriction(raw: unknown): RepeatedFrictionOutput {
           ]),
         ).values(),
       ].sort((a, b) =>
-        a.sourceId.localeCompare(b.sourceId) ||
-        a.sourceRecordId.localeCompare(b.sourceRecordId)
+        compare(a.sourceId, b.sourceId) ||
+        compare(a.sourceRecordId, b.sourceRecordId)
       );
       const repeated = items.length >= threshold.minimumSignalCount &&
         items.filter((item) => item.abandonment).length >=
@@ -260,7 +285,7 @@ export function detectRepeatedFriction(raw: unknown): RepeatedFrictionOutput {
     );
   }
   const categoryStates = [...input.policy.categories].sort((a, b) =>
-    a.category.localeCompare(b.category)
+    compare(a.category, b.category)
   ).map(({ category }) => {
     const all = preservedSignals.filter((item) =>
       item.signal.category === category

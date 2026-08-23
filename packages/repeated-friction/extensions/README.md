@@ -15,6 +15,11 @@ is sorted by category and group key and includes every preserved signal's
 eligibility plus a disposition of either `recommend_for_evidence_queue` or
 `do_not_queue`.
 
+The freshness policy must explicitly allow evidence sensitivity levels. Signals
+outside that allowlist remain preserved for auditability but are ineligible for
+aggregation. Evidence URLs containing credentials are rejected, and all input
+strings, evidence arrays, signal arrays, and output groups are bounded.
+
 ```ts
 const result = detectRepeatedFriction({
   schemaVersion: "1.0",

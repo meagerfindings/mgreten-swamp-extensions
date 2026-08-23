@@ -3,7 +3,17 @@ import { z } from "npm:zod@4";
 export const SIGNAL_SCHEMA_VERSION = "1.0" as const;
 
 const timestampSchema = z.iso.datetime({ offset: true });
-const identifierSchema = z.string().trim().min(1);
+const identifierSchema = z.string().trim().min(1).max(200);
+const narrativeSchema = z.string().trim().min(1).max(2_000);
+const evidenceLinkSchema = z.url().max(2_048).superRefine((value, context) => {
+  const url = new URL(value);
+  if (url.username || url.password) {
+    context.addIssue({
+      code: "custom",
+      message: "evidence links must not contain credentials",
+    });
+  }
+});
 
 export const sourceReferenceSchema = z.strictObject({
   schemaVersion: z.literal(SIGNAL_SCHEMA_VERSION),
@@ -71,26 +81,28 @@ export const normalizedSignalSchema = z.strictObject({
     lastObservedAt: timestampSchema,
   }),
   impact: z.strictObject({
-    summary: identifierSchema,
+    summary: narrativeSchema,
     scope: z.enum(["none", "individual", "team", "organization", "external"]),
     affectedCount: z.number().int().nonnegative().optional(),
   }),
-  evidenceLinks: z.array(z.url()).min(1).superRefine((links, context) => {
-    const firstIndexes = new Map<string, number>();
-    links.forEach((link, index) => {
-      const firstIndex = firstIndexes.get(link);
-      if (firstIndex === undefined) firstIndexes.set(link, index);
-      else {context.addIssue({
-          code: "custom",
-          path: [index],
-          message: `duplicate evidence link (first at index ${firstIndex})`,
-        });}
-    });
-  }),
+  evidenceLinks: z.array(evidenceLinkSchema).min(1).max(20).superRefine(
+    (links, context) => {
+      const firstIndexes = new Map<string, number>();
+      links.forEach((link, index) => {
+        const firstIndex = firstIndexes.get(link);
+        if (firstIndex === undefined) firstIndexes.set(link, index);
+        else {context.addIssue({
+            code: "custom",
+            path: [index],
+            message: `duplicate evidence link (first at index ${firstIndex})`,
+          });}
+      });
+    },
+  ),
   recommendedEscalation: z.strictObject({
     action: z.enum(["none", "monitor", "investigate", "notify", "escalate"]),
     urgency: z.enum(["routine", "soon", "immediate"]),
-    rationale: identifierSchema,
+    rationale: narrativeSchema,
     target: identifierSchema.optional(),
   }),
 }).superRefine((signal, context) => {
