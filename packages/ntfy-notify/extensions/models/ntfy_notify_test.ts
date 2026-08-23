@@ -1,6 +1,11 @@
 /** Regression tests for ntfy model schemas and defaults. */
 
-import { assertEquals, assertFalse, assertThrows } from "jsr:@std/assert@1";
+import {
+  assertEquals,
+  assertFalse,
+  assertRejects,
+  assertThrows,
+} from "jsr:@std/assert@1";
 import { model } from "./ntfy_notify.ts";
 
 const sendArguments = model.methods.send.arguments;
@@ -127,14 +132,14 @@ Deno.test("outbox transport maps a successful generic send to ntfy", async () =>
     const result = await model.methods.sendOutboxTransport.execute({
       payload: { title: "Build passed", message: "main is green" },
       idempotencyKey: "build-42",
-      options: { topic: "builds", priority: 4, tags: ["check"] },
+      options: { topic: "build alerts", priority: 4, tags: ["check"] },
     }, testContext(logs, writes));
 
     assertEquals(result, { dataHandles: [{ dataName: "notification" }] });
   });
 
   assertEquals(requests.length, 1);
-  assertEquals(requests[0].url, "https://ntfy.example.com/builds");
+  assertEquals(requests[0].url, "https://ntfy.example.com/build%20alerts");
   assertEquals(requests[0].init?.body, "main is green");
   assertEquals(
     (requests[0].init?.headers as Record<string, string>).Title,
@@ -144,20 +149,24 @@ Deno.test("outbox transport maps a successful generic send to ntfy", async () =>
   assertEquals(writes[0].httpStatus, 200);
 });
 
-Deno.test("outbox transport records an ntfy HTTP failure", async () => {
+Deno.test("outbox transport throws before writing on an ntfy HTTP failure", async () => {
   const writes: Record<string, unknown>[] = [];
   await withFetch(
     () => Promise.resolve(new Response("rate limited", { status: 429 })),
     async () => {
-      await model.methods.sendOutboxTransport.execute({
-        payload: { title: "Build", message: "failed" },
-        idempotencyKey: "build-43",
-        options: {},
-      }, testContext([], writes));
+      await assertRejects(
+        () =>
+          model.methods.sendOutboxTransport.execute({
+            payload: { title: "Build", message: "failed" },
+            idempotencyKey: "build-43",
+            options: {},
+          }, testContext([], writes)),
+        Error,
+        "HTTP 429",
+      );
     },
   );
-  assertEquals(writes[0].success, false);
-  assertEquals(writes[0].httpStatus, 429);
+  assertEquals(writes, []);
 });
 
 Deno.test("outbox transport keeps payload and idempotency key out of logs", async () => {
@@ -200,6 +209,18 @@ Deno.test("outbox transport rejects malformed payloads and unbounded options", (
       options: { priority: 6 },
     })
   );
+});
+
+Deno.test("outbox transport tolerates runtime-injected model configuration", () => {
+  const parsed = outboxArguments.parse({
+    payload: { title: "Alert", message: "Body" },
+    idempotencyKey: "alert-1",
+    options: {},
+    ntfyUrl: "https://ntfy.example.com",
+    defaultTopic: "alerts",
+  });
+  assertEquals(parsed.ntfyUrl, "https://ntfy.example.com");
+  assertEquals(parsed.defaultTopic, "alerts");
 });
 
 Deno.test("outbox transport replay sends again because ntfy deduplication is unavailable", async () => {

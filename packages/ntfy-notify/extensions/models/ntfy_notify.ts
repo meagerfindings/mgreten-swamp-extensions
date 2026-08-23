@@ -45,6 +45,12 @@ const OutboxTransportArgumentsSchema = z.object({
   payload: OutboxPayloadSchema,
   idempotencyKey: z.string().min(1).max(256),
   options: OutboxOptionsSchema,
+  ntfyUrl: z.string().optional().describe(
+    "Runtime-populated model configuration; callers should omit",
+  ),
+  defaultTopic: z.string().optional().describe(
+    "Runtime-populated model configuration; callers should omit",
+  ),
 }).strict();
 
 type SendArguments = {
@@ -73,10 +79,11 @@ type MethodContext = {
 async function sendNotification(
   args: SendArguments,
   context: MethodContext,
+  throwOnFailure = false,
 ): Promise<{ dataHandles: Record<string, unknown>[] }> {
   const topic = args.topic || context.globalArgs.defaultTopic;
   const priority = args.priority ?? 3;
-  const ntfyUrl = `${context.globalArgs.ntfyUrl}/${topic}`;
+  const ntfyUrl = `${context.globalArgs.ntfyUrl}/${encodeURIComponent(topic)}`;
 
   context.logger.info("Sending NTFY notification to topic {topic}", { topic });
 
@@ -93,12 +100,14 @@ async function sendNotification(
 
   let httpStatus = 0;
   let success = false;
+  let failureMessage = "NTFY request failed before receiving a response";
 
   try {
     const response = await fetch(ntfyUrl, {
       method: "POST",
       headers,
       body: args.message,
+      signal: AbortSignal.timeout(30_000),
     });
     httpStatus = response.status;
     success = response.ok;
@@ -108,22 +117,26 @@ async function sendNotification(
         status: httpStatus,
       });
     } else {
-      const responseBody = await response.text();
-      context.logger.warning("NTFY returned HTTP {status}: {body}", {
+      failureMessage = `NTFY returned HTTP ${httpStatus} ${response.statusText}`
+        .trim();
+      context.logger.warning("NTFY returned HTTP {status} {statusText}", {
         status: httpStatus,
-        body: responseBody.slice(0, 500),
+        statusText: response.statusText,
       });
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    failureMessage = `NTFY request failed: ${errorMsg}`;
     context.logger.error("Failed to send NTFY notification: {error}", {
       error: errorMsg,
     });
   }
 
+  if (throwOnFailure && !success) throw new Error(failureMessage);
+
   const handle = await context.writeResource(
     "notification",
-    `notification-${Date.now()}`,
+    `notification-${Date.now()}-${crypto.randomUUID()}`,
     {
       topic,
       title: args.title,
@@ -201,6 +214,7 @@ export const model = {
         return await sendNotification(
           { ...args.payload, ...args.options },
           context,
+          true,
         );
       },
     },

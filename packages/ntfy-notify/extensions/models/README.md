@@ -79,6 +79,14 @@ Compatibility adapter for notification outbox workflows. Its strict contract is:
 Unknown fields are rejected. The payload is marked sensitive so workflow tooling
 can redact its title and message. The result is the standard model-method shape
 `{ dataHandles: [...] }`, pointing to the notification delivery record.
+Swamp may inject the instance's `ntfyUrl` and `defaultTopic` configuration into
+the runtime argument object; callers should not provide those method fields.
+
+The adapter throws on network errors and non-2xx responses before writing a
+delivery record. This lets the calling outbox workflow persist its own failed
+attempt and bounded retry state instead of incorrectly marking delivery as
+successful. The original `send` method retains its existing audit behavior of
+recording both successful and unsuccessful HTTP outcomes.
 
 `idempotencyKey` satisfies the caller contract but is not sent to ntfy, logged,
 or persisted. ntfy has no verified server-side deduplication guarantee here, so
@@ -94,9 +102,10 @@ the title, message, priority, and tags. Each notification is recorded as a
 useful for auditing delivery in workflows or debugging connectivity to
 self-hosted instances.
 
-No authentication is built in. If your ntfy server requires auth, configure it
-at the server level or use an access token in the URL (ntfy supports query-param
-tokens). The model uses the standard `fetch` API — no external dependencies
+No authentication is built in. Do not place access tokens in `ntfyUrl`: model
+configuration is not marked sensitive. If your ntfy server requires auth,
+provide it outside this extension (for example, through a trusted authenticated
+proxy). The model uses the standard `fetch` API — no external dependencies
 beyond Zod.
 
 ## License
