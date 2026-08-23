@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@mgreten/campaign-outcome"
+version: 2026.08.23.1
+description: >
+  Validates, canonically orders, and persists aggregate campaign outcome
+  evidence for human decision-making without external effects.
+repository: "https://github.com/meagerfindings/swamp-campaign-outcome"
+models:
+  - campaign_outcome.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+dependencies: []
