@@ -9,7 +9,10 @@ instances without editing a workflow.
 All workflows require `requestId`, `assessmentModel`, `providerModel`, `input`,
 and `policy`. Feedback triage uses `envelopes` instead of `input`.
 
-`requestId` is stable, non-empty, and safe for data-resource naming.
+`requestId` is stable, non-empty, unique to the logical assessment, and safe
+for data-resource naming. Retries of that same assessment reuse it; changed
+input or policy requires a new `requestId` so prior artifacts cannot be treated
+as fresh evidence.
 `assessmentModel` implements the named deterministic methods in its workflow:
 `prepare` and `validate`, plus `normalize` for triage. `providerModel`
 implements `invokeAndParse` and returns resources named `invocation-<requestId>`
@@ -24,8 +27,9 @@ write-capable profiles. Network policy is either denied or a bounded allowlist.
 
 ## Binding and fail-closed rules
 
-`prepare` emits `request-<requestId>` with a bounded prompt, its hash, and an
-isolated cwd. The provider receives exactly that prompt and policy. `validate`
+`prepare` emits `request-<requestId>` with the matching `requestId`, a bounded
+prompt, its hash, and an isolated cwd. The provider receives exactly that prompt
+and policy. `validate`
 must reject unless all of the following match the prepared artifact:
 
 1. request ID, prompt hash, cwd, provider ref, and model ref;

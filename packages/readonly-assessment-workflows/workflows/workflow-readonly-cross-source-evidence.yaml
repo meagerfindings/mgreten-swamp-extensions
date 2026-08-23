@@ -7,6 +7,7 @@ tags:
   capability: readonly-cross-source-evidence
   authority: none
 inputs:
+  additionalProperties: false
   properties:
     requestId:
       type: string
@@ -16,11 +17,16 @@ inputs:
     assessmentModel:
       type: string
       minLength: 1
+      maxLength: 128
+      pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
     providerModel:
       type: string
       minLength: 1
+      maxLength: 128
+      pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
     input:
       type: object
+      minProperties: 1
     policy:
       type: object
   required: [requestId, assessmentModel, providerModel, input, policy]
@@ -28,10 +34,16 @@ jobs:
   - name: assess-evidence
     description: Preserve source boundaries and validate a recommendation-only evidence assessment.
     steps:
+      - name: assert-input-scope
+        description: Reject unsafe dynamic resource and model identifiers before any model dispatch.
+        task: { type: assert, expr: 'inputs.requestId.matches("^[A-Za-z0-9][A-Za-z0-9_-]{0,89}$") && inputs.assessmentModel.matches("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$") && inputs.providerModel.matches("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")', message: requestId or model identifier is outside the safe bounded identifier grammar., severity: high }
+        dependsOn: []
+        weight: 0
+        allowFailure: false
       - name: assert-policy-contract
         description: Fail before preparation unless the caller declares the minimum readonly policy contract.
-        task: { type: assert, expr: 'has(inputs.policy.tools) && inputs.policy.tools.mode == "readonly" && has(inputs.policy.sandbox) && inputs.policy.sandbox.required == true && inputs.policy.sandbox.credentialAccess == "provider" && has(inputs.policy.network) && (inputs.policy.network.mode == "deny" || inputs.policy.network.mode == "allowlist")', message: Policy must declare readonly tools, a required sandbox, provider-only credentials, and bounded network mode., severity: high }
-        dependsOn: []
+        task: { type: assert, expr: 'has(inputs.policy.personas) && size(inputs.policy.personas) > 0 && has(inputs.policy.redaction) && has(inputs.policy.redaction.profile) && size(inputs.policy.redaction.profile) > 0 && has(inputs.policy.tools) && inputs.policy.tools.mode == "readonly" && has(inputs.policy.sandbox) && inputs.policy.sandbox.required == true && inputs.policy.sandbox.credentialAccess == "provider" && has(inputs.policy.network) && (inputs.policy.network.mode == "deny" || (inputs.policy.network.mode == "allowlist" && has(inputs.policy.network.allowlist) && size(inputs.policy.network.allowlist) > 0))', message: Policy must declare personas, redaction, readonly tools, a required sandbox, provider-only credentials, and bounded network mode., severity: high }
+        dependsOn: [{ step: assert-input-scope, condition: { type: succeeded } }]
         weight: 0
         allowFailure: false
       - name: prepare
@@ -49,7 +61,7 @@ jobs:
         allowFailure: false
       - name: assert-request-contract
         description: Require the prepared request and launch-binding fields.
-        task: { type: assert, expr: 'has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.prompt) && has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.promptHash) && has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.cwd) && size(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.prompt) > 0', message: Prepared request resource is missing required launch binding., severity: high }
+        task: { type: assert, expr: 'data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.requestId == inputs.requestId && has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.prompt) && has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.promptHash) && has(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.cwd) && size(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.prompt) > 0 && size(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.promptHash) > 0 && size(data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.cwd) > 0', message: Prepared request resource is missing required launch binding., severity: high }
         dependsOn: [{ step: prepare, condition: { type: succeeded } }]
         weight: 0
         allowFailure: false
@@ -72,7 +84,7 @@ jobs:
         allowFailure: false
       - name: assert-invocation-contract
         description: Require persisted invocation and launch claim binding and authority fields.
-        task: { type: assert, expr: 'data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.invocationId == inputs.requestId && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.success == true && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.promptHash == data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.promptHash && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.cwd == data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.cwd && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.provider) && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.model) && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.parsedResponse.authority) && has(data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.operation) && has(data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.toolProfile) && has(data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.sandbox)', message: Invocation or launch claim is missing required binding or authority fields., severity: high }
+        task: { type: assert, expr: 'data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.invocationId == inputs.requestId && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.success == true && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.promptHash == data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.promptHash && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.cwd == data.latest(inputs.assessmentModel, "request-" + inputs.requestId).attributes.cwd && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.provider) && has(data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.model) && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.parsedResponse.authority.disposition == "recommendation_only" && data.latest(inputs.providerModel, "invocation-" + inputs.requestId).attributes.parsedResponse.authority.sideEffects == "none" && data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.operation == "invokeAndParse" && data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.toolProfile == "readonly" && data.latest(inputs.providerModel, "launch-claim-" + inputs.requestId).attributes.sandbox == "required"', message: Invocation or launch claim violates required binding, readonly, or no-authority fields., severity: high }
         dependsOn: [{ step: invoke-readonly-provider, condition: { type: succeeded } }]
         weight: 0
         allowFailure: false

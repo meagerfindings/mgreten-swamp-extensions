@@ -1,9 +1,12 @@
 # Synthetic compatibility fixture for the workflow-level assert steps.
 policy:
+  personas: [skeptic]
+  redaction: { profile: strict }
   tools: { mode: readonly }
   network: { mode: deny }
   sandbox: { required: true, credentialAccess: provider }
 request:
+  requestId: request-1
   prompt: "Review synthetic evidence and return an advisory only."
   promptHash: "synthetic-sha256"
   cwd: "/synthetic/isolated/request-1"
