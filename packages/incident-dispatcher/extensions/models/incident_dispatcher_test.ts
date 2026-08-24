@@ -1,10 +1,26 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
+  model,
   observe,
   prepareInvocation,
   recordOutcome,
   validateAndRecordInvocation,
 } from "./incident_dispatcher.ts";
+
+Deno.test("upgrades retained Moment Savor 2026.08.19.4 globals", () => {
+  const upgraded = model.upgrades[0].upgradeAttributes({
+    agentCwd: "/tmp/moment-savor-incident-investigations",
+    maxPromptBytes: 12000,
+  });
+  assertEquals(upgraded, {
+    allowedProviders: ["amp"],
+    modelPattern: "^amp-default$",
+    workspaceRoot: "/tmp/moment-savor-incident-investigations",
+    maxPromptBytes: 12000,
+    sameCauseFailureLimit: 3,
+  });
+  assert(model.globalArguments.safeParse(upgraded).success);
+});
 
 const incident = {
   incidentId: "api-1",
@@ -41,7 +57,8 @@ const memory = () => {
         sameCauseFailureLimit: 3,
       },
       ensureWorkspace: (path: string) => Promise.resolve(path),
-      readResource: (name: string) => Promise.resolve(records.get(name) ?? null),
+      readResource: (name: string) =>
+        Promise.resolve(records.get(name) ?? null),
       writeResource: async (
         _spec: string,
         name: string,
@@ -301,12 +318,20 @@ Deno.test("rejects policy-violating audit and unclaimed evidence", async () => {
 });
 
 Deno.test("rejects malformed policy and non-canonical workspace claims", async () => {
-  for (const globalArgs of [
-    { ...memory().context.globalArgs, modelPattern: "[" },
-    { ...memory().context.globalArgs, modelPattern: "model-.*" },
-    { ...memory().context.globalArgs, workspaceRoot: "/tmp/dispatcher/../escape" },
-    { ...memory().context.globalArgs, allowedProviders: ["provider", "provider"] },
-  ]) {
+  for (
+    const globalArgs of [
+      { ...memory().context.globalArgs, modelPattern: "[" },
+      { ...memory().context.globalArgs, modelPattern: "model-.*" },
+      {
+        ...memory().context.globalArgs,
+        workspaceRoot: "/tmp/dispatcher/../escape",
+      },
+      {
+        ...memory().context.globalArgs,
+        allowedProviders: ["provider", "provider"],
+      },
+    ]
+  ) {
     const store = memory();
     store.context.globalArgs = globalArgs;
     await assertRejects(() => observe(input(), store.context));
@@ -315,24 +340,30 @@ Deno.test("rejects malformed policy and non-canonical workspace claims", async (
   const store = memory();
   await observe(input(), store.context);
   store.context.ensureWorkspace = () => Promise.resolve("/tmp/other");
-  await assertRejects(() => prepareInvocation({
-    incidentId: incident.incidentId,
-    preparedAt: "2026-08-23T10:01:00Z",
-  }, store.context));
+  await assertRejects(() =>
+    prepareInvocation({
+      incidentId: incident.incidentId,
+      preparedAt: "2026-08-23T10:01:00Z",
+    }, store.context)
+  );
   assertEquals(store.records.get("lifecycle-api-1")?.status, "queued");
 });
 
 Deno.test("does not accept unreferenced authority or unvalidated completion", async () => {
   const store = memory();
-  await assertRejects(() => observe(input({ trigger: "authorized-request" }), store.context));
+  await assertRejects(() =>
+    observe(input({ trigger: "authorized-request" }), store.context)
+  );
   assertEquals(store.records.size, 0);
 
   const life = (await observe(input(), store.context)).value;
-  await assertRejects(() => recordOutcome({
-    incidentId: incident.incidentId,
-    invocationId: life.invocationId,
-    recordedAt: "2026-08-23T10:01:00Z",
-    outcome: "completed",
-  }, store.context));
+  await assertRejects(() =>
+    recordOutcome({
+      incidentId: incident.incidentId,
+      invocationId: life.invocationId,
+      recordedAt: "2026-08-23T10:01:00Z",
+      outcome: "completed",
+    }, store.context)
+  );
   assertEquals(store.records.get("lifecycle-api-1")?.status, "queued");
 });

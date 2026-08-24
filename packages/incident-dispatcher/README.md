@@ -22,6 +22,12 @@ audit; callers must accept audits only from a trusted `enforcementAuthority`.
 This model validates audit bindings and claims but cannot authenticate an audit
 producer or prove no-tools, sandbox, credential, or network enforcement.
 
+The package includes a lazy global-argument upgrade for retained
+`2026.08.19.4` Moment Savor instances (`agentCwd` becomes `workspaceRoot`, with
+Amp defaults). Its generic method and resource schemas intentionally replace
+that app-specific pre-publication contract; update dependent workflows before
+switching their extension source.
+
 ## Configure and observe
 
 Create an instance with at least one permitted provider. The model pattern is a

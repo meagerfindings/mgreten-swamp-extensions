@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/incident-dispatcher"
-version: "2026.08.23.1"
+version: "2026.08.24.1"
 description: "Generic gated incident lifecycle with minimized typed agent requests and validated results."
 repository: "https://github.com/meagerfindings/swamp-incident-dispatcher"
 paths:

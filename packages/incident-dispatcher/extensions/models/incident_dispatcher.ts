@@ -1,7 +1,7 @@
 import { z } from "npm:zod@4";
 
 /** Version of the incident-dispatcher model contract. */
-export const MODEL_VERSION = "2026.08.23.1" as const;
+export const MODEL_VERSION = "2026.08.24.1" as const;
 const Time = z.iso.datetime({ offset: true });
 const Id = z.string().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/);
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -42,13 +42,20 @@ const policySchema = z.strictObject({
 });
 type Policy = z.infer<typeof policySchema>;
 const summary = z.string().trim().min(1).max(280).superRefine((value, ctx) => {
-  if (
-    /[\r\n]|https?:\/\/|\b(?:api[_ -]?key|password|secret|bearer|token)\s*[:=]/i
-      .test(value)
-  ) {
+  const prohibited = [
+    /[\r\n]/,
+    /https?:\/\//i,
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
+    /(?:\+\d[\d\s().-]{6,}\d|(?:\(\d{3}\)|\d{3})[ .-]\d{3}[ .-]\d{4})/,
+    /\b\d{2}-\d{7}\b/,
+    /\b(?:api[_ -]?key|password|secret|bearer|access[_ -]?token)\s*[:=]/i,
+    /\b[a-f0-9]{32,}\b/i,
+    /(?:^|\s)\/(?:home|etc|var|run|tmp)\//,
+  ];
+  if (prohibited.some((pattern) => pattern.test(value))) {
     ctx.addIssue({
       code: "custom",
-      message: "summary contains prohibited raw content",
+      message: "summary contains prohibited raw or identifying content",
     });
   }
 });
@@ -306,7 +313,7 @@ export async function observe(raw: unknown, ctx: Context) {
   const invocationId = eligible
     ? `inv-${a.incident.incidentId}-${fingerprint.slice(0, 12)}-${
       attempts.length + 1
-    }`
+    }`.slice(0, 100)
     : prior?.invocationId ?? null;
   const value = lifecycleSchema.parse({
     schemaVersion: "1.0",
@@ -520,7 +527,9 @@ export async function validateAndRecordInvocation(raw: unknown, ctx: Context) {
   ) throw new TypeError("output cites unclaimed evidence");
   if (
     a.validatedAt !== a.agentOutput.generatedAt ||
-    Date.parse(a.agentOutput.generatedAt) < Date.parse(request.preparedAt)
+    Date.parse(a.agentOutput.generatedAt) < Date.parse(request.preparedAt) ||
+    Date.parse(a.agentOutput.generatedAt) >
+      Date.parse(request.preparedAt) + 30 * 60 * 1000
   ) throw new TypeError("output timestamp is invalid");
   const value = resultSchema.parse({
     ...a.agentOutput,
@@ -580,6 +589,18 @@ export const model = {
   type: "@mgreten/incident-dispatcher",
   version: MODEL_VERSION,
   globalArguments: policySchema,
+  upgrades: [{
+    toVersion: MODEL_VERSION,
+    description:
+      "Migrate the retained 2026.08.19.4 Moment Savor dispatcher globals to generic policy globals",
+    upgradeAttributes: (old: Record<string, unknown>) => ({
+      allowedProviders: ["amp"],
+      modelPattern: "^amp-default$",
+      workspaceRoot: old.agentCwd ?? "/tmp/incident-dispatcher",
+      maxPromptBytes: old.maxPromptBytes ?? 12000,
+      sameCauseFailureLimit: 3,
+    }),
+  }],
   resources: {
     lifecycle: {
       description: "Durable gated incident lifecycle",
