@@ -35,13 +35,19 @@ swamp model method run registry-conflicts evaluate --input requestId=run-1 --inp
 
 Malformed or ambiguous data is rejected rather than inferred: absent rules,
 duplicate `recordId` + `version` pairs across any category, inconsistent
-availability, invalid hashes, and missing authority all fail validation.
-Diagnostics are globally sorted and capped at 500; `truncated` is true exactly
-when diagnostics were omitted, while `verdict` always considers the complete
-set. The output also preserves a canonical `recordDigests` list, binding replay
-evidence to every caller-declared record hash; callers remain responsible for
-verifying those hashes against their source records. `blocked` is an escalation
-signal, not authorization to act.
+availability, invalid hashes, and missing authority all fail validation. For
+compatibility with pre-extraction consumers, the complete legacy
+`context`/`decisions`/`work`/`recommendations` contract is also accepted and
+returns its original `artifactId`/`artifactIds`, `kind`, and `stale_goal`
+output. Inputs must match exactly one complete contract: mixed old/new fields
+fail closed. Existing legacy evaluation resources are retained verbatim during
+upgrade; they are never guessed into the generic vocabulary. New generic
+evaluations continue to include `recordDigests`. Diagnostics are globally sorted
+and capped at 500; `truncated` is true exactly when diagnostics were omitted,
+while `verdict` always considers the complete set. The output also preserves a
+canonical `recordDigests` list, binding replay evidence to every caller-declared
+record hash; callers remain responsible for verifying those hashes against their
+source records. `blocked` is an escalation signal, not authorization to act.
 
 ## Verification
 

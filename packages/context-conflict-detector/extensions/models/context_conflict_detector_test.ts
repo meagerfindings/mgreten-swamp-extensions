@@ -1,6 +1,8 @@
 import {
   detectConflicts,
+  genericOutputSchema,
   inputSchema,
+  legacyOutputSchema,
   model,
 } from "./context_conflict_detector.ts";
 
@@ -59,6 +61,31 @@ const fixture = () => ({
   ordering: "severity_desc_code_asc_conflict_key_asc_record_ids_asc",
 });
 type Fixture = ReturnType<typeof fixture>;
+const legacyFixture = () => {
+  const generic = fixture();
+  const toArtifact = ({ recordId, ...rest }: ReturnType<typeof record>) => ({
+    artifactId: recordId,
+    ...rest,
+  });
+  return {
+    schemaVersion: "1.0",
+    evaluationId: generic.evaluationId,
+    evaluatedAt: generic.evaluatedAt,
+    context: generic.references.map(toArtifact),
+    decisions: generic.decisions.map(toArtifact),
+    work: generic.plans.map(toArtifact),
+    recommendations: generic.proposals.map(toArtifact),
+    availability: ["context", "decision", "work", "recommendation"].map(
+      (kind) => ({ kind, status: "available", reason: null }),
+    ),
+    conflictRules: [{
+      ...generic.conflictRules[0],
+      appliesTo: ["context", "decision"],
+    }],
+    stalePolicy: generic.stalePolicy,
+    ordering: "severity_desc_code_asc_conflict_key_asc_artifact_ids_asc",
+  };
+};
 
 Deno.test("synthetic conflicts are deterministic and blocked without authority", () => {
   const first = detectConflicts(fixture());
@@ -184,10 +211,123 @@ Deno.test("output binds replay evidence to caller-declared record digests", () =
   tampered.references[0].sha256 = "b".repeat(64);
   const replay = detectConflicts(tampered);
   assert(JSON.stringify(original) !== JSON.stringify(replay));
+  assert("recordDigests" in replay);
   assert(
     replay.recordDigests.find((item) => item.recordId === "reference-1")
       ?.sha256 === "b".repeat(64),
   );
+});
+Deno.test("legacy context-compiler records receive the exact legacy output contract", () => {
+  const legacy = legacyFixture();
+  legacy.context[0].reviewAt = legacy.evaluatedAt;
+  const output = detectConflicts(legacy);
+  assert(legacyOutputSchema.safeParse(output).success);
+  assert(!genericOutputSchema.safeParse(output).success);
+  assert(!("recordDigests" in output));
+  assert(output.diagnostics.every((item) => "artifactIds" in item));
+  assert(output.diagnostics.some((item) => item.code === "stale_goal"));
+  assert(
+    output.diagnostics.find((item) => item.code === "stale_goal")
+      ?.recommendation.endsWith("the artifact automatically."),
+  );
+  assert(model.resources.evaluation.schema.safeParse(output).success);
+});
+
+Deno.test("legacy freshness expiring exactly at evaluation remains current", () => {
+  const legacy = legacyFixture();
+  legacy.context[0].freshness.expiresAt = legacy.evaluatedAt;
+  const output = detectConflicts(legacy);
+  assert(!output.diagnostics.some((item) => item.code === "expired_freshness"));
+});
+
+Deno.test("legacy diagnostics are sorted before truthful truncation", () => {
+  const legacy = legacyFixture();
+  const artifact = legacy.context[0];
+  legacy.context = Array.from({ length: 100 }, (_, i) => ({
+    ...artifact,
+    artifactId: `context-${String(i).padStart(3, "0")}`,
+    reviewAt: "2026-08-16T00:00:00Z",
+  }));
+  legacy.decisions = Array.from({ length: 100 }, (_, i) => ({
+    ...artifact,
+    artifactId: `decision-${String(i).padStart(3, "0")}`,
+    claims: [{ conflictKey: "delivery.status", value: "stopped" }],
+    reviewAt: "2026-08-16T00:00:00Z",
+  }));
+  legacy.stalePolicy.reviewDue = "escalate";
+
+  const output = detectConflicts(legacy);
+  assert(output.diagnostics.length === 500);
+  assert(output.truncated === true);
+  assert(output.verdict === "blocked");
+  assert(
+    output.diagnostics.every((diagnostic) =>
+      diagnostic.severity === "escalation"
+    ),
+  );
+  assert(
+    output.diagnostics.every((diagnostic, index, diagnostics) =>
+      index === 0 ||
+      diagnostics[index - 1].code.localeCompare(diagnostic.code) <= 0
+    ),
+  );
+});
+
+Deno.test("legacy artifact identity and version must be unique across kinds", () => {
+  const legacy = legacyFixture();
+  legacy.work = [{ ...legacy.context[0] }];
+  assert(!inputSchema.safeParse(legacy).success);
+
+  legacy.work[0].version = 2;
+  detectConflicts(legacy);
+});
+
+Deno.test("malformed old/new hybrids fail closed", () => {
+  const hybrids: unknown[] = [
+    { ...fixture(), context: [] },
+    {
+      ...fixture(),
+      references: fixture().references.map((item) => ({
+        ...item,
+        artifactId: item.recordId,
+      })),
+    },
+    {
+      ...fixture(),
+      availability: fixture().availability.map(({ category, ...item }) => ({
+        ...item,
+        kind: category === "reference" ? "context" : category,
+      })),
+    },
+  ];
+  hybrids.forEach((hybrid) => {
+    assert(!inputSchema.safeParse(hybrid).success);
+    let failed = false;
+    try {
+      detectConflicts(hybrid);
+    } catch {
+      failed = true;
+    }
+    assert(failed);
+  });
+});
+
+Deno.test("resource upgrades retain valid legacy and generic vocabulary verbatim", () => {
+  const generic = detectConflicts(fixture());
+  const legacy = detectConflicts(legacyFixture());
+  assert("recordDigests" in generic);
+  assert("artifactIds" in legacy.diagnostics[0]);
+  const upgrade = model.upgrades[0].upgradeAttributes;
+  assert(JSON.stringify(upgrade(generic)) === JSON.stringify(generic));
+  assert(JSON.stringify(upgrade(legacy)) === JSON.stringify(legacy));
+  const hybrid = { ...generic, artifactIds: [] };
+  let failed = false;
+  try {
+    upgrade(hybrid);
+  } catch {
+    failed = true;
+  }
+  assert(failed);
 });
 Deno.test("model persists exactly one evaluation", async () => {
   const writes: unknown[][] = [];
@@ -202,4 +342,63 @@ Deno.test("model persists exactly one evaluation", async () => {
     logger: { info: () => undefined },
   });
   assert(writes.length === 1 && writes[0][0] === "evaluation");
+});
+
+Deno.test("model persists retained legacy output without translation", async () => {
+  const writes: unknown[][] = [];
+  await model.methods.evaluate.execute({
+    requestId: "legacy-request",
+    input: legacyFixture(),
+  }, {
+    writeResource: (...args: unknown[]) => {
+      writes.push(args);
+      return Promise.resolve({ name: args[1] });
+    },
+    logger: { info: () => undefined },
+  });
+  assert(writes.length === 1);
+  assert(writes[0][1] === "context-conflict-legacy-request");
+  assert(legacyOutputSchema.safeParse(writes[0][2]).success);
+  assert(!genericOutputSchema.safeParse(writes[0][2]).success);
+});
+
+Deno.test("model logs entry and completion with structured outcome", async () => {
+  const logs: unknown[][] = [];
+  await model.methods.evaluate.execute({
+    requestId: "logged-request",
+    input: fixture(),
+  }, {
+    writeResource: () => Promise.resolve({ name: "evaluation" }),
+    logger: { info: (...args: unknown[]) => logs.push(args) },
+  });
+  assert(logs.length === 2);
+  assert(logs[0][0] === "Evaluating registry conflicts for {requestId}");
+  assert((logs[0][1] as { requestId: string }).requestId === "logged-request");
+  assert(
+    logs[1][0] === "Persisted registry conflict evaluation {requestId}",
+  );
+  const completion = logs[1][1] as Record<string, unknown>;
+  assert(completion.requestId === "logged-request");
+  assert(completion.verdict === "blocked");
+  assert(typeof completion.diagnosticCount === "number");
+});
+
+Deno.test("write failures propagate without a false completion log", async () => {
+  const logs: unknown[][] = [];
+  const failure = new Error("persistence unavailable");
+  let caught: unknown;
+  try {
+    await model.methods.evaluate.execute({
+      requestId: "failed-request",
+      input: fixture(),
+    }, {
+      writeResource: () => Promise.reject(failure),
+      logger: { info: (...args: unknown[]) => logs.push(args) },
+    });
+  } catch (error) {
+    caught = error;
+  }
+  assert(caught === failure);
+  assert(logs.length === 1);
+  assert(logs[0][0] === "Evaluating registry conflicts for {requestId}");
 });

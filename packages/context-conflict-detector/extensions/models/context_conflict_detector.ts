@@ -7,6 +7,7 @@ const Id = z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/);
 const Text = z.string().trim().min(1).max(2_000);
 const Timestamp = z.iso.datetime({ offset: true });
 const Category = z.enum(["reference", "decision", "plan", "proposal"]);
+const LegacyKind = z.enum(["context", "decision", "work", "recommendation"]);
 const Record = z.strictObject({
   recordId: Id,
   version: z.number().int().positive(),
@@ -77,7 +78,7 @@ const Rule = z.strictObject({
   });
 });
 /** Validates an explicit, generic registry snapshot. */
-export const inputSchema = z.strictObject({
+export const genericInputSchema = z.strictObject({
   schemaVersion: z.literal(SCHEMA_VERSION),
   evaluationId: Id,
   evaluatedAt: Timestamp,
@@ -170,7 +171,7 @@ export const inputSchema = z.strictObject({
     ruleIds.add(rule.ruleId);
   });
 });
-const Diagnostic = z.strictObject({
+const GenericDiagnostic = z.strictObject({
   severity: z.enum(["escalation", "warning", "information"]),
   code: z.enum([
     "contradictory_decision",
@@ -188,11 +189,11 @@ const Diagnostic = z.strictObject({
   requiresHumanResolution: z.literal(true),
 });
 /** Immutable output contract with an explicit no-authority boundary. */
-export const outputSchema = z.strictObject({
+export const genericOutputSchema = z.strictObject({
   schemaVersion: z.literal(SCHEMA_VERSION),
   evaluationId: Id,
   evaluatedAt: Timestamp,
-  diagnostics: z.array(Diagnostic).max(500),
+  diagnostics: z.array(GenericDiagnostic).max(500),
   recordDigests: z.array(z.strictObject({
     category: Category,
     recordId: Id,
@@ -214,16 +215,221 @@ export const outputSchema = z.strictObject({
     networkCalls: z.literal(false),
   }),
 });
+
+// The legacy contract remains explicit rather than accepting aliases field by
+// field. This makes mixed-vocabulary payloads invalid instead of guessing what
+// the caller intended.
+const LegacyRecord = z.strictObject({
+  artifactId: Id,
+  version: z.number().int().positive().max(1_000_000),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  authority: Record.shape.authority,
+  provenance: Record.shape.provenance,
+  freshness: Record.shape.freshness,
+  reviewAt: Timestamp,
+  claims: z.array(z.strictObject({ conflictKey: Id, value: Text })).max(50),
+});
+const LegacyRule = z.strictObject({
+  ruleId: Id,
+  conflictKey: Id,
+  appliesTo: z.array(LegacyKind).min(2).max(4),
+  contradictoryValuePairs: z.array(z.tuple([Text, Text])).min(1).max(50),
+  severity: z.enum(["warning", "escalation"]),
+  recommendation: Text,
+});
+/** Exact pre-extraction input contract; no generic aliases are accepted. */
+export const legacyInputSchema = z.strictObject({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  evaluationId: Id,
+  evaluatedAt: Timestamp,
+  context: z.array(LegacyRecord).max(100),
+  decisions: z.array(LegacyRecord).max(100),
+  work: z.array(LegacyRecord).max(100),
+  recommendations: z.array(LegacyRecord).max(100),
+  availability: z.array(z.strictObject({
+    kind: LegacyKind,
+    status: z.enum(["available", "unavailable"]),
+    reason: Text.nullable(),
+  })).length(4),
+  conflictRules: z.array(LegacyRule).min(1).max(100),
+  stalePolicy: z.strictObject({
+    reviewDue: z.enum(["escalate", "report", "ignore"]),
+    freshnessExpired: z.enum(["escalate", "report", "ignore"]),
+    futureAsOf: z.enum(["escalate", "report"]),
+  }),
+  ordering: z.literal(
+    "severity_desc_code_asc_conflict_key_asc_artifact_ids_asc",
+  ),
+}).superRefine((x, ctx) => {
+  const fail = (path: PropertyKey[], message: string): void =>
+    ctx.addIssue({ code: "custom", path, message });
+  const unique = (
+    values: string[],
+    path: PropertyKey[],
+    message: string,
+  ): void => {
+    const seen = new Set<string>();
+    values.forEach((value, index) => {
+      if (seen.has(value)) fail([...path, index], message);
+      seen.add(value);
+    });
+  };
+  for (const kind of LegacyKind.options) {
+    if (x.availability.filter((item) => item.kind === kind).length !== 1) {
+      fail(
+        ["availability"],
+        `exactly one ${kind} availability entry is required`,
+      );
+    }
+  }
+  x.availability.forEach((item, index) => {
+    if ((item.status === "unavailable") !== (item.reason !== null)) {
+      fail(
+        ["availability", index, "reason"],
+        "reason is required only for unavailable data",
+      );
+    }
+  });
+  unique(
+    x.conflictRules.map((rule) => rule.ruleId),
+    ["conflictRules"],
+    "duplicate ruleId",
+  );
+  x.conflictRules.forEach((rule, index) => {
+    unique(
+      rule.appliesTo,
+      ["conflictRules", index, "appliesTo"],
+      "duplicate kind",
+    );
+    rule.contradictoryValuePairs.forEach(([left, right], pairIndex) => {
+      if (left === right) {
+        fail(
+          ["conflictRules", index, "contradictoryValuePairs", pairIndex],
+          "contradictory values must differ",
+        );
+      }
+    });
+  });
+  const groups = {
+    context: x.context,
+    decision: x.decisions,
+    work: x.work,
+    recommendation: x.recommendations,
+  };
+  const artifactVersions = new Map<
+    string,
+    { kind: string; index: number }
+  >();
+  for (const [kind, artifacts] of Object.entries(groups)) {
+    const available = x.availability.find((item) =>
+      item.kind === kind
+    )?.status === "available";
+    if (!available && artifacts.length) {
+      fail(
+        [kind === "decision" ? "decisions" : kind],
+        "unavailable data must not include artifacts",
+      );
+    }
+    artifacts.forEach((artifact, index) => {
+      const identity = `${artifact.artifactId}@${artifact.version}`;
+      const previous = artifactVersions.get(identity);
+      if (previous) {
+        fail(
+          [kind, index],
+          `${identity} duplicates ${previous.kind}[${previous.index}]`,
+        );
+      } else {
+        artifactVersions.set(identity, { kind, index });
+      }
+      if (
+        (kind === "context" || kind === "decision") &&
+        !artifact.authority.humanAuthority
+      ) {
+        fail(
+          [kind, index, "authority", "humanAuthority"],
+          `${kind} artifacts must carry explicit human authority`,
+        );
+      }
+      unique(
+        artifact.claims.map((claim) => claim.conflictKey),
+        [kind, index, "claims"],
+        "duplicate conflictKey",
+      );
+      if (
+        Date.parse(artifact.provenance.collectedAt) > Date.parse(x.evaluatedAt)
+      ) {
+        fail(
+          [kind, index, "provenance", "collectedAt"],
+          "artifact cannot be collected after evaluatedAt",
+        );
+      }
+      if (
+        Date.parse(artifact.freshness.asOf) >
+          Date.parse(artifact.freshness.expiresAt)
+      ) {
+        fail(
+          [kind, index, "freshness"],
+          "asOf must not follow expiresAt",
+        );
+      }
+      if (
+        Date.parse(artifact.provenance.collectedAt) >
+          Date.parse(artifact.freshness.asOf)
+      ) {
+        fail(
+          [kind, index, "freshness", "asOf"],
+          "freshness cannot predate provenance collection",
+        );
+      }
+    });
+  }
+});
+const LegacyDiagnostic = z.strictObject({
+  severity: z.enum(["escalation", "warning", "information"]),
+  code: z.enum([
+    "contradictory_decision",
+    "conflict",
+    "stale_goal",
+    "expired_freshness",
+    "future_as_of",
+    "unavailable_data",
+  ]),
+  conflictKey: Id.nullable(),
+  artifactIds: z.array(Id).max(8),
+  ruleId: Id.nullable(),
+  message: Text,
+  recommendation: Text,
+  requiresHumanResolution: z.literal(true),
+});
+/** Exact output contract consumed by the pre-extraction context compiler. */
+export const legacyOutputSchema = z.strictObject({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  evaluationId: Id,
+  evaluatedAt: Timestamp,
+  diagnostics: z.array(LegacyDiagnostic).max(500),
+  unavailableData: z.array(z.strictObject({ kind: LegacyKind, reason: Text }))
+    .max(4),
+  truncated: z.boolean(),
+  verdict: z.enum(["clean", "blocked"]),
+  authority: genericOutputSchema.shape.authority,
+});
+/** Closed union of complete generic and legacy input contracts. */
+export const inputSchema = z.union([genericInputSchema, legacyInputSchema]);
+/** Resource union retaining both generic and legacy evaluation records. */
+export const outputSchema = z.union([genericOutputSchema, legacyOutputSchema]);
+
 /** Deterministically reports declared conflicts and freshness conditions without resolving them. */
-export function detectConflicts(raw: unknown): z.infer<typeof outputSchema> {
-  const x = inputSchema.parse(raw);
+function detectGenericConflicts(
+  raw: unknown,
+): z.infer<typeof genericOutputSchema> {
+  const x = genericInputSchema.parse(raw);
   const items = [
     ...x.references.map((record) => ({ category: "reference", record })),
     ...x.decisions.map((record) => ({ category: "decision", record })),
     ...x.plans.map((record) => ({ category: "plan", record })),
     ...x.proposals.map((record) => ({ category: "proposal", record })),
   ] as { category: z.infer<typeof Category>; record: z.infer<typeof Record> }[];
-  const diagnostics: z.infer<typeof Diagnostic>[] = [];
+  const diagnostics: z.infer<typeof GenericDiagnostic>[] = [];
   for (const item of items) {
     const add = (
       code: "review_due" | "expired_freshness" | "future_as_of",
@@ -319,7 +525,7 @@ export function detectConflicts(raw: unknown): z.infer<typeof outputSchema> {
   );
   const truncated = diagnostics.length > 500;
   const returnedDiagnostics = diagnostics.slice(0, 500);
-  return outputSchema.parse({
+  return genericOutputSchema.parse({
     schemaVersion: x.schemaVersion,
     evaluationId: x.evaluationId,
     evaluatedAt: x.evaluatedAt,
@@ -352,6 +558,150 @@ export function detectConflicts(raw: unknown): z.infer<typeof outputSchema> {
     },
   });
 }
+
+/** Preserves the pre-extraction detector's output and expiry-boundary behavior. */
+function detectLegacyConflicts(
+  raw: unknown,
+): z.infer<typeof legacyOutputSchema> {
+  const x = legacyInputSchema.parse(raw);
+  const items = [
+    ...x.context.map((artifact) => ({ kind: "context", artifact })),
+    ...x.decisions.map((artifact) => ({ kind: "decision", artifact })),
+    ...x.work.map((artifact) => ({ kind: "work", artifact })),
+    ...x.recommendations.map((artifact) => ({
+      kind: "recommendation",
+      artifact,
+    })),
+  ] as {
+    kind: z.infer<typeof LegacyKind>;
+    artifact: z.infer<typeof LegacyRecord>;
+  }[];
+  const diagnostics: z.infer<typeof LegacyDiagnostic>[] = [];
+  const addStale = (
+    item: (typeof items)[number],
+    code: "stale_goal" | "expired_freshness" | "future_as_of",
+    policy: "escalate" | "report",
+  ): void => {
+    diagnostics.push({
+      severity: policy === "escalate" ? "escalation" : "warning",
+      code,
+      conflictKey: null,
+      artifactIds: [item.artifact.artifactId],
+      ruleId: null,
+      message:
+        `${item.kind} ${item.artifact.artifactId}@${item.artifact.version} requires review`,
+      recommendation:
+        "Escalate to the named human authority; do not update or supersede the artifact automatically.",
+      requiresHumanResolution: true,
+    });
+  };
+  for (const item of items) {
+    if (
+      Date.parse(item.artifact.reviewAt) <= Date.parse(x.evaluatedAt) &&
+      x.stalePolicy.reviewDue !== "ignore"
+    ) addStale(item, "stale_goal", x.stalePolicy.reviewDue);
+    // Legacy freshness is strict-before; generic freshness is inclusive.
+    if (
+      Date.parse(item.artifact.freshness.expiresAt) <
+        Date.parse(x.evaluatedAt) &&
+      x.stalePolicy.freshnessExpired !== "ignore"
+    ) addStale(item, "expired_freshness", x.stalePolicy.freshnessExpired);
+    if (Date.parse(item.artifact.freshness.asOf) > Date.parse(x.evaluatedAt)) {
+      addStale(item, "future_as_of", x.stalePolicy.futureAsOf);
+    }
+  }
+  for (const rule of x.conflictRules) {
+    const candidates = items.filter((item) =>
+      rule.appliesTo.includes(item.kind)
+    )
+      .flatMap((item) =>
+        item.artifact.claims.filter((claim) =>
+          claim.conflictKey === rule.conflictKey
+        ).map((claim) => ({ ...item, claim }))
+      );
+    for (let left = 0; left < candidates.length; left++) {
+      for (let right = left + 1; right < candidates.length; right++) {
+        const a = candidates[left], b = candidates[right];
+        if (
+          rule.contradictoryValuePairs.some(([first, second]) =>
+            (a.claim.value === first && b.claim.value === second) ||
+            (a.claim.value === second && b.claim.value === first)
+          )
+        ) {
+          diagnostics.push({
+            severity: rule.severity,
+            code: a.kind === "decision" && b.kind === "decision"
+              ? "contradictory_decision"
+              : "conflict",
+            conflictKey: rule.conflictKey,
+            artifactIds: [a.artifact.artifactId, b.artifact.artifactId].sort(),
+            ruleId: rule.ruleId,
+            message:
+              `Conflicting caller-declared values for ${rule.conflictKey}`,
+            recommendation: rule.recommendation,
+            requiresHumanResolution: true,
+          });
+        }
+      }
+    }
+  }
+  x.availability.filter((item) => item.status === "unavailable").forEach((
+    item,
+  ) =>
+    diagnostics.push({
+      severity: "information",
+      code: "unavailable_data",
+      conflictKey: null,
+      artifactIds: [],
+      ruleId: null,
+      message: `${item.kind} data unavailable: ${item.reason}`,
+      recommendation:
+        "Supply the unavailable data before treating this evaluation as complete.",
+      requiresHumanResolution: true,
+    })
+  );
+  const rank = { escalation: 0, warning: 1, information: 2 };
+  diagnostics.sort((a, b) =>
+    rank[a.severity] - rank[b.severity] || a.code.localeCompare(b.code) ||
+    (a.conflictKey ?? "").localeCompare(b.conflictKey ?? "") ||
+    a.artifactIds.join("\0").localeCompare(b.artifactIds.join("\0")) ||
+    (a.ruleId ?? "").localeCompare(b.ruleId ?? "")
+  );
+  const truncated = diagnostics.length > 500;
+  const blocked = diagnostics.some((diagnostic) =>
+    diagnostic.severity === "escalation" || diagnostic.code === "conflict" ||
+    diagnostic.code === "contradictory_decision"
+  );
+  return legacyOutputSchema.parse({
+    schemaVersion: x.schemaVersion,
+    evaluationId: x.evaluationId,
+    evaluatedAt: x.evaluatedAt,
+    diagnostics: diagnostics.slice(0, 500),
+    unavailableData: x.availability.filter((item) =>
+      item.status === "unavailable"
+    ).map((item) => ({ kind: item.kind, reason: item.reason! })).sort((a, b) =>
+      a.kind.localeCompare(b.kind)
+    ),
+    truncated,
+    verdict: blocked ? "blocked" : "clean",
+    authority: {
+      disposition: "recommendation_only",
+      humanResolutionRequired: true,
+      mayResolveConflicts: false,
+      mayExecute: false,
+      sideEffects: "persistence_only",
+      providerCalls: false,
+      networkCalls: false,
+    },
+  });
+}
+
+/** Selects one complete contract without merging their behavior. */
+export function detectConflicts(raw: unknown): z.infer<typeof outputSchema> {
+  const generic = genericInputSchema.safeParse(raw);
+  if (generic.success) return detectGenericConflicts(generic.data);
+  return detectLegacyConflicts(raw);
+}
 const argumentsSchema = z.strictObject({
   requestId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/),
   input: z.unknown(),
@@ -360,6 +710,13 @@ const argumentsSchema = z.strictObject({
 export const model = {
   type: "@mgreten/context-conflict-detector",
   version: "2026.08.23.1",
+  upgrades: [{
+    toVersion: "2026.08.23.1",
+    description:
+      "Retain strict legacy evaluation resources alongside generic evaluations without rewriting their vocabulary.",
+    upgradeAttributes: (attributes: Record<string, unknown>) =>
+      outputSchema.parse(attributes),
+  }],
   globalArguments: z.strictObject({}),
   resources: {
     evaluation: {
