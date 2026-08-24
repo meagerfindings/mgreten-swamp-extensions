@@ -23,7 +23,7 @@ type Context = {
 /** Standalone read-only trial evaluator with no operational integrations or bindings. */
 export const model = {
   type: "@mgreten/read-only-trial",
-  version: "2026.08.23.1",
+  version: "2026.08.24.1",
   globalArguments: z.strictObject({}),
   resources: {
     evaluation: {

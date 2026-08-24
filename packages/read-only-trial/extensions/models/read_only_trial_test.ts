@@ -82,13 +82,25 @@ Deno.test("pulse delivery cannot be later than evaluation and progresses at the 
   assertThrows(
     () => evaluateReadOnlyTrial(future),
     Error,
-    "pulse delivery must be between observation and evaluation",
+    "pulse delivery must be between observation and trial end",
   );
 
   const boundary = fixture();
   assert(boundary.observations[1].pulse.status === "recorded");
-  boundary.observations[1].pulse.deliveredAt = boundary.evaluatedAt;
+  boundary.evaluatedAt = "2026-08-03T00:00:00Z";
+  boundary.observations[1].pulse.deliveredAt = "2026-08-02T23:59:59.999Z";
   assertEquals(evaluateReadOnlyTrial(boundary).status, "awaiting_final_review");
+});
+
+Deno.test("pulse delivery cannot escape the declared trial window", () => {
+  const input = fixture();
+  assert(input.observations[1].pulse.status === "recorded");
+  input.observations[1].pulse.deliveredAt = "2026-08-03T00:00:00Z";
+  assertThrows(
+    () => evaluateReadOnlyTrial(input),
+    Error,
+    "trial end",
+  );
 });
 
 Deno.test("synthetic freshness rejects readiness that expires at activation", () => {
@@ -105,6 +117,20 @@ Deno.test("synthetic freshness covers the full declared duration", () => {
   const boundary = fixture();
   boundary.sourceReadiness[0].expiresAt = "2026-08-03T00:00:00Z";
   assertEquals(evaluateReadOnlyTrial(boundary).status, "awaiting_final_review");
+});
+
+Deno.test("activation and readiness cannot claim future evidence", () => {
+  const approval = fixture();
+  approval.evaluatedAt = "2026-07-31T23:59:59Z";
+  assertThrows(() => evaluateReadOnlyTrial(approval), Error, "approval cannot");
+
+  const readinessEvidence = fixture();
+  readinessEvidence.sourceReadiness[0].checkedAt = "2026-08-03T02:00:00Z";
+  assertThrows(
+    () => evaluateReadOnlyTrial(readinessEvidence),
+    Error,
+    "checked by trial start and evaluation",
+  );
 });
 
 Deno.test("synthetic repeated failure pauses without operational authority", () => {
@@ -143,9 +169,9 @@ Deno.test("model persists exactly one local evaluation and has no bindings", asy
     input: fixture(),
   }, {
     logger: { info: (...args: unknown[]) => logs.push(args) },
-    writeResource: async (...args: unknown[]) => {
+    writeResource: (...args: unknown[]) => {
       writes.push(args);
-      return { name: args[1] };
+      return Promise.resolve({ name: args[1] });
     },
   });
   assertEquals(writes.length, 1);
@@ -156,6 +182,26 @@ Deno.test("model persists exactly one local evaluation and has no bindings", asy
       model.methods.evaluate.execute.toString(),
     ),
   );
+});
+
+Deno.test("persistence failure propagates without a false completion", async () => {
+  const logs: string[] = [];
+  await assertRejects(
+    () =>
+      model.methods.evaluate.execute({
+        evaluationId: "synthetic-trial",
+        input: fixture(),
+      }, {
+        logger: {
+          info: (message: string) => logs.push(message),
+        },
+        writeResource: () =>
+          Promise.reject(new Error("synthetic write failure")),
+      }),
+    Error,
+    "synthetic write failure",
+  );
+  assertEquals(logs, ["Evaluating read-only trial {evaluationId}"]);
 });
 
 Deno.test("strict contracts reject malformed IDs and cross-trial replay", async () => {
@@ -211,7 +257,11 @@ Deno.test("generic sources, duration, and evaluation are deterministic", () => {
 Deno.test("strict nested schemas and failure threshold reject boundary abuse", () => {
   const extraField = fixture() as Record<string, unknown>;
   extraField.unexpected = true;
-  assertThrows(() => evaluateReadOnlyTrial(extraField), Error, "Unrecognized key");
+  assertThrows(
+    () => evaluateReadOnlyTrial(extraField),
+    Error,
+    "Unrecognized key",
+  );
 
   const twoFailures = fixture();
   twoFailures.failures = [1, 2].map((sequence) => ({
@@ -220,7 +270,10 @@ Deno.test("strict nested schemas and failure threshold reject boundary abuse", (
     causeFingerprint: "same-cause",
     evidenceRef: `failure-${sequence}`,
   }));
-  assertEquals(evaluateReadOnlyTrial(twoFailures).status, "awaiting_final_review");
+  assertEquals(
+    evaluateReadOnlyTrial(twoFailures).status,
+    "awaiting_final_review",
+  );
 
   const outOfWindow = fixture();
   outOfWindow.failures = [{
@@ -230,4 +283,19 @@ Deno.test("strict nested schemas and failure threshold reject boundary abuse", (
     evidenceRef: "failure-1",
   }];
   assertThrows(() => evaluateReadOnlyTrial(outOfWindow), Error, "inside");
+});
+
+Deno.test("prohibited conditions require in-window occurrence evidence", () => {
+  const input = fixture();
+  input.prohibitedConditions = [{
+    conditionId: "condition-1",
+    occurredAt: "2026-08-03T00:00:00Z",
+    kind: "unapproved_telemetry_access",
+    evidenceRef: "condition-evidence-1",
+  }];
+  assertThrows(
+    () => evaluateReadOnlyTrial(input),
+    Error,
+    "prohibited condition must occur inside",
+  );
 });

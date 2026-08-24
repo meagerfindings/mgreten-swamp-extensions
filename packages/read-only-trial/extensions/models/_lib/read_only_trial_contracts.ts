@@ -68,6 +68,7 @@ const failureSchema = z.strictObject({
 
 const prohibitedConditionSchema = z.strictObject({
   conditionId: Id,
+  occurredAt: Timestamp,
   kind: z.enum([
     "restricted_data_access",
     "restricted_data_dependency",
@@ -162,17 +163,25 @@ export const readOnlyTrialInputSchema = z.strictObject({
   }
   const startsAt = Date.parse(input.activation.startsAt);
   const endsAt = startsAt + input.durationDays * 86_400_000;
+  const evaluatedAt = Date.parse(input.evaluatedAt);
   if (Date.parse(input.activation.approvedAt) > startsAt) {
     issue(["activation", "startsAt"], "trial cannot start before approval");
+  }
+  if (Date.parse(input.activation.approvedAt) > evaluatedAt) {
+    issue(
+      ["activation", "approvedAt"],
+      "activation approval cannot be later than evaluation",
+    );
   }
   input.sourceReadiness.forEach((source, index) => {
     if (
       Date.parse(source.checkedAt) > startsAt ||
+      Date.parse(source.checkedAt) > evaluatedAt ||
       Date.parse(source.expiresAt) < endsAt
     ) {
       issue(
         ["sourceReadiness", index],
-        "source readiness must be checked by trial start and remain fresh through trial end",
+        "source readiness must be checked by trial start and evaluation, and remain fresh through trial end",
       );
     }
   });
@@ -198,12 +207,12 @@ export const readOnlyTrialInputSchema = z.strictObject({
     if (
       observation.pulse.status === "recorded" &&
       (Date.parse(observation.pulse.deliveredAt) < observedAt ||
-        Date.parse(observation.pulse.deliveredAt) >
-          Date.parse(input.evaluatedAt))
+        Date.parse(observation.pulse.deliveredAt) >= endsAt ||
+        Date.parse(observation.pulse.deliveredAt) > evaluatedAt)
     ) {
       issue(
         ["observations", index, "pulse", "deliveredAt"],
-        "pulse delivery must be between observation and evaluation",
+        "pulse delivery must be between observation and trial end, and no later than evaluation",
       );
     }
   });
@@ -231,6 +240,18 @@ export const readOnlyTrialInputSchema = z.strictObject({
       issue(
         ["failures", index, "occurredAt"],
         "failures must be strictly chronological",
+      );
+    }
+  });
+  input.prohibitedConditions.forEach((condition, index) => {
+    const occurredAt = Date.parse(condition.occurredAt);
+    if (
+      occurredAt < startsAt || occurredAt >= endsAt ||
+      occurredAt > evaluatedAt
+    ) {
+      issue(
+        ["prohibitedConditions", index, "occurredAt"],
+        "prohibited condition must occur inside the evaluated trial window",
       );
     }
   });
