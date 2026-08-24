@@ -1,7 +1,6 @@
 {
   "imports": {
-    "@std/yaml": "jsr:@std/yaml@1",
-    "zod": "npm:zod@4"
+    "@std/yaml": "jsr:@std/yaml@1"
   },
   "fmt": { "include": ["tests"] },
   "lint": { "include": ["tests"] },

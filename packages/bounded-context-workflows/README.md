@@ -70,9 +70,10 @@ cannot constrain. Review their schemas and implementations for source copying,
 credentials, provider/network calls, execution, and mutation before use. The
 synthetic examples illustrate shape only and are not production data.
 
-The exact method, registry-resource, and legacy snapshot compatibility matrix is
-documented in [docs/CONTRACT.md](docs/CONTRACT.md). Dynamic model names permit
-instance selection; dependency method names are fixed so contract drift is
-detected during validation and by the packaged compatibility tests.
+The exact method and registry-resource compatibility contract is documented in
+[docs/CONTRACT.md](docs/CONTRACT.md). Dynamic model names permit instance
+selection; dependency method names are fixed so contract drift is detected
+during Swamp validation. The packaged tests pin the declared method and registry
+projection contracts without depending on another checkout.
 
 Licensed under the MIT License. See [LICENSE](LICENSE).
