@@ -23,12 +23,11 @@ inputs:
       items: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$' }
     evaluatedAt: { type: string, format: date-time }
     freshnessMaxAgeSeconds: { type: integer, minimum: 1 }
-    maxTokens: { type: integer, minimum: 1 }
+    maxTokens: { type: integer, minimum: 1, maximum: 100000 }
     sourceRegistryModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$' }
     sourceRegistryMethod: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$' }
     sourceRegistryRecordName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$' }
     contextCompilerModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$' }
-    compileMethod: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$' }
     replayPolicy: { const: reject-conflicting-replay }
     authorityAttestation: { const: reference-only-advisory-no-authority }
     candidates:
@@ -40,7 +39,7 @@ inputs:
         additionalProperties: false
         properties:
           sourceId: { type: string, minLength: 1, maxLength: 200 }
-          sourceVersion: { type: string, minLength: 1, maxLength: 200 }
+          sourceVersion: { type: string, minLength: 1, maxLength: 2000 }
           tokenEstimate: { type: integer, minimum: 1 }
           evidence:
             type: object
@@ -53,7 +52,7 @@ inputs:
               minimized: { const: true }
             required: [reference, observedAt, expiresAt, cited, minimized]
         required: [sourceId, sourceVersion, tokenEstimate, evidence]
-  required: [manifestId, packId, purpose, role, roleTaxonomy, evaluatedAt, freshnessMaxAgeSeconds, maxTokens, sourceRegistryModel, sourceRegistryMethod, sourceRegistryRecordName, contextCompilerModel, compileMethod, replayPolicy, authorityAttestation, candidates]
+  required: [manifestId, packId, purpose, role, roleTaxonomy, evaluatedAt, freshnessMaxAgeSeconds, maxTokens, sourceRegistryModel, sourceRegistryMethod, sourceRegistryRecordName, contextCompilerModel, replayPolicy, authorityAttestation, candidates]
 jobs:
   - name: compile-context
     description: Validate role membership, catalog reference metadata, then compile one bounded context manifest.
@@ -62,7 +61,7 @@ jobs:
         description: Reject identifiers containing whitespace, traversal, or expression syntax before method dispatch.
         task:
           type: assert
-          expr: inputs.sourceRegistryModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$') && inputs.sourceRegistryMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$') && inputs.sourceRegistryRecordName.matches('^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$') && inputs.contextCompilerModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$') && inputs.compileMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$')
+          expr: inputs.sourceRegistryModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$') && inputs.sourceRegistryMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$') && inputs.sourceRegistryRecordName.matches('^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$') && inputs.contextCompilerModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$')
           message: Dynamic model, method, and record identifiers must use the bounded safe identifier syntax.
           severity: high
         dependsOn: []
@@ -109,7 +108,7 @@ jobs:
         task:
           type: model_method
           modelIdOrName: '${{ inputs.contextCompilerModel }}'
-          methodName: '${{ inputs.compileMethod }}'
+          methodName: compileRegistered
           inputs:
             manifestId: '${{ inputs.manifestId }}'
             packId: '${{ inputs.packId }}'

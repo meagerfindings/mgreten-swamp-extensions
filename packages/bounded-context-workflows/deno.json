@@ -1,0 +1,13 @@
+{
+  "imports": {
+    "@std/yaml": "jsr:@std/yaml@1",
+    "zod": "npm:zod@4"
+  },
+  "fmt": { "include": ["tests"] },
+  "lint": { "include": ["tests"] },
+  "tasks": {
+    "check": "deno check tests/workflow_contract_compatibility_test.ts",
+    "test": "deno test --allow-read tests",
+    "verify": "deno fmt --check && deno lint && deno task check && deno task test"
+  }
+}

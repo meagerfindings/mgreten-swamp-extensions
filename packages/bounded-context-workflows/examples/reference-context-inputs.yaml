@@ -13,7 +13,6 @@ sourceRegistryModel: example-source-registry
 sourceRegistryMethod: catalog
 sourceRegistryRecordName: current
 contextCompilerModel: example-context-compiler
-compileMethod: compileRegistered
 replayPolicy: reject-conflicting-replay
 authorityAttestation: reference-only-advisory-no-authority
 candidates:

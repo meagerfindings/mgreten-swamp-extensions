@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/bounded-context-workflows"
-version: 2026.08.23.1
+version: 2026.08.24.1
 description: >-
   Reusable, reference-only Swamp workflows for compiling bounded context and
   operating packets from caller-configured model instances.
@@ -18,5 +18,8 @@ additionalFiles:
   - LICENSE
   - examples/reference-context-inputs.yaml
   - examples/operating-context-inputs.yaml
+  - docs/CONTRACT.md
+  - deno.json
+  - tests/workflow_contract_compatibility_test.ts
 dependencies:
   - "@mgreten/context-compiler"

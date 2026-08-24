@@ -6,16 +6,17 @@ metadata-only source registry, then asks a compatible context-compiler model to
 select fresh, role-eligible references within a token budget.
 `@mgreten/bounded-operating-context` separately compiles durable policy context and a
 time-bounded operating packet. The workflows contain no agent or provider task
-themselves and pass only validated record fields. Because model and method names
-are caller inputs, this bundle cannot prove that a configured method has no
-other effects; operators must review those methods before use.
+themselves and pass only validated record fields. Because model instance names
+and the registry method are caller inputs, this bundle cannot prove that a
+configured method has no other effects; operators must review those methods
+before use.
 
 ## Dependency contract
 
 Install a compatible `@mgreten/context-compiler` model and configure a source
 registry model before running either workflow. The bundle has no bundled model,
-provider, vault, driver, or side-effect dependency. Model instance and method
-references are workflow inputs so each installation controls its own data
+provider, vault, driver, or side-effect dependency. Model instance references
+are workflow inputs so each installation controls its own data
 boundary. A registry must expose metadata only (no credentials or source
 content), and the compiler must preserve reference-only output with no provider
 or network calls.
@@ -29,7 +30,8 @@ swamp extension pull @mgreten/bounded-context-workflows
 
 Provide `sourceRegistryModel`, `sourceRegistryMethod`, and
 `sourceRegistryRecordName` for the registry instance, plus
-`contextCompilerModel` and `compileMethod` for the compatible compiler. The
+`contextCompilerModel` for the compatible compiler. The workflow invokes the
+published `compileRegistered` method directly. The
 `roleTaxonomy` is checked before compilation; `role` must be one of its values.
 Each candidate must be explicitly cited and minimized and include observed and
 expiry timestamps enclosing `evaluatedAt`; the workflow also enforces
@@ -44,11 +46,11 @@ swamp workflow run @mgreten/bounded-reference-context \
 
 ## Operating context
 
-The operating workflow accepts separate method references for compiling durable
-policy and the current packet. It accepts entries explicitly marked minimized
-and cited. The
-caller supplies generation and expiry timestamps, so freshness remains explicit
-and auditable rather than being inferred from execution time.
+The operating workflow invokes the published `compileConstitution` and
+`compileOperatingPacket` methods directly. It accepts entries explicitly marked
+minimized and cited. The caller supplies generation and expiry timestamps, so
+freshness remains explicit and auditable rather than being inferred from
+execution time.
 Both workflows require an advisory/no-authority attestation and a
 reject-conflicting-replay policy. Compatible compiler methods must implement
 that policy idempotently: an identical artifact identifier and payload may
@@ -67,5 +69,10 @@ fields, but caller-selected registry/compiler methods may have effects that YAML
 cannot constrain. Review their schemas and implementations for source copying,
 credentials, provider/network calls, execution, and mutation before use. The
 synthetic examples illustrate shape only and are not production data.
+
+The exact method, registry-resource, and legacy snapshot compatibility matrix is
+documented in [docs/CONTRACT.md](docs/CONTRACT.md). Dynamic model names permit
+instance selection; dependency method names are fixed so contract drift is
+detected during validation and by the packaged compatibility tests.
 
 Licensed under the MIT License. See [LICENSE](LICENSE).

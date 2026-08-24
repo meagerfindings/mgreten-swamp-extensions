@@ -15,14 +15,12 @@ inputs:
     generatedAt: { type: string, format: date-time }
     expiresAt: { type: string, format: date-time }
     contextCompilerModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$' }
-    compileConstitutionMethod: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$' }
-    compileOperatingPacketMethod: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$' }
     constitution:
       type: object
       additionalProperties: false
       properties:
         artifactId: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$' }
-        version: { type: string, minLength: 1, maxLength: 200 }
+        version: { type: string, minLength: 1, maxLength: 2000 }
         policyRef: { type: string, minLength: 1, maxLength: 2000 }
         observedAt: { type: string, format: date-time }
         contentDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
@@ -45,14 +43,14 @@ inputs:
           observedAt: { type: string, format: date-time }
           expiresAt: { type: string, format: date-time }
           sourceRef: { type: string, minLength: 1, maxLength: 2000 }
-          sourceVersion: { type: string, minLength: 1, maxLength: 200 }
+          sourceVersion: { type: string, minLength: 1, maxLength: 2000 }
           cited: { const: true }
           minimized: { const: true }
         required: [entryId, kind, summary, confidence, sensitivity, observedAt, expiresAt, sourceRef, sourceVersion, cited, minimized]
     contentAttestation: { const: minimized-no-secrets-no-private-content }
     replayPolicy: { const: reject-conflicting-replay }
     authorityAttestation: { const: reference-only-advisory-no-authority }
-  required: [packetId, generatedAt, expiresAt, contextCompilerModel, compileConstitutionMethod, compileOperatingPacketMethod, constitution, entries, contentAttestation, replayPolicy, authorityAttestation]
+  required: [packetId, generatedAt, expiresAt, contextCompilerModel, constitution, entries, contentAttestation, replayPolicy, authorityAttestation]
 jobs:
   - name: compile-operating-context
     description: Compile durable policy context independently before compiling the current bounded packet.
@@ -61,8 +59,8 @@ jobs:
         description: Reject identifiers containing whitespace, traversal, or expression syntax before method dispatch.
         task:
           type: assert
-          expr: inputs.contextCompilerModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$') && inputs.compileConstitutionMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$') && inputs.compileOperatingPacketMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$')
-          message: Dynamic model and method identifiers must use the bounded safe identifier syntax.
+          expr: inputs.contextCompilerModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$')
+          message: The dynamic model identifier must use the bounded safe identifier syntax.
           severity: high
         dependsOn: []
         weight: 0
@@ -71,7 +69,7 @@ jobs:
         description: Require a future packet expiry and fresh minimized cited entries.
         task:
           type: assert
-          expr: timestamp(inputs.generatedAt) < timestamp(inputs.expiresAt) && inputs.constitution.cited && inputs.constitution.minimized && timestamp(inputs.constitution.observedAt) <= timestamp(inputs.generatedAt) && inputs.entries.all(item, item.cited && item.minimized && timestamp(item.observedAt) <= timestamp(inputs.generatedAt) && timestamp(inputs.generatedAt) < timestamp(item.expiresAt))
+          expr: timestamp(inputs.generatedAt) < timestamp(inputs.expiresAt) && inputs.constitution.cited && inputs.constitution.minimized && timestamp(inputs.constitution.observedAt) <= timestamp(inputs.generatedAt) && inputs.entries.all(item, item.cited && item.minimized && timestamp(item.observedAt) <= timestamp(inputs.generatedAt) && timestamp(inputs.generatedAt) < timestamp(item.expiresAt) && timestamp(item.expiresAt) <= timestamp(inputs.expiresAt))
           message: Packet and entry chronology, citation, and minimization must be valid.
           severity: high
         dependsOn:
@@ -84,7 +82,7 @@ jobs:
         task:
           type: model_method
           modelIdOrName: '${{ inputs.contextCompilerModel }}'
-          methodName: '${{ inputs.compileConstitutionMethod }}'
+          methodName: compileConstitution
           inputs:
             constitution: '${{ inputs.constitution }}'
             replayPolicy: '${{ inputs.replayPolicy }}'
@@ -99,7 +97,7 @@ jobs:
         task:
           type: model_method
           modelIdOrName: '${{ inputs.contextCompilerModel }}'
-          methodName: '${{ inputs.compileOperatingPacketMethod }}'
+          methodName: compileOperatingPacket
           inputs:
             packetId: '${{ inputs.packetId }}'
             generatedAt: '${{ inputs.generatedAt }}'
