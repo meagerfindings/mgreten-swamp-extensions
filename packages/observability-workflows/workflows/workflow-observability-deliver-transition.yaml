@@ -26,6 +26,10 @@ inputs:
       type: string
       pattern: '^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$'
       default: "@mgreten/dispatch-enqueued-notifications"
+    sendWorkflow:
+      type: string
+      pattern: '^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      default: "@mgreten/send-one-notification"
     transportModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
     transportMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
     transportOptions: { type: object, default: {} }
@@ -38,7 +42,7 @@ jobs:
         description: Reject unsafe dynamic targets before enqueueing the transition.
         task:
           type: assert
-          expr: inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.outboxModelType.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.dispatchWorkflow.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")
+          expr: inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.outboxModelType.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.dispatchWorkflow.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.sendWorkflow.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")
           message: Outbox, workflow, transport, and method identifiers must use the documented safe syntax.
           severity: high
         dependsOn: []
@@ -70,6 +74,7 @@ jobs:
             enqueueStepName: enqueue
             outboxModel: "${{ inputs.outboxSink }}"
             outboxModelType: "${{ inputs.outboxModelType }}"
+            sendWorkflow: "${{ inputs.sendWorkflow }}"
             transportModel: "${{ inputs.transportModel }}"
             transportMethod: "${{ inputs.transportMethod }}"
             transportOptions: "${{ inputs.transportOptions }}"

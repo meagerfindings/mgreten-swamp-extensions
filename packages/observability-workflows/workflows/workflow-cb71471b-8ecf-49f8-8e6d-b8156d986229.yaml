@@ -22,6 +22,10 @@ inputs:
           era: { type: string, minLength: 1 }
           payload: { type: object }
     outboxSink: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
+    sendWorkflow:
+      type: string
+      pattern: '^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      default: "@mgreten/send-one-notification"
     transportModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9@._/-]*$' }
     transportMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
     transportOptions: { type: object, default: {} }
@@ -34,7 +38,7 @@ jobs:
         description: Reject unsafe delivery targets and duplicate outbox identities even when urgency or payload differs.
         task:
           type: assert
-          expr: inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitions.all(transition, size(inputs.transitions.filter(candidate, candidate.workItem == transition.workItem && candidate.event == transition.event && candidate.era == transition.era)) == 1)
+          expr: inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.sendWorkflow.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitions.all(transition, size(inputs.transitions.filter(candidate, candidate.workItem == transition.workItem && candidate.event == transition.event && candidate.era == transition.era)) == 1)
           message: Delivery targets must use safe syntax, and each workItem, event, and era identity must occur exactly once per batch.
           severity: high
         dependsOn: []
@@ -52,6 +56,7 @@ jobs:
           inputs:
             transition: "${{ self.transition }}"
             outboxSink: "${{ inputs.outboxSink }}"
+            sendWorkflow: "${{ inputs.sendWorkflow }}"
             transportModel: "${{ inputs.transportModel }}"
             transportMethod: "${{ inputs.transportMethod }}"
             transportOptions: "${{ inputs.transportOptions }}"

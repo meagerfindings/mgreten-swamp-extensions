@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/observability-workflows"
-version: "2026.08.23.1"
+version: "2026.08.24.1"
 description: "Generic read, normalization, digest, and transition-only alert workflows for Swamp observability adapters."
 repository: "https://github.com/meagerfindings/swamp-observability-workflows"
 workflows:

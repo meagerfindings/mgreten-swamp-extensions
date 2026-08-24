@@ -61,8 +61,10 @@ The delivery workflow uses `@mgreten/notification-outbox`'s
 `enqueueNotification` method with transition fields `workItem`, `event`,
 `urgency`, `era`, and `payload`. It then invokes
 `@mgreten/dispatch-enqueued-notifications`, which ultimately folds delivery
-through `drainNotifications`. Configure `transportModel`, `transportMethod`, and
-optional `transportOptions`. To disable delivery, leave `outboxSink` empty; the watchdog then
+through `drainNotifications` via `@mgreten/send-one-notification`. Configure
+`transportModel`, `transportMethod`, and optional `transportOptions`. Consumers
+may override `sendWorkflow` with a contract-compatible workflow; the default is
+the dependency workflow above. To disable delivery, leave `outboxSink` empty; the watchdog then
 expands no delivery steps while still recording and evaluating transitions.
 When a sink is enabled, the first assertion requires a non-empty transport
 model and method before any adapter method executes.
@@ -88,6 +90,14 @@ Adapter, method, model, workflow, and spec identifiers are constrained to a
 safe character set before execution. This prevents caller input from changing
 the meaning of exact `data.query` predicates and rejects blank delivery targets
 before read or enqueue side effects.
+
+The concrete dependency contract verified for this release is
+`@mgreten/notification-outbox` type version `2026.08.01.2` and the active
+`@mgreten/dispatch-enqueued-notifications` workflow ID
+`512aa8fd-1529-4ea6-9a6f-e21699e5ec55`. The dispatch workflow requires exact
+enqueue run/job/step coordinates, the outbox model, transport model, and
+transport method; it accepts `sendWorkflow` and `transportOptions`. These are
+compatibility references, not IDs embedded in the executable workflows.
 
 ## Trust boundary
 

@@ -52,7 +52,9 @@ sources or duplicate transition state.
 
 The delivery path interoperates with `@mgreten/notification-outbox` and
 `@mgreten/notification-outbox-workflows`, using their `enqueueNotification` and
-`drainNotifications` lifecycle. Read, normalization, digest, and
+`drainNotifications` lifecycle. The default delivery child is
+`@mgreten/send-one-notification`; set `sendWorkflow` only when installing a
+contract-compatible replacement. Read, normalization, digest, and
 transition-evaluator instances are caller-owned generic adapters. Their method
 contracts are documented in [docs/contracts.md](docs/contracts.md).
 
@@ -100,3 +102,12 @@ workflow run or use the configured outbox failure-drain policy. A new watchdog
 run does not repeat an unchanged transition and is not a delivery retry.
 
 Licensed under the MIT License. See [LICENSE](LICENSE).
+
+## Maintainer checks
+
+```sh
+python3 -m unittest discover -s tests -v
+swamp extension fmt manifest.yaml --check --json
+swamp extension quality manifest.yaml --json
+swamp extension push manifest.yaml --dry-run --json
+```

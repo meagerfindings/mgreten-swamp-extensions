@@ -23,6 +23,10 @@ inputs:
     evaluateMethod: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', default: evaluateTransitions }
     transitionSpecName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$', default: transition }
     outboxSink: { type: string, pattern: '^$|^[A-Za-z0-9@][A-Za-z0-9@._/-]*$', default: "" }
+    sendWorkflow:
+      type: string
+      pattern: '^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      default: "@mgreten/send-one-notification"
     transportModel: { type: string, pattern: '^$|^[A-Za-z0-9@][A-Za-z0-9@._/-]*$', default: "" }
     transportMethod: { type: string, pattern: '^$|^[A-Za-z0-9][A-Za-z0-9._-]*$', default: "" }
     transportOptions: { type: object, default: {} }
@@ -35,7 +39,7 @@ jobs:
         description: Fail before adapter execution on unsafe identifiers or incomplete delivery configuration.
         task:
           type: assert
-          expr: inputs.readAdapter.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.readMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.readSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizer.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.normalizeMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizedSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitionEvaluator.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.evaluateMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitionSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && (inputs.outboxSink == "" || (inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")))
+          expr: inputs.readAdapter.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.readMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.readSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizer.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.normalizeMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.normalizedSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitionEvaluator.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.evaluateMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.transitionSpecName.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$") && inputs.sendWorkflow.matches("^@[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._/-]*$") && (inputs.outboxSink == "" || (inputs.outboxSink.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportModel.matches("^[A-Za-z0-9@][A-Za-z0-9@._/-]*$") && inputs.transportMethod.matches("^[A-Za-z0-9][A-Za-z0-9._-]*$")))
           message: Dynamic identifiers must use safe syntax, and an enabled outbox requires valid transportModel and transportMethod inputs.
           severity: high
         dependsOn: []
@@ -99,6 +103,7 @@ jobs:
             transitions: >-
               ${{ inputs.outboxSink == "" ? [] : data.query('workflowRunId == "' + run.id + '" && jobName == "inspect-and-alert" && stepName == "evaluate-transitions" && modelName == "' + inputs.transitionEvaluator + '" && specName == "' + inputs.transitionSpecName + '"', 'attributes') }}
             outboxSink: "${{ inputs.outboxSink }}"
+            sendWorkflow: "${{ inputs.sendWorkflow }}"
             transportModel: "${{ inputs.transportModel }}"
             transportMethod: "${{ inputs.transportMethod }}"
             transportOptions: "${{ inputs.transportOptions }}"
