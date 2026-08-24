@@ -263,6 +263,30 @@ Deno.test("real command runner terminates hung children", async () => {
   );
 });
 
+Deno.test("real command runner honors lifecycle cancellation", async () => {
+  const controller = new AbortController();
+  const pending = runCommand(
+    "sleep 10",
+    "/tmp",
+    10_000,
+    1024,
+    controller.signal,
+  );
+  controller.abort(new DOMException("cancelled", "AbortError"));
+  await assertRejects(() => pending, DOMException, "cancelled");
+});
+
+Deno.test("status honors cancellation before running commands", async () => {
+  const controller = new AbortController();
+  controller.abort(new DOMException("cancelled", "AbortError"));
+  await assertRejects(
+    () =>
+      status(config, "/tmp/demo", mockedLifecycle({}, []), controller.signal),
+    DOMException,
+    "cancelled",
+  );
+});
+
 Deno.test("real command runner bounds flood output", async () => {
   const output = await runCommand("yes x | head -c 100000", "/tmp", 2_000, 512);
   assertEquals(output.code, 0);

@@ -97,6 +97,7 @@ export interface LifecycleDependencies {
     workingDirectory: string,
     timeoutMs: number,
     outputMaxBytes: number,
+    signal?: AbortSignal,
   ): Promise<CommandResult>;
   fetch(url: string, signal: AbortSignal): Promise<{ status: number }>;
   sleep(milliseconds: number): Promise<void>;
@@ -134,7 +135,9 @@ export async function runCommand(
   workingDirectory: string,
   timeoutMs: number,
   outputMaxBytes: number,
+  signal?: AbortSignal,
 ): Promise<CommandResult> {
+  signal?.throwIfAborted();
   const grouped = Deno.build.os === "linux";
   const child = new Deno.Command(grouped ? "/usr/bin/setsid" : "/bin/sh", {
     args: grouped ? ["/bin/sh", "-c", command] : ["-c", command],
@@ -145,14 +148,21 @@ export async function runCommand(
   const stdout = readBounded(child.stdout, outputMaxBytes);
   const stderr = readBounded(child.stderr, outputMaxBytes);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let abortHandler: (() => void) | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () => reject(new Error(`command timed out after ${timeoutMs}ms`)),
       timeoutMs,
     );
   });
+  const cancellation = new Promise<never>((_, reject) => {
+    if (!signal) return;
+    abortHandler = () =>
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", abortHandler, { once: true });
+  });
   try {
-    const status = await Promise.race([child.status, timeout]);
+    const status = await Promise.race([child.status, timeout, cancellation]);
     return { code: status.code, stdout: await stdout, stderr: await stderr };
   } catch (error) {
     try {
@@ -171,6 +181,7 @@ export async function runCommand(
     throw error;
   } finally {
     clearTimeout(timer);
+    if (abortHandler) signal?.removeEventListener("abort", abortHandler);
   }
 }
 
@@ -201,19 +212,23 @@ const run = (
   workingDirectory: string,
   config: GlobalArgs,
   dependencies: LifecycleDependencies,
+  signal?: AbortSignal,
 ) =>
   dependencies.run(
     command,
     workingDirectory,
     config.commandTimeoutMs ?? 30_000,
     config.commandOutputMaxBytes ?? 8_192,
+    signal,
   );
 
 async function checkHealth(
   healthCheck: GlobalArgs["healthCheck"],
   dependencies: LifecycleDependencies,
+  signal?: AbortSignal,
 ): Promise<"not_configured" | "healthy" | "unhealthy"> {
   if (!healthCheck) return "not_configured";
+  signal?.throwIfAborted();
 
   const timeoutMs = healthCheck.timeoutMs ?? 30_000;
   const intervalMs = healthCheck.intervalMs ?? 1_000;
@@ -224,17 +239,21 @@ async function checkHealth(
       if (
         (await dependencies.fetch(
           healthCheck.url,
-          AbortSignal.timeout(remaining),
+          signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(remaining)])
+            : AbortSignal.timeout(remaining),
         )).status ===
           healthCheck.expectedStatus
       ) {
         return "healthy";
       }
     } catch {
+      signal?.throwIfAborted();
       // A server may still be starting; retry only until the configured deadline.
     }
     if (dependencies.now().getTime() >= deadline) break;
     await dependencies.sleep(intervalMs);
+    signal?.throwIfAborted();
   } while (dependencies.now().getTime() < deadline);
 
   return "unhealthy";
@@ -244,6 +263,7 @@ async function certificateExpiry(
   config: GlobalArgs,
   workingDirectory: string,
   dependencies: LifecycleDependencies,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   if (config.certificate.strategy === "none") return null;
   const result = await run(
@@ -251,6 +271,7 @@ async function certificateExpiry(
     workingDirectory,
     config,
     dependencies,
+    signal,
   );
   if (result.code !== 0) {
     throw new Error(`certificate expiry command exited with ${result.code}`);
@@ -266,11 +287,18 @@ export async function status(
   config: GlobalArgs,
   workingDirectory: string,
   dependencies: LifecycleDependencies = realDependencies,
+  signal?: AbortSignal,
 ): Promise<ServerStatus> {
   const commandResult = config.statusCommand
-    ? await run(config.statusCommand, workingDirectory, config, dependencies)
+    ? await run(
+      config.statusCommand,
+      workingDirectory,
+      config,
+      dependencies,
+      signal,
+    )
     : null;
-  const health = await checkHealth(config.healthCheck, dependencies);
+  const health = await checkHealth(config.healthCheck, dependencies, signal);
   const running = commandResult
     ? commandResult.code === 0
     : health === "healthy";
@@ -284,6 +312,7 @@ export async function status(
       config,
       workingDirectory,
       dependencies,
+      signal,
     ),
     checkedAt: dependencies.now().toISOString(),
   };
@@ -293,12 +322,14 @@ export async function start(
   config: GlobalArgs,
   workingDirectory: string,
   dependencies: LifecycleDependencies = realDependencies,
+  signal?: AbortSignal,
 ): Promise<{ command: CommandResult; status: ServerStatus }> {
   const command = await run(
     config.startCommand,
     workingDirectory,
     config,
     dependencies,
+    signal,
   );
   if (command.code !== 0) {
     throw new Error(
@@ -307,7 +338,7 @@ export async function start(
       }`,
     );
   }
-  const observed = await status(config, workingDirectory, dependencies);
+  const observed = await status(config, workingDirectory, dependencies, signal);
   if (config.healthCheck && observed.health !== "healthy") {
     throw new Error(
       "startCommand completed but the loopback health check failed",
@@ -326,19 +357,21 @@ export async function stop(
   config: GlobalArgs,
   workingDirectory: string,
   dependencies: LifecycleDependencies = realDependencies,
+  signal?: AbortSignal,
 ): Promise<{ command: CommandResult; status: ServerStatus }> {
   const command = await run(
     config.stopCommand,
     workingDirectory,
     config,
     dependencies,
+    signal,
   );
   if (command.code !== 0) {
     throw new Error(
       `stopCommand exited with ${command.code}: ${safeFailureContext(command)}`,
     );
   }
-  const observed = await status(config, workingDirectory, dependencies);
+  const observed = await status(config, workingDirectory, dependencies, signal);
   if (observed.running || observed.health === "healthy") {
     throw new Error(
       "stopCommand completed but the local server is still running",

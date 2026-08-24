@@ -12,6 +12,7 @@ import {
 interface ModelContext {
   globalArgs: z.infer<typeof GlobalArgsSchema>;
   repoDir: string;
+  signal: AbortSignal;
   logger: {
     info(message: string, properties?: Record<string, unknown>): void;
   };
@@ -36,7 +37,7 @@ async function workingDirectory(context: ModelContext) {
 /** Local-only development server lifecycle controller. */
 export const model = {
   type: "@mgreten/local-dev-server",
-  version: "2026.08.23.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     status: {
@@ -72,6 +73,8 @@ export const model = {
         const current = await status(
           context.globalArgs,
           await workingDirectory(context),
+          undefined,
+          context.signal,
         );
         context.logger.info("Checked local development server status", {
           running: current.running,
@@ -89,6 +92,8 @@ export const model = {
         const result = await start(
           context.globalArgs,
           await workingDirectory(context),
+          undefined,
+          context.signal,
         );
         context.logger.info("Started local development server", {
           health: result.status.health,
@@ -109,6 +114,8 @@ export const model = {
         const result = await stop(
           context.globalArgs,
           await workingDirectory(context),
+          undefined,
+          context.signal,
         );
         context.logger.info("Stopped local development server", {
           health: result.status.health,
