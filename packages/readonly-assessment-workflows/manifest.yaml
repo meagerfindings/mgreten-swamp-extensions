@@ -21,6 +21,8 @@ additionalFiles:
   - docs/CONTRACT.md
   - examples/decision-review-input.yaml
   - examples/synthetic-contract-fixture.yaml
+  - deno.json
+  - tests/workflow_contract_compatibility_test.ts
 dependencies:
   - "@mgreten/cli-agent"
   - "@mgreten/decision-review"

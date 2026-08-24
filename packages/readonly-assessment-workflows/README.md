@@ -13,17 +13,18 @@ packages only; no application models or application data contracts are bundled.
 
 ## Safety contract
 
-The caller supplies model-instance refs and a policy object. The assessment
-model's `prepare` and `validate` methods must reject a policy unless it has a
-readonly tool mode, a required sandbox, and bounded input. The provider must
+The caller supplies compatible model-instance refs and bounded input. Provider
+dispatch is fixed to Amp with the readonly tool profile, a required automatic
+sandbox, provider-scoped credentials, and the network mode required by the
+standalone validators. The provider must
 emit an invocation record including its prompt hash, cwd, provider, model, and
 success state. Validation binds that record to the prepared request and fails
-closed on a missing field, policy mismatch, malformed response, unsupported
+closed on a missing field, launch mismatch, malformed response, unsupported
 claim, or authority-bearing output.
 
-Network access is parameterized but is never authority: it is an explicit
-allowlist decision for the provider runtime. These YAML workflows verify policy
-declarations and persisted launch evidence, but cannot themselves enforce an
+Network access is fixed to the `allow` launch claim required by the published
+standalone assessment contracts; it is never authority. These YAML workflows
+verify persisted launch evidence, but cannot themselves enforce an
 OS/container/provider sandbox or credential isolation. Those controls remain
 the provider runtime's responsibility and must be independently configured.
 
@@ -38,8 +39,7 @@ swamp workflow run @mgreten/readonly-decision-review \
   --input requestId=decision-2026-q3-01 \
   --input assessmentModel=decision-review \
   --input providerModel=readonly-provider \
-  --input input='{"question":"Should we run experiment X?","evidence":[]}' \
-  --input policy='{"personas":["skeptic","customer-advocate"],"redaction":{"profile":"strict"},"tools":{"mode":"readonly"},"network":{"mode":"deny"},"sandbox":{"required":true,"credentialAccess":"provider"}}'
+  --input input='{"schemaVersion":"1.0","reviewId":"decision-2026-q3-01",...}'
 ```
 
 See [the provider and assessment contract](docs/CONTRACT.md) and

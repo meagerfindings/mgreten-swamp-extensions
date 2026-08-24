@@ -6,36 +6,36 @@ instances without editing a workflow.
 
 ## Required workflow inputs
 
-All workflows require `requestId`, `assessmentModel`, `providerModel`, `input`,
-and `policy`. Feedback triage uses `envelopes` instead of `input`.
+All workflows require `requestId`, `assessmentModel`, and `providerModel`.
+Decision review and idea gate use `input`, cross-source evidence uses an array
+under `input`, and feedback triage uses `envelopes`.
 
 `requestId` is stable, non-empty, unique to the logical assessment, and safe
 for data-resource naming. Retries of that same assessment reuse it; changed
-input or policy requires a new `requestId` so prior artifacts cannot be treated
+input requires a new `requestId` so prior artifacts cannot be treated
 as fresh evidence.
 `assessmentModel` implements the named deterministic methods in its workflow:
 `prepare` and `validate`, plus `normalize` for triage. `providerModel`
 implements `invokeAndParse` and returns resources named `invocation-<requestId>`
 and `launch-claim-<requestId>`.
 
-The policy is passed unchanged into both deterministic preparation and the
-provider launch. Workflow assertions check the required policy and resource
-fields before continuing. It must contain bounded personas, redaction policy, readonly
-tool policy, network policy, and a sandbox policy with `required: true`. A
-consumer must use `tools.mode: readonly`; the generic assessment model rejects
-write-capable profiles. Network policy is either denied or a bounded allowlist.
+The workflow maps these public inputs to each concrete standalone method
+contract (`reviewId`, `requestId`, or `gateId`; `evidence` for cross-source
+preparation). Provider launch arguments are not a generic policy envelope:
+they are the published `@mgreten/cli-agent` arguments and fix Amp, readonly
+tools, required sandboxing, provider-scoped credentials, and network `allow`.
 
 ## Binding and fail-closed rules
 
-`prepare` emits `request-<requestId>` with the matching `requestId`, a bounded
-prompt, its hash, and an isolated cwd. The provider receives exactly that prompt
-and policy. `validate`
+`prepare` emits `request-<requestId>` with the model-specific stable ID, a
+bounded prompt, its hash, and (where the model contract provides it) an
+isolated `agentCwd`. The provider receives exactly that prompt. `validate`
 must reject unless all of the following match the prepared artifact:
 
 1. request ID, prompt hash, cwd, provider ref, and model ref;
-2. readonly tool policy, mandatory sandbox, and provider-only credential scope;
-3. redaction policy and the permitted network policy;
-4. required personas and response schema; and
+2. readonly tool profile, mandatory sandbox, and provider-only credential scope;
+3. the permitted network launch mode;
+4. the model-specific response schema; and
 5. source/evidence IDs and every claim's cited support.
 
 Validation is deterministic and has no fallback acceptance path. An assessment
