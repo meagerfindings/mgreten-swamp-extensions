@@ -1,7 +1,8 @@
 # @mgreten/context-compiler
 
-A domain-neutral Swamp model that compiles caller-supplied metadata into fresh,
-bounded, deterministic context artifacts. It is the model dependency for
+A strict dual-contract Swamp model. It retains the active Moment Savor
+context-manifest, constitution, operating-packet, and dispatch-context contracts
+while also exposing domain-neutral compilation for
 `@mgreten/bounded-context-workflows`.
 
 The compiler accepts references and provenance only. It does not retrieve source
@@ -12,18 +13,18 @@ authority. Every output fixes `sideEffectAuthority` to `none`.
 
 The type is `@mgreten/context-compiler` with no global arguments:
 
-- `compileRegistered` writes a `context` resource named by `manifestId`. It
-  requires a caller role taxonomy, registry source IDs and provenance, bounded
-  freshness, cited/minimized candidates, and a token budget.
-- `compileConstitution` writes a `constitution` resource named by `artifactId`.
-  It preserves a minimized policy reference and caller-supplied SHA-256 digest;
-  policy content is never accepted.
-- `compileOperatingPacket` writes an `operatingPacket` resource named by
-  `packetId`. It accepts fresh, cited, minimized entries and stable-sorts them.
+- Retained `compile`, `compileRegistered`, `compileConstitution`,
+  `compileOperatingPacket`, and `compileDispatchContext` payloads and resources
+  preserve the active Moment Savor vocabulary and behavior.
+- Generic `compileRegistered`, `compileConstitution`, and
+  `compileOperatingPacket` accept only their complete domain-neutral contracts.
+- Method argument and resource schemas are closed unions. Mixed retained/generic
+  payloads are invalid; fields are never aliased, inferred, or translated.
 
-All methods require `reject-conflicting-replay` and
-`reference-only-advisory-no-authority`. Exact replay is a no-op; changed content
-under an existing identifier is rejected without a write.
+Generic methods require `reject-conflicting-replay` and
+`reference-only-advisory-no-authority`. For every public persistence method,
+exact replay is a no-op and changed content under an existing identifier is
+rejected before writing.
 
 ## Use
 

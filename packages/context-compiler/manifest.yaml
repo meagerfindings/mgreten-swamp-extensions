@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/context-compiler"
-version: 2026.08.23.1
+version: 2026.08.24.1
 description: "Deterministically compiles fresh, bounded, reference-only context with no operational authority."
 repository: "https://github.com/meagerfindings/swamp-context-compiler"
 models:
@@ -9,4 +9,13 @@ additionalFiles:
   - README.md
   - LICENSE
   - extensions/models/context_compiler_test.ts
+  - extensions/models/generic_context_compiler_test.ts
+  - extensions/models/generic_context_compiler.ts
+  - extensions/models/_lib/context_manifest.ts
+  - extensions/models/_lib/evidence_provenance_contracts.ts
+  - extensions/models/_lib/role_context_pack_contracts.ts
+  - extensions/models/_lib/security_classification_contracts.ts
+  - extensions/models/_lib/context_conflict_detector_contracts.ts
+  - extensions/models/_lib/signal_contracts.ts
+  - extensions/models/moment_savor_source_registry.ts
 platforms: []
