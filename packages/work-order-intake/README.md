@@ -21,6 +21,13 @@ implementation requires a separate `plan-approval` gate.
 - a bounded target list, change budget, acceptance criteria, and deterministic
   checks.
 
+For backward compatibility, `intake` also accepts the strict retained
+dossier-derived proposal shape (`workOrderId`, `dossier`, `allowedPaths`, risk,
+and evidence links) and persists its accepted result with `workOrder`. The two
+proposal shapes are an explicit union: mixed generic/legacy objects are invalid
+and are never coerced. Both result shapes retain the same zero-authority
+boundary.
+
 Valid proposals become an `acceptedProposal`; invalid proposals fail closed as
 `invalid`, `unapproved`, or `split_required`, with stable diagnostics. The
 subject SHA-256 is computed over the canonical proposal content (excluding the
@@ -47,11 +54,13 @@ const proposal = {
 ## Methods
 
 - `intake`: validate and persist the deterministic disposition.
-- `assertAccepted`: accept only `intakeId`, read `intake-<intakeId>` through
-  Swamp resource storage, require the caller's expected subject to exactly match
-  the accepted subject, and stop a calling workflow when that persisted
-  disposition was not accepted. Caller-supplied result objects are not trusted.
-  It does not perform or authorize implementation.
+- `assertAccepted`: the generic form accepts `intakeId` plus the exact expected
+  subject and reads `intake-<intakeId>` through Swamp resource storage, require
+  the caller's expected subject to exactly match the accepted subject, and stop
+  a calling workflow when that persisted disposition was not accepted. The
+  compatibility form accepts only a retained result object so the active
+  pre-extraction workflow remains valid. Argument hybrids are rejected. Neither
+  form performs or authorizes implementation.
 
 ## Development
 
