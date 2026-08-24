@@ -768,7 +768,6 @@ async function runCase(
   let failureMessage: string | null = null;
   let infrastructureError = false;
   let visible = "";
-  let hidden = "";
   let diff = "";
   let statusText = "";
   try {
@@ -907,7 +906,6 @@ async function runCase(
       }),
     );
     hiddenPassed = hiddenResult.success;
-    hidden = `${hiddenResult.stdout}\n${hiddenResult.stderr}`;
     const [names, untracked, diffResult, statusResult, numstatResult] =
       await Promise.all([
         git(runner, caseDir, ["diff", "--name-only", "HEAD~0", "--"], signal),
@@ -987,7 +985,9 @@ async function runCase(
       }, 0);
     if (changedLines > maxChangedLines) budgetExceeded = true;
   } catch (error) {
-    infrastructureError = !budgetExceeded;
+    const cancelled = signal?.aborted === true ||
+      (error instanceof DOMException && error.name === "AbortError");
+    infrastructureError = !budgetExceeded && !cancelled;
     failureMessage = error instanceof Error ? error.message : String(error);
   } finally {
     try {
@@ -1038,8 +1038,6 @@ async function runCase(
       outputBytes,
       changedLines,
       invocationExitCode: invocationResult?.code ?? null,
-      invocationStdout: bounded(invocationResult?.stdout ?? ""),
-      invocationStderr: bounded(invocationResult?.stderr ?? ""),
       changedPaths,
       disallowedPaths,
       contractPassed,
@@ -1047,7 +1045,7 @@ async function runCase(
       gitStatus: bounded(statusText),
       diff: bounded(diff),
       visibleTests: bounded(visible),
-      hiddenTests: bounded(hidden),
+      hiddenTests: hiddenPassed ? "passed" : "failed",
     },
     null,
     2,
@@ -1204,88 +1202,101 @@ export async function runBenchmarkSuite(
     }
     throw error;
   }
-  await preflight({
-    suiteDir,
-    repoDir: context.repoDir,
-    nodePath,
-    bubblewrapPath: context.globalArgs.bubblewrapPath,
-    swampPath: context.globalArgs.swampPath,
-    agentModelName: context.globalArgs.agentModelName,
-    signal: context.signal,
-    runner,
-  });
-  context.logger.info("Benchmark suite starting", {
-    suiteId,
-    executionMode,
-    candidates: inputs.candidates.length,
-    tasks: inputs.taskIds.length,
-  });
-  const handles: any[] = [];
-  const results: CaseResult[] = [];
-  for (const candidate of inputs.candidates) {
-    for (const taskId of inputs.taskIds) {
-      if (context.signal?.aborted) {
-        throw new DOMException("benchmark cancelled", "AbortError");
-      }
-      const { result, evidence } = await runCase({
-        suiteId,
-        suiteDir,
-        repoDir: context.repoDir,
-        nodePath,
-        bubblewrapPath: context.globalArgs.bubblewrapPath,
-        swampPath: context.globalArgs.swampPath,
-        agentModelName: context.globalArgs.agentModelName,
-        candidate,
-        taskId,
-        wallTimeoutMs: inputs.wallTimeoutMs,
-        maxPacketBytes: inputs.maxPacketBytes,
-        maxOutputBytes: inputs.maxOutputBytes,
-        maxChangedLines: inputs.maxChangedLines,
-        executionMode,
-        signal: context.signal,
-        runner,
-      });
-      const tags = {
-        suite: suiteId,
-        candidate: candidate.id,
-        effortLevel: candidate.effortLevel,
-        executionMode,
-        task: taskId,
-        status: result.status,
-      };
-      const evidenceHandle = await context.createFileWriter(
-        "evidence",
-        result.evidenceRef,
-        { tags },
-      ).writeText(evidence);
-      handles.push(evidenceHandle);
-      const resultName = `case-${suiteId}-${candidate.id}-${taskId}`;
-      handles.push(
-        await context.writeResource("caseResult", resultName, result, { tags }),
-      );
-      results.push(result);
-      context.logger.info("Benchmark case completed", {
-        suiteId,
-        candidate: candidate.id,
-        task: taskId,
-        status: result.status,
-      });
-      if (context.signal?.aborted) {
-        throw new DOMException("benchmark cancelled", "AbortError");
+  try {
+    await preflight({
+      suiteDir,
+      repoDir: context.repoDir,
+      nodePath,
+      bubblewrapPath: context.globalArgs.bubblewrapPath,
+      swampPath: context.globalArgs.swampPath,
+      agentModelName: context.globalArgs.agentModelName,
+      signal: context.signal,
+      runner,
+    });
+    context.logger.info("Benchmark suite starting", {
+      suiteId,
+      executionMode,
+      candidates: inputs.candidates.length,
+      tasks: inputs.taskIds.length,
+    });
+    const handles: any[] = [];
+    const results: CaseResult[] = [];
+    for (const candidate of inputs.candidates) {
+      for (const taskId of inputs.taskIds) {
+        if (context.signal?.aborted) {
+          throw new DOMException("benchmark cancelled", "AbortError");
+        }
+        const { result, evidence } = await runCase({
+          suiteId,
+          suiteDir,
+          repoDir: context.repoDir,
+          nodePath,
+          bubblewrapPath: context.globalArgs.bubblewrapPath,
+          swampPath: context.globalArgs.swampPath,
+          agentModelName: context.globalArgs.agentModelName,
+          candidate,
+          taskId,
+          wallTimeoutMs: inputs.wallTimeoutMs,
+          maxPacketBytes: inputs.maxPacketBytes,
+          maxOutputBytes: inputs.maxOutputBytes,
+          maxChangedLines: inputs.maxChangedLines,
+          executionMode,
+          signal: context.signal,
+          runner,
+        });
+        const tags = {
+          suite: suiteId,
+          candidate: candidate.id,
+          effortLevel: candidate.effortLevel,
+          executionMode,
+          task: taskId,
+          status: result.status,
+        };
+        const evidenceHandle = await context.createFileWriter(
+          "evidence",
+          result.evidenceRef,
+          { tags },
+        ).writeText(evidence);
+        handles.push(evidenceHandle);
+        const resultName = `case-${suiteId}-${candidate.id}-${taskId}`;
+        handles.push(
+          await context.writeResource("caseResult", resultName, result, {
+            tags,
+          }),
+        );
+        results.push(result);
+        context.logger.info("Benchmark case completed", {
+          suiteId,
+          candidate: candidate.id,
+          task: taskId,
+          status: result.status,
+        });
+        if (context.signal?.aborted) {
+          throw new DOMException("benchmark cancelled", "AbortError");
+        }
       }
     }
+    const summary = aggregateSummary(suiteId, results);
+    handles.push(
+      await context.writeResource(
+        "suiteSummary",
+        `summary-${suiteId}`,
+        summary,
+        {
+          tags: { suite: suiteId, executionMode },
+        },
+      ),
+    );
+    context.logger.info("Benchmark suite completed", {
+      suiteId,
+      totalCases: summary.totalCases,
+    });
+    return { dataHandles: handles };
+  } finally {
+    await Deno.remove(suiteDir, { recursive: true }).catch((error) => {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+    });
   }
-  const summary = aggregateSummary(suiteId, results);
-  handles.push(
-    await context.writeResource("suiteSummary", `summary-${suiteId}`, summary, {
-      tags: { suite: suiteId, executionMode },
-    }),
-  );
-  context.logger.info("Benchmark suite completed", {
-    suiteId,
-    totalCases: summary.totalCases,
-  });
-  return { dataHandles: handles };
 }
 
 /** Swamp model definition for the standalone implementer benchmark. */

@@ -465,10 +465,16 @@ Deno.test("integration: injected agent edit is materialized, git-inspected, veri
         entry.content.includes('"effortLevel": "medium"')
       ),
     );
+    const evidence = written.find((entry) => entry.spec === "evidence")
+      ?.content ?? "";
+    assert(evidence.includes('"hiddenTests": "passed"'));
+    assert(!evidence.includes('"hiddenTests": "hidden"'));
     const summary = written.find((entry) => entry.spec === "suiteSummary")
       ?.data as ReturnType<typeof aggregateSummary>;
     assertEquals(summary.candidates[0].effortLevel, "medium");
-    assert(await Deno.stat(`${suiteDir}/cases/fake/task-01/PROMPT.md`));
+    await assertRejects(() =>
+      Deno.stat(`${suiteDir}/cases/fake/task-01/PROMPT.md`)
+    );
     await assertRejects(() => Deno.stat(`${suiteDir}/.hidden/fake-task-01`));
   });
 });
