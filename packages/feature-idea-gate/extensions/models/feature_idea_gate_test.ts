@@ -206,15 +206,6 @@ Deno.test("missing data, blockers, tampering, and failed audited calls do not va
     provider: "amp",
     model: "synthetic",
     promptHash: request.promptHash,
-    outputHash: await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(JSON.stringify(output())),
-    )
-      .then((digest) =>
-        [...new Uint8Array(digest)].map((byte) =>
-          byte.toString(16).padStart(2, "0")
-        ).join("")
-      ),
     cwd: request.agentCwd,
     success: true,
   };
@@ -225,7 +216,6 @@ Deno.test("missing data, blockers, tampering, and failed audited calls do not va
     model: "synthetic",
     cwd: request.agentCwd,
     promptHash: request.promptHash,
-    outputHash: audit.outputHash,
     toolProfile: "readonly",
     sandbox: {
       mode: "auto",
@@ -260,20 +250,6 @@ Deno.test("missing data, blockers, tampering, and failed audited calls do not va
       ),
     "not successful",
   );
-  const changedOutput = output();
-  changedOutput.assessments[0].conciseRationale = "Tampered after invocation.";
-  await rejects(
-    () =>
-      validateAgentResult(
-        "generic-gate",
-        request,
-        changedOutput,
-        audit,
-        claim,
-        now,
-      ),
-    "output hash does not match",
-  );
   await rejects(
     () =>
       validateAgentResult(
@@ -290,6 +266,161 @@ Deno.test("missing data, blockers, tampering, and failed audited calls do not va
     buildPrompt(input()).includes("Use no tools") &&
       !buildPrompt(input()).includes(["Moment", "Savor"].join(" ")),
   );
+});
+
+Deno.test("accepts complete cli-agent resources and strictly projects persisted audit", async () => {
+  const globals = globalArgumentsSchema.parse({
+    agentCwd: "/tmp/generic-gate-test",
+  });
+  const request = await prepareRequest("generic-gate", input(), globals, now);
+  const invocation = {
+    invocationId: "generic-gate",
+    provider: "amp",
+    model: "synthetic",
+    prompt: request.prompt.slice(0, 500),
+    promptTruncated: true,
+    promptHash: request.promptHash,
+    slashCommand: "",
+    cwd: request.agentCwd,
+    exitCode: 0,
+    success: true,
+    durationMs: 1234,
+    outputBytes: 456,
+    outputPreview: "legitimate telemetry",
+    outputTokensPerSecond: 12.5,
+    retries: 0,
+    timedOut: false,
+    invokedAt: "2026-08-23T11:30:01Z",
+    tokens: { input: 10, output: 20, cacheRead: 0, cacheWrite: 0, total: 30 },
+    costUsd: 0.01,
+    tags: { capability: "quarterly-feature-idea-gate" },
+    parsedResponse: output(),
+    legitimateFutureMetadata: { trace: "not-for-gate-audit" },
+  };
+  const claim = {
+    operation: "invokeAndParse" as const,
+    invocationId: "generic-gate",
+    provider: "amp" as const,
+    model: "synthetic",
+    cwd: request.agentCwd,
+    promptHash: request.promptHash,
+    tags: { capability: "quarterly-feature-idea-gate" },
+    definition: {
+      id: "agent",
+      name: "moment-savor-agent",
+      version: 1,
+      tags: {},
+    },
+    methodName: "invokeAndParse",
+    cliPath: "/usr/local/bin/amp",
+    idleTimeoutMs: 120000,
+    wallTimeoutMs: 120000,
+    maxRetries: 0,
+    toolProfile: "readonly" as const,
+    sandbox: {
+      mode: "auto" as const,
+      provider: "amp" as const,
+      credentialAccess: "provider" as const,
+      network: "allow" as const,
+      profilePath: "",
+      required: true as const,
+    },
+    legitimateFutureMetadata: "not-for-gate-audit",
+  };
+  const validated = await validateAgentResult(
+    "generic-gate",
+    request,
+    output(),
+    invocation,
+    claim,
+    now,
+  );
+  assert(
+    Object.keys(validated.invocation).sort().join(",") ===
+      "cwd,invocationId,model,promptHash,provider,success",
+  );
+  assert(
+    Object.keys(validated.invocationClaim).sort().join(",") ===
+      "cwd,invocationId,model,operation,promptHash,provider,sandbox,toolProfile",
+  );
+  assert(!("outputHash" in validated.invocation));
+  assert(!("tags" in validated.invocationClaim));
+
+  await rejects(
+    () =>
+      validateAgentResult(
+        "generic-gate",
+        request,
+        output(),
+        {
+          ...invocation,
+          promptHash: "0".repeat(64),
+        },
+        claim,
+        now,
+      ),
+    "prompt hash does not match",
+  );
+  await rejects(
+    () =>
+      validateAgentResult("generic-gate", request, output(), invocation, {
+        ...claim,
+        model: "mismatch",
+      }, now),
+    "launch claim does not match",
+  );
+  for (
+    const [field, value] of [
+      ["invocationId", "different-invocation"],
+      ["provider", "different-provider"],
+      ["model", "different-model"],
+      ["cwd", "/tmp/different-workspace"],
+      ["success", false],
+    ] as const
+  ) {
+    await rejects(
+      () =>
+        validateAgentResult(
+          "generic-gate",
+          request,
+          output(),
+          { ...invocation, [field]: value },
+          claim,
+          now,
+        ),
+      field === "cwd"
+        ? "cwd does not match"
+        : field === "success" || field === "provider"
+        ? "not successful"
+        : "launch claim does not match",
+    );
+  }
+  for (
+    const changedClaim of [
+      { ...claim, operation: "invoke" },
+      { ...claim, toolProfile: "actor" },
+      { ...claim, sandbox: { ...claim.sandbox, required: false } },
+      { ...claim, sandbox: { ...claim.sandbox, provider: "other" } },
+      { ...claim, sandbox: { ...claim.sandbox, network: "deny" } },
+      {
+        ...claim,
+        sandbox: { ...claim.sandbox, credentialAccess: "inherit" },
+      },
+    ]
+  ) {
+    await rejects(
+      () =>
+        validateAgentResult(
+          "generic-gate",
+          request,
+          output(),
+          invocation,
+          changedClaim,
+          now,
+        ),
+      "Invalid",
+    );
+  }
 });
 
 Deno.test("hard-gate evidence semantics, freshness, provenance, and labels come from policy", async () => {

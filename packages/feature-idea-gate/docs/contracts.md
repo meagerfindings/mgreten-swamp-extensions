@@ -24,10 +24,14 @@ Inputs fail closed when time ordering is invalid, evidence is stale, ratings are
 missing or cite the wrong evidence type, candidates are unassessed, or a
 trust/privacy blocker lacks appropriate evidence.
 
-The invocation audit and platform claim bind both the prepared prompt and the
-parsed agent output by SHA-256 hash. `validate` rejects either-side hash, model,
-invocation ID, workspace, provider, success, or read-only sandbox claim drift
-before writing data.
+The invocation audit and pre-spawn platform claim bind the prepared prompt by
+SHA-256 hash plus invocation ID, model, workspace, provider, operation,
+successful completion, and read-only sandbox settings. A launch claim cannot
+bind output that does not exist until after spawn, so `outputHash` is neither
+required nor persisted. `validate` accepts complete current cli-agent resources
+and legacy no-hash records, then projects only those security-relevant fields
+into strict persisted audit schemas; timing, token, cost, preview, tags,
+definition, timeout, CLI-path, and other telemetry cannot enter gate records.
 
 The module exports Zod schemas and TypeScript inference types for callers that
 need to construct or verify payloads before invoking the Swamp model.

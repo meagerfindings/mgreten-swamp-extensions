@@ -51,10 +51,18 @@ export const invocationAuditSchema = z.strictObject({
   provider: z.string().trim().min(1).max(100),
   model: z.string().trim().min(1).max(200),
   promptHash: z.string().regex(/^[a-f0-9]{64}$/),
-  outputHash: z.string().regex(/^[a-f0-9]{64}$/),
   cwd: z.string().min(1),
   success: z.boolean(),
 });
+/** Current cli-agent invocation resource; additional telemetry is accepted but not audited. */
+export const cliAgentInvocationSchema = z.object({
+  invocationId: SafeId,
+  provider: z.string().trim().min(1).max(100),
+  model: z.string().trim().min(1).max(200),
+  promptHash: z.string().regex(/^[a-f0-9]{64}$/),
+  cwd: z.string().min(1),
+  success: z.boolean(),
+}).passthrough();
 /** Required platform claim proving the invocation used the read-only profile. */
 export const invocationClaimAuditSchema = z.strictObject({
   operation: z.literal("invokeAndParse"),
@@ -63,7 +71,6 @@ export const invocationClaimAuditSchema = z.strictObject({
   model: z.string().trim().min(1).max(200),
   cwd: z.string().min(1),
   promptHash: z.string().regex(/^[a-f0-9]{64}$/),
-  outputHash: z.string().regex(/^[a-f0-9]{64}$/),
   toolProfile: z.literal("readonly"),
   sandbox: z.strictObject({
     mode: z.enum(["auto", "bwrap", "seatbelt"]),
@@ -74,6 +81,17 @@ export const invocationClaimAuditSchema = z.strictObject({
     required: z.literal(true),
   }),
 });
+/** Current pre-spawn cli-agent launch claim; operational metadata is not audited. */
+export const cliAgentInvocationClaimSchema = z.object({
+  operation: z.literal("invokeAndParse"),
+  invocationId: SafeId,
+  provider: z.literal("amp"),
+  model: z.string().trim().min(1).max(200),
+  cwd: z.string().min(1),
+  promptHash: z.string().regex(/^[a-f0-9]{64}$/),
+  toolProfile: z.literal("readonly"),
+  sandbox: invocationClaimAuditSchema.shape.sandbox,
+}).passthrough();
 /** Validated recommendation record with all operational authority disabled. */
 export const validatedGateSchema = z.strictObject({
   schemaVersion: z.literal(FEATURE_IDEA_GATE_SCHEMA_VERSION),
@@ -101,8 +119,8 @@ const validateArgumentsSchema = z.strictObject({
   gateId: SafeId,
   request: preparedRequestSchema,
   agentOutput: z.unknown(),
-  invocation: invocationAuditSchema,
-  invocationClaim: invocationClaimAuditSchema,
+  invocation: cliAgentInvocationSchema,
+  invocationClaim: cliAgentInvocationClaimSchema,
 });
 const fail = (message: string): never => {
   throw new TypeError(message);
@@ -178,9 +196,26 @@ export async function validateAgentResult(
   SafeId.parse(gateId);
   const request = preparedRequestSchema.parse(requestInput);
   const agentOutput = featureIdeaGateAgentOutputSchema.parse(agentOutputInput);
-  const invocation = invocationAuditSchema.parse(invocationInput);
-  const claim = invocationClaimAuditSchema.parse(claimInput);
-  const outputHash = await sha256(JSON.stringify(agentOutput));
+  const rawInvocation = cliAgentInvocationSchema.parse(invocationInput);
+  const rawClaim = cliAgentInvocationClaimSchema.parse(claimInput);
+  const invocation = invocationAuditSchema.parse({
+    invocationId: rawInvocation.invocationId,
+    provider: rawInvocation.provider,
+    model: rawInvocation.model,
+    promptHash: rawInvocation.promptHash,
+    cwd: rawInvocation.cwd,
+    success: rawInvocation.success,
+  });
+  const claim = invocationClaimAuditSchema.parse({
+    operation: rawClaim.operation,
+    invocationId: rawClaim.invocationId,
+    provider: rawClaim.provider,
+    model: rawClaim.model,
+    cwd: rawClaim.cwd,
+    promptHash: rawClaim.promptHash,
+    toolProfile: rawClaim.toolProfile,
+    sandbox: rawClaim.sandbox,
+  });
   if (request.gateId !== gateId || request.input.gateId !== gateId) {
     fail("Gate ID does not match prepared request");
   }
@@ -197,13 +232,11 @@ export async function validateAgentResult(
     invocation.promptHash !== request.promptHash ||
     claim.promptHash !== request.promptHash
   ) fail("Invocation prompt hash does not match prepared request");
-  if (invocation.outputHash !== outputHash || claim.outputHash !== outputHash) {
-    fail("Invocation output hash does not match agent output");
-  }
   if (invocation.cwd !== request.agentCwd || claim.cwd !== request.agentCwd) {
     fail("Invocation cwd does not match isolated request workspace");
   }
   if (
+    invocation.invocationId !== gateId ||
     claim.invocationId !== invocation.invocationId ||
     claim.model !== invocation.model
   ) fail("Invocation launch claim does not match invocation");

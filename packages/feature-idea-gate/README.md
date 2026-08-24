@@ -12,6 +12,9 @@ it does not create files or directories. The caller may use an external
 read-only assessor, then pass both its output and an audited invocation claim to
 `validate`. `validate` rejects malformed, stale, incomplete, or mismatched
 evidence/output and writes a recommendation record only after all checks pass.
+Complete current cli-agent invocation and pre-spawn launch-claim resources are
+accepted for compatibility, but persisted audits strictly project only the
+prompt and launch bindings; unrelated cli-agent telemetry is discarded.
 
 Every output states `recommendation-only`, `sideEffects: none`, and false for
 approval, planning, execution, and tool authority. A `promote_one` result is an
