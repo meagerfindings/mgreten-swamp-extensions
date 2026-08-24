@@ -49,6 +49,15 @@ const memory = () => {
       writeCount = 0;
     },
     context: {
+      definition: { name: "dispatcher-test" },
+      logger: undefined as
+        | {
+          info(
+            message: string,
+            values?: Record<string, unknown>,
+          ): void;
+        }
+        | undefined,
       globalArgs: {
         allowedProviders: ["provider"],
         modelPattern: "^model-[0-9]+$",
@@ -84,6 +93,33 @@ Deno.test("gates duplicate and active observations to one claim", async () => {
   assert(first.value.eligibility.eligible);
   assertEquals(replay.value.eligibility.reason, "active");
   assertEquals(replay.value.attempts.length, 1);
+});
+Deno.test("model method surface returns data handles and structured logs", async () => {
+  const store = memory();
+  const logs: Array<{ message: string; values?: Record<string, unknown> }> = [];
+  store.context.logger = {
+    info: (message, values) => logs.push({ message, values }),
+  };
+  const result = await model.methods.observe.execute(input(), store.context);
+  assertEquals(result.dataHandles, [{ name: "lifecycle-api-1" }]);
+  assertEquals(logs, [
+    { message: "Starting {method}", values: { method: "observe" } },
+    { message: "Completed {method}", values: { method: "observe" } },
+  ]);
+  assertEquals(
+    await model.checks["policy-valid"].execute(store.context),
+    { pass: true },
+  );
+});
+Deno.test("fails closed on malformed retained lifecycle state", async () => {
+  const store = memory();
+  store.records.set("lifecycle-api-1", { status: "queued" });
+  await assertRejects(
+    () => observe(input(), store.context),
+    TypeError,
+    "stored incident lifecycle is invalid",
+  );
+  assertEquals(store.records.get("lifecycle-api-1"), { status: "queued" });
 });
 Deno.test("ineligible observations retain authoritative metadata and lifecycle ordering", async () => {
   const store = memory();
@@ -214,6 +250,7 @@ Deno.test("records only a provider/model-bound typed result", async () => {
     },
   }, store.context);
   assertEquals(result.value.rawOutputIncluded, false);
+  assertEquals(result.value.lifecycleRef.modelName, "dispatcher-test");
   assertEquals(store.records.get("lifecycle-api-1")?.status, "completed");
 });
 Deno.test("result is durable before completion and validation resumes after either write fails", async () => {
@@ -227,13 +264,13 @@ Deno.test("result is durable before completion and validation resumes after eith
     const args = {
       incidentId: incident.incidentId,
       invocationId: request.invocationId,
-      validatedAt: "2026-08-23T10:02:00Z",
+      validatedAt: "2026-08-23T10:31:00Z",
       request,
       agentOutput: {
         schemaVersion: "1.0",
         incidentId: incident.incidentId,
         invocationId: request.invocationId,
-        generatedAt: "2026-08-23T10:02:00Z",
+        generatedAt: "2026-08-23T10:31:00Z",
         verdict: "inconclusive",
         summary: "Evidence is insufficient.",
         confidence: "low",
@@ -271,6 +308,15 @@ Deno.test("result is durable before completion and validation resumes after eith
     assertEquals(store.records.get("lifecycle-api-1")?.status, "completed");
     const replay = await validateAndRecordInvocation(args, store.context);
     assertEquals(replay.handles.length, 0);
+    await assertRejects(() =>
+      validateAndRecordInvocation({
+        ...args,
+        agentOutput: {
+          ...args.agentOutput,
+          summary: "A conflicting replayed result.",
+        },
+      }, store.context)
+    );
   }
 });
 Deno.test("rejects policy-violating audit and unclaimed evidence", async () => {

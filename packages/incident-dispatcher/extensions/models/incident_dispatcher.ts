@@ -230,6 +230,7 @@ const outcomeArgs = z.strictObject({
 type Context = {
   globalArgs?: Policy;
   logger?: { info(message: string, values?: Record<string, unknown>): void };
+  definition?: { name: string };
   readResource(name: string): Promise<Record<string, unknown> | null>;
   writeResource(
     spec: string,
@@ -276,9 +277,11 @@ const runLogged = async <T>(
 export async function observe(raw: unknown, ctx: Context) {
   const a = observeArgs.parse(raw);
   const p = policy(ctx);
-  const parsed = lifecycleSchema.safeParse(
-    await ctx.readResource(lifeName(a.incident.incidentId)),
-  );
+  const stored = await ctx.readResource(lifeName(a.incident.incidentId));
+  const parsed = lifecycleSchema.safeParse(stored);
+  if (stored !== null && !parsed.success) {
+    throw new TypeError("stored incident lifecycle is invalid");
+  }
   const prior = parsed.success ? parsed.data : null;
   const fingerprint = await hash({
     incident: a.incident,
@@ -383,9 +386,11 @@ export async function prepareInvocation(raw: unknown, ctx: Context) {
   if (!["queued", "running"].includes(life.status) || !life.invocationId) {
     throw new TypeError("incident lacks a queued invocation");
   }
-  const existing = requestSchema.safeParse(
-    await ctx.readResource(requestName(life.invocationId)),
-  );
+  const storedRequest = await ctx.readResource(requestName(life.invocationId));
+  const existing = requestSchema.safeParse(storedRequest);
+  if (storedRequest !== null && !existing.success) {
+    throw new TypeError("stored invocation request is invalid");
+  }
   if (existing.success) {
     if (existing.data.incidentId !== life.incidentId) {
       throw new TypeError("stored request does not match queued invocation");
@@ -499,6 +504,7 @@ export async function recordOutcome(raw: unknown, ctx: Context) {
 /** Validates request, audit, and output bindings before persisting a result. */
 export async function validateAndRecordInvocation(raw: unknown, ctx: Context) {
   const a = validateArgs.parse(raw);
+  const modelName = Id.parse(ctx.definition?.name);
   const request = requestSchema.parse(
     await ctx.readResource(requestName(a.invocationId)),
   );
@@ -535,7 +541,7 @@ export async function validateAndRecordInvocation(raw: unknown, ctx: Context) {
     ...a.agentOutput,
     resultId: a.invocationId,
     lifecycleRef: {
-      modelName: "incident-dispatcher",
+      modelName,
       resourceName: lifeName(a.incidentId),
     },
     auditId: a.audit.auditId,
@@ -547,9 +553,11 @@ export async function validateAndRecordInvocation(raw: unknown, ctx: Context) {
     rawOutputIncluded: false,
     authority: { notification: "external-only", remediation: "forbidden" },
   });
-  const existing = resultSchema.safeParse(
-    await ctx.readResource(`result-${value.resultId}`),
-  );
+  const storedResult = await ctx.readResource(`result-${value.resultId}`);
+  const existing = resultSchema.safeParse(storedResult);
+  if (storedResult !== null && !existing.success) {
+    throw new TypeError("stored invocation result is invalid");
+  }
   if (existing.success && canon(existing.data) !== canon(value)) {
     throw new TypeError("conflicting result replay");
   }
@@ -619,6 +627,25 @@ export const model = {
       schema: resultSchema,
       lifetime: "infinite" as const,
       garbageCollection: 100,
+    },
+  },
+  checks: {
+    "policy-valid": {
+      description: "Verify incident dispatch policy before state transitions",
+      labels: ["policy"],
+      appliesTo: [
+        "observe",
+        "prepareInvocation",
+        "validateAndRecordInvocation",
+        "recordOutcome",
+      ],
+      execute: (ctx: Context) => {
+        const parsed = policySchema.safeParse(ctx.globalArgs);
+        return parsed.success ? { pass: true } : {
+          pass: false,
+          errors: parsed.error.issues.map((issue) => issue.message),
+        };
+      },
     },
   },
   methods: {
