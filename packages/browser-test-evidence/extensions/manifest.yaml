@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/browser-test-evidence"
-version: 2026.08.23.1
+version: 2026.08.24.1
 description: >
   Normalize Playwright JSON reports into versioned, structured browser test
   evidence with test metadata, retry outcomes, cleanup annotations, and CI

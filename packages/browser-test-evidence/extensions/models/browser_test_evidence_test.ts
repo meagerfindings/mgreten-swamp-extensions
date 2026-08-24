@@ -86,11 +86,10 @@ const report = () => ({
   }],
 });
 
-Deno.test("rejects malformed, unrelated, unknown-status, and missing-time reports", () => {
+Deno.test("rejects malformed, unknown-status, and missing-time reports", () => {
   for (
     const invalid of [
       {},
-      { ...report(), unrelated: true },
       (() => {
         const value = report();
         value.suites[0].specs[0].tests[0].results[0].status = "unknown";
@@ -131,7 +130,7 @@ Deno.test("normalization is deterministic and model writes run-specific resource
       context,
     );
     const writes = getWrittenResources();
-    if (writes.length !== 1 || writes[0].name !== "browser-ci-123") {
+    if (writes.length !== 1 || writes[0].name !== "browser-ci") {
       throw new Error(JSON.stringify(writes));
     }
     const value = writes[0].data as Record<string, unknown>;
@@ -158,7 +157,7 @@ Deno.test("replay is idempotent and conflicting reuse is rejected", async () => 
     const recorded = first.getWrittenResources()[0].data;
     const replay = createModelTestContext({
       methodName: "importPlaywrightJson",
-      storedResources: { "browser-ci-123": recorded },
+      storedResources: { "browser-ci": recorded },
     });
     const result = await model.methods.importPlaywrightJson.execute(
       { ...args, reportPath: path },
@@ -189,6 +188,69 @@ Deno.test("replay is idempotent and conflicting reuse is rejected", async () => 
   } finally {
     await Deno.remove(path);
   }
+});
+
+Deno.test("a new run appends a version to the retained environment stream", async () => {
+  const path = await Deno.makeTempFile();
+  try {
+    await Deno.writeTextFile(path, JSON.stringify(report()));
+    const prior = normalizePlaywrightReport(report(), args, "a".repeat(64));
+    const next = createModelTestContext({
+      methodName: "importPlaywrightJson",
+      storedResources: { "browser-ci": prior },
+    });
+    await model.methods.importPlaywrightJson.execute(
+      { ...args, runId: "124", reportPath: path },
+      next.context,
+    );
+    const writes = next.getWrittenResources();
+    if (writes.length !== 1 || writes[0].name !== "browser-ci") {
+      throw new Error(
+        `new run did not append to browser-ci: ${JSON.stringify(writes)}`,
+      );
+    }
+  } finally {
+    await Deno.remove(path);
+  }
+});
+
+Deno.test("retains failure messages and accepts real reporter extras and typed metadata", () => {
+  const value = report();
+  const project = value.config.projects[0] as Record<string, unknown>;
+  project.metadata = {
+    browserEngine: "chromium",
+    viewportProfile: 390,
+    viewport: true,
+  };
+  (value.config as Record<string, unknown>).rootDir = "/workspace/example";
+  const result = value.suites[0].specs[0].tests[0].results[0] as Record<
+    string,
+    unknown
+  >;
+  result.error = { message: "expected heading was absent" };
+  result.attachments = [{ name: "trace", contentType: "application/zip" }];
+
+  const run = normalizePlaywrightReport(value, args);
+  if (
+    run.tests[0].failureMessage !== "expected heading was absent" ||
+    run.tests[0].viewportProfile !== "390" || run.tests[0].viewport !== "true"
+  ) {
+    throw new Error(
+      `retained evidence was not normalized: ${JSON.stringify(run.tests[0])}`,
+    );
+  }
+});
+
+Deno.test("rejects metadata objects instead of coercing them", () => {
+  const value = report();
+  value.config.projects[0].metadata.viewport = { width: 1280 } as unknown as string;
+  let rejected = false;
+  try {
+    normalizePlaywrightReport(value, args);
+  } catch {
+    rejected = true;
+  }
+  if (!rejected) throw new Error("object metadata was coerced instead of rejected");
 });
 
 Deno.test("rejects unsafe identities and privacy-leaking URLs", () => {
