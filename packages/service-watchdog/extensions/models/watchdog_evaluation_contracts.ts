@@ -13,15 +13,55 @@ const unmeasured = z.strictObject({
   reason: identifier,
 });
 const sourceReference = z.strictObject({
-  sourceKey: identifier,
-  collectedAt: timestamp,
+  schemaVersion: z.literal("1.0"),
+  sourceId: identifier,
+  source: z.strictObject({
+    system: identifier,
+    accountId: identifier.optional(),
+    resourceType: identifier,
+    resourceId: identifier,
+  }),
+  provenance: z.strictObject({
+    collector: identifier,
+    collectorVersion: identifier,
+    method: identifier,
+    collectedAt: timestamp,
+  }),
   observedAt: timestamp,
+  freshness: z.strictObject({ asOf: timestamp, expiresAt: timestamp }),
+  sensitivity: z.enum(["public", "internal", "confidential", "restricted"]),
+}).superRefine((value, context) => {
+  const observedAt = Date.parse(value.observedAt);
+  const collectedAt = Date.parse(value.provenance.collectedAt);
+  const asOf = Date.parse(value.freshness.asOf);
+  const expiresAt = Date.parse(value.freshness.expiresAt);
+  if (collectedAt < observedAt) {
+    context.addIssue({
+      code: "custom",
+      path: ["provenance", "collectedAt"],
+      message: "collectedAt must be at or after observedAt",
+    });
+  }
+  if (asOf < observedAt) {
+    context.addIssue({
+      code: "custom",
+      path: ["freshness", "asOf"],
+      message: "asOf must be at or after observedAt",
+    });
+  }
+  if (expiresAt < asOf) {
+    context.addIssue({
+      code: "custom",
+      path: ["freshness", "expiresAt"],
+      message: "expiresAt must be at or after asOf",
+    });
+  }
 });
 
 const evaluationInput = z.strictObject({
   schemaVersion: z.literal(WATCHDOG_EVALUATION_SCHEMA_VERSION),
   evaluationId: identifier,
-  watchdogKey: identifier,
+  watchdogId: identifier,
   observationWindow: z.strictObject({ startsAt: timestamp, endsAt: timestamp }),
   recordedAt: timestamp,
   confusion: z.union([
@@ -159,6 +199,18 @@ const evaluationInput = z.strictObject({
     });
   }
   if (
+    value.confusion.status === "measured" &&
+    value.humanAttention.status === "measured" &&
+    value.humanAttention.denominators.escalationsRequiringAttention >
+      value.confusion.denominators.escalations
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["humanAttention", "denominators", "escalationsRequiringAttention"],
+      message: "escalationsRequiringAttention cannot exceed escalations",
+    });
+  }
+  if (
     value.humanAttention.status === "measured" &&
     value.humanAttention.denominators.escalationsRequiringAttention === 0 &&
     (value.humanAttention.duration.value !== 0 ||
@@ -168,6 +220,18 @@ const evaluationInput = z.strictObject({
       code: "custom",
       path: ["humanAttention"],
       message: "attention must be zero without attention-requiring escalations",
+    });
+  }
+  if (
+    value.humanAttention.status === "measured" &&
+    value.humanAttention.interactionCount <
+      value.humanAttention.denominators.escalationsRequiringAttention
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["humanAttention", "interactionCount"],
+      message:
+        "interactionCount cannot be less than escalationsRequiringAttention",
     });
   }
 });

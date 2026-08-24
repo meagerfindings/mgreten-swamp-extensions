@@ -34,15 +34,15 @@ const harness = () => {
     context: {
       globalArgs: policy,
       now: () => new Date(now),
-      readResource: async (name: string) => stored[name] ?? null,
-      writeResource: async (
+      readResource: (name: string) => Promise.resolve(stored[name] ?? null),
+      writeResource: (
         spec: string,
         name: string,
         data: Record<string, unknown>,
       ) => {
         writes.push({ spec, name, data });
         stored[name] = data;
-        return { name };
+        return Promise.resolve({ name });
       },
     },
   };
@@ -118,7 +118,7 @@ Deno.test("two-phase transition-only watchdog opens and resolves exactly once", 
 
 Deno.test("missing, stale, and truncated source evidence cannot change a healthy state", async () => {
   const h = harness();
-  const plan = (await prepareInspection(h.context)).value;
+  await prepareInspection(h.context);
   await evaluateInspection({ sourceSnapshots: [] }, h.context);
   assert(h.writes.filter((write) => write.spec === "alertIntent").length === 0);
 });
@@ -194,7 +194,10 @@ Deno.test("one stale required observation makes all subject evidence unknown", a
       observedAt: "2026-08-23T11:00:00.000Z",
     }],
   };
-  await evaluateInspection({ sourceSnapshots: [primary, secondary] }, h.context);
+  await evaluateInspection(
+    { sourceSnapshots: [primary, secondary] },
+    h.context,
+  );
   const state = h.writes.find((write) => write.spec === "subjectState");
   assert(state?.data.state === "unknown");
   assert(h.writes.every((write) => write.spec !== "alertIntent"));
@@ -216,11 +219,11 @@ Deno.test("reads and validates every output before the first evaluation write", 
   const writesBefore = h.writes.length;
   const context = {
     ...h.context,
-    readResource: async (name: string) => {
+    readResource: (name: string) => {
       if (name === "incident-incident-api-1") {
         throw new Error("injected read failure");
       }
-      return h.stored[name] ?? null;
+      return Promise.resolve(h.stored[name] ?? null);
     },
   };
   let rejected = false;

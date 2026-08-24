@@ -9,7 +9,7 @@ const assert = (value: unknown, message = "assertion failed") => {
 const measured = {
   schemaVersion: "1.0",
   evaluationId: "synthetic-evaluation",
-  watchdogKey: "synthetic-watchdog",
+  watchdogId: "synthetic-watchdog",
   observationWindow: {
     startsAt: "2026-08-01T00:00:00Z",
     endsAt: "2026-08-02T00:00:00Z",
@@ -44,9 +44,25 @@ const measured = {
     amount: 12.5,
     currency: "USD",
     provenance: {
-      sourceKey: "synthetic",
-      collectedAt: "2026-08-02T00:00:00Z",
+      schemaVersion: "1.0",
+      sourceId: "synthetic-source",
+      source: {
+        system: "synthetic",
+        resourceType: "watchdog-evaluation",
+        resourceId: "synthetic-evaluation",
+      },
+      provenance: {
+        collector: "synthetic-test",
+        collectorVersion: "1.0",
+        method: "fixture",
+        collectedAt: "2026-08-02T00:00:00Z",
+      },
       observedAt: "2026-08-01T23:00:00Z",
+      freshness: {
+        asOf: "2026-08-02T00:00:00Z",
+        expiresAt: "2026-08-03T00:00:00Z",
+      },
+      sensitivity: "public",
     },
   },
   humanAttention: {
@@ -79,5 +95,50 @@ Deno.test("rejects incoherent denominators with sorted diagnostics", () => {
       a.message.localeCompare(b.message)
     );
     assert(JSON.stringify(result.diagnostics) === JSON.stringify(sorted));
+  }
+});
+
+Deno.test("retains the active watchdog evaluation identity and provenance contract", () => {
+  const wrongIdentity = validateWatchdogEvaluation({
+    ...measured,
+    watchdogId: undefined,
+    watchdogKey: "legacy-incompatible-key",
+  });
+  assert(!wrongIdentity.success);
+
+  const staleProvenance = validateWatchdogEvaluation({
+    ...measured,
+    cost: {
+      ...measured.cost,
+      provenance: {
+        ...measured.cost.provenance,
+        freshness: {
+          asOf: "2026-08-01T22:00:00Z",
+          expiresAt: "2026-08-03T00:00:00Z",
+        },
+      },
+    },
+  });
+  assert(!staleProvenance.success);
+});
+
+Deno.test("rejects impossible human-attention denominators", () => {
+  for (
+    const humanAttention of [
+      {
+        ...measured.humanAttention,
+        denominators: { escalationsRequiringAttention: 11 },
+        interactionCount: 11,
+      },
+      {
+        ...measured.humanAttention,
+        denominators: { escalationsRequiringAttention: 4 },
+        interactionCount: 3,
+      },
+    ]
+  ) {
+    assert(
+      !validateWatchdogEvaluation({ ...measured, humanAttention }).success,
+    );
   }
 });

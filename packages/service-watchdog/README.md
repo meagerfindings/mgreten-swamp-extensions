@@ -10,6 +10,12 @@ Provider-neutral Swamp model for deterministic, **transition-only** service watc
 
 An `alertIntent` is an output record, not a notification. A separate delivery workflow may consume it. Retries of the same inspection do not create another intent; untrusted/missing/stale/truncated evidence cannot open or resolve an incident.
 
+## Compatibility
+
+This model is an **additive provider-neutral core**, not a drop-in replacement for `@mgreten/moment-savor-watchdog`. The active Moment Savor model accepts Better Stack and Railway snapshots directly and emits product-specific incident and delivery fields. This package instead requires caller-owned adapters to normalize those sources and intentionally omits provider IDs, delivery copy, and investigation prompts.
+
+The bundled `watchdog_evaluation_contracts.ts` remains schema-compatible with the active generic Moment Savor watchdog-evaluation contract (`schemaVersion: "1.0"`), including `watchdogId` and normalized source-reference provenance. Consumers can evaluate either watchdog implementation without translating evaluation records.
+
 ## Policy
 
 Global arguments parameterize:

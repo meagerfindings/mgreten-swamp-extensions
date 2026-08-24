@@ -1,7 +1,7 @@
 import { z } from "npm:zod@4";
 
 /** Current public version of the service watchdog model. */
-export const MODEL_VERSION = "2026.08.23.1" as const;
+export const MODEL_VERSION = "2026.08.24.1" as const;
 const timestamp = z.iso.datetime({ offset: true });
 const key = z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_.:-]+$/);
 const status = z.string().trim().min(1).max(50).regex(/^[a-z0-9_.-]+$/);
