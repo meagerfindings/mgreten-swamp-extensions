@@ -15,11 +15,30 @@ async function workflow(file: string): Promise<Workflow> {
   return parse(await Deno.readTextFile(url)) as Workflow;
 }
 
-function requiredKeys(schema: unknown): string[] {
+function requiredKeyVariants(schema: unknown): string[][] {
   const json = z.toJSONSchema(
     schema as Parameters<typeof z.toJSONSchema>[0],
-  ) as { required?: string[] };
-  return [...(json.required ?? [])].sort();
+  ) as {
+    required?: string[];
+    anyOf?: Array<{ required?: string[] }>;
+    oneOf?: Array<{ required?: string[] }>;
+  };
+  const variants = json.anyOf ?? json.oneOf ?? [json];
+  return variants.map((variant) => [...(variant.required ?? [])].sort());
+}
+
+function requiredKeys(schema: unknown): string[] {
+  const variants = requiredKeyVariants(schema);
+  if (variants.length !== 1) {
+    throw new Error(`expected one schema variant, found ${variants.length}`);
+  }
+  return variants[0];
+}
+
+function genericRequiredKeyVariants(schema: unknown): string[][] {
+  return requiredKeyVariants(schema).filter((keys) =>
+    keys.includes("replayPolicy") && keys.includes("authorityAttestation")
+  );
 }
 
 Deno.test("live compiler method schemas exactly match workflow inputs", async () => {
@@ -42,11 +61,14 @@ Deno.test("live compiler method schemas exactly match workflow inputs", async ()
         );
       }
       const actual = Object.keys(step.task.inputs ?? {}).sort();
-      const expected = requiredKeys(method.arguments);
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      const variants = genericRequiredKeyVariants(method.arguments);
+      const matchesExactVariant = variants.some((expected) =>
+        JSON.stringify(actual) === JSON.stringify(expected)
+      );
+      if (!matchesExactVariant) {
         throw new Error(
-          `${file}:${step.name} inputs ${JSON.stringify(actual)} != ${
-            JSON.stringify(expected)
+          `${file}:${step.name} inputs ${JSON.stringify(actual)} != any of ${
+            JSON.stringify(variants)
           }`,
         );
       }
@@ -111,11 +133,15 @@ Deno.test("operating attestation and chronology match live compiler", async () =
 });
 
 Deno.test("Moment Savor snapshot packet is explicitly incompatible", () => {
-  const generic = requiredKeys(
+  const genericVariants = genericRequiredKeyVariants(
     compiler.methods.compileOperatingPacket.arguments,
   );
   const snapshot = requiredKeys(snapshotPacketSchema);
-  if (JSON.stringify(generic) === JSON.stringify(snapshot)) {
+  if (
+    genericVariants.some((keys) =>
+      JSON.stringify(keys) === JSON.stringify(snapshot)
+    )
+  ) {
     throw new Error(
       "snapshot became drop-in compatible; update the contract plan",
     );
