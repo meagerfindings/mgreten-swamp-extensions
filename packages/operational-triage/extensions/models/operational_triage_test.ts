@@ -30,14 +30,14 @@ function harness(existing: Record<string, unknown> | null = null) {
     writes,
     context: {
       logger: { info: (_message: string, _properties: Record<string, unknown>) => {} },
-      readResource: async (_name: string) => existing,
-      writeResource: async (
+      readResource: (_name: string) => Promise.resolve(existing),
+      writeResource: (
         spec: string,
         name: string,
         data: Record<string, unknown>,
       ) => {
         writes.push({ spec, name, data });
-        return { name };
+        return Promise.resolve({ name });
       },
     },
   };
@@ -172,6 +172,19 @@ Deno.test("identical replay is idempotent and tampered replay fails closed", asy
   equal(conflict.writes.length, 0);
 });
 
+Deno.test("persistence failures propagate without a success handle", async () => {
+  const { context } = harness();
+  context.writeResource = () => Promise.reject(new Error("synthetic storage failure"));
+  await rejects(
+    () =>
+      model.methods.normalizeSnapshot.execute(
+        { snapshot: syntheticRedactedSnapshot() },
+        context,
+      ),
+    "synthetic storage failure",
+  );
+});
+
 Deno.test("attestation counts, truncation, and collection time are consistent", async () => {
   const mutations = [
     (snapshot: ReturnType<typeof syntheticRedactedSnapshot>) => {
@@ -191,6 +204,79 @@ Deno.test("attestation counts, truncation, and collection time are consistent", 
     await rejects(
       () => model.methods.normalizeSnapshot.execute({ snapshot }, harness().context),
       "Invalid operational triage snapshot",
+    );
+  }
+});
+
+Deno.test("resource names and aggregate allowlist accounting are bounded", async () => {
+  for (const mutate of [
+    (snapshot: ReturnType<typeof syntheticRedactedSnapshot>) => {
+      snapshot.snapshotId = "unsafe/name";
+    },
+    (snapshot: ReturnType<typeof syntheticRedactedSnapshot>) => {
+      snapshot.filtering.excludedCount = 1;
+      snapshot.filtering.excludedByReason.identityNotAllowed = 1;
+    },
+  ]) {
+    const snapshot = syntheticRedactedSnapshot();
+    mutate(snapshot);
+    await rejects(
+      () => model.methods.normalizeSnapshot.execute({ snapshot }, harness().context),
+      "Invalid operational triage snapshot",
+    );
+  }
+});
+
+Deno.test("provenance identities and evidence references cannot be ambiguous", async () => {
+  const duplicateEvidence = syntheticRedactedSnapshot();
+  duplicateEvidence.records[0].evidenceIds.push("synthetic-evidence-1");
+  await rejects(
+    () => model.methods.normalizeSnapshot.execute(
+      { snapshot: duplicateEvidence },
+      harness().context,
+    ),
+    "duplicate evidenceId",
+  );
+
+  const ambiguousSource = syntheticRedactedSnapshot();
+  ambiguousSource.records.push({
+    ...structuredClone(ambiguousSource.records[0]),
+    recordId: "synthetic-monitor-record-2",
+    sourceReference: {
+      ...structuredClone(ambiguousSource.records[0].sourceReference),
+      source: {
+        ...structuredClone(ambiguousSource.records[0].sourceReference.source),
+        resourceId: "secondary-check",
+      },
+    },
+  });
+  ambiguousSource.filtering.includedCount = 2;
+  ambiguousSource.limits.rowsRead = 2;
+  await rejects(
+    () => model.methods.normalizeSnapshot.execute(
+      { snapshot: ambiguousSource },
+      harness().context,
+    ),
+    "sourceId must identify exactly one source identity",
+  );
+});
+
+Deno.test("collection and freshness attestations must belong to the snapshot window", async () => {
+  for (const field of ["collectedAt", "asOf"] as const) {
+    const snapshot = syntheticRedactedSnapshot();
+    if (field === "collectedAt") {
+      snapshot.records[0].sourceReference.provenance.collectedAt =
+        "2026-08-23T09:59:00Z";
+    } else {
+      snapshot.records[0].sourceReference.freshness.asOf =
+        "2026-08-23T09:59:00Z";
+    }
+    await rejects(
+      () => model.methods.normalizeSnapshot.execute(
+        { snapshot },
+        harness().context,
+      ),
+      "snapshot window",
     );
   }
 });

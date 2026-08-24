@@ -75,6 +75,11 @@ lifetime. Replaying the identical snapshot is a no-op; reusing a snapshot ID
 with different content fails closed. Validation failures write nothing and
 include stable diagnostics.
 
+Snapshot IDs are restricted to resource-safe letters, numbers, `:`, `.`, `_`,
+and `-`. Included plus excluded source-record counts cannot exceed `rowsRead`.
+Evidence IDs must be unique within each record and escalation, and one
+`sourceId` cannot describe multiple source identities in the same snapshot.
+
 ## Allowlist requirements
 
 The producer is responsible for enforcing its allowlist before it constructs a
@@ -90,8 +95,30 @@ unless they have been explicitly approved for the public contract.
 Each record's `sourceReference.freshness.asOf` must be no later than
 `generatedAt`, and `expiresAt` must be at or after it. The snapshot window must
 end no later than `generatedAt`, and must not exceed `limits.maxWindowSeconds`.
+Collection and freshness attestations must fall within the snapshot window.
 Expired evidence is rejected, so consumers cannot mistake stale data for a
-current triage result.
+current triage result. `observedAt` may predate the window for a still-active
+incident, but it cannot be later than the freshness attestation.
+
+## Failure and replay behavior
+
+Schema, leakage, consistency, freshness, and replay-conflict failures occur
+before a write and return stable diagnostics where validation is involved. A
+storage failure is propagated and is never reported as success. Identical
+replay returns no new data handle. Callers should retry only the exact same
+snapshot; changing content requires a new `snapshotId`.
+
+## Moment Savor compatibility
+
+Moment Savor's active `@mgreten/better-stack-triage` is a provider adapter with
+`normalizeReadSnapshots` and a Better Stack-specific input contract. This
+extension has a different type identity and intentionally exposes only
+`normalizeSnapshot`; it is additive, not a drop-in replacement. A future
+integration should keep the Better Stack collector/adapter, pass its already
+normalized snapshot to a separately configured `@mgreten/operational-triage`
+instance, then migrate downstream consumers only after contract fixtures prove
+field-for-field compatibility. Existing model identities, resource names, and
+workflow method names should remain unchanged during that trial.
 
 Every non-empty record must include a bounded source reference. The following
 shape illustrates the provenance and freshness contract; record-kind fields

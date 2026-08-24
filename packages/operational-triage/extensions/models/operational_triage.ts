@@ -5,7 +5,7 @@ import {
 } from "./_lib/operational_triage_contracts.ts";
 
 /** Version of the operational-triage model contract. */
-export const OPERATIONAL_TRIAGE_MODEL_VERSION = "2026.08.23.1" as const;
+export const OPERATIONAL_TRIAGE_MODEL_VERSION = "2026.08.24.1" as const;
 
 /** Empty global-argument contract for this provider-neutral model. */
 export const globalArgumentsSchema = z.strictObject({});

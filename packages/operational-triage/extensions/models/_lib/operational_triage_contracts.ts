@@ -9,6 +9,7 @@ export const OPERATIONAL_TRIAGE_HARD_LIMITS = {
 } as const;
 
 const id = z.string().trim().min(1).max(200);
+const snapshotId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9:._-]{0,199}$/);
 const text = z.string().trim().min(1).max(2_000);
 const timestamp = z.iso.datetime({ offset: true });
 const count = z.number().int().nonnegative();
@@ -135,7 +136,7 @@ const limits = z.strictObject({
 
 export const operationalTriageSnapshotSchema = z.strictObject({
   schemaVersion: z.literal(OPERATIONAL_TRIAGE_SCHEMA_VERSION),
-  snapshotId: id,
+  snapshotId,
   generatedAt: timestamp,
   records: z.array(operationalTriageRecordSchema).max(
     OPERATIONAL_TRIAGE_HARD_LIMITS.rows,
@@ -199,6 +200,15 @@ export const operationalTriageSnapshotSchema = z.strictObject({
   if (snapshot.records.length > snapshot.limits.rowsRead) {
     issue(["records"], "record count cannot exceed rowsRead");
   }
+  if (
+    snapshot.filtering.includedCount + snapshot.filtering.excludedCount >
+      snapshot.limits.rowsRead
+  ) {
+    issue(
+      ["filtering"],
+      "included and excluded source records cannot exceed rowsRead",
+    );
+  }
   if (snapshot.filtering.includedCount !== snapshot.records.length) {
     issue(
       ["filtering", "includedCount"],
@@ -226,11 +236,33 @@ export const operationalTriageSnapshotSchema = z.strictObject({
     );
   }
   const recordIds = new Set<string>();
+  const sourceIdentities = new Map<string, string>();
   snapshot.records.forEach((record, index) => {
     if (recordIds.has(record.recordId)) {
       issue(["records", index, "recordId"], "duplicate recordId");
     }
     recordIds.add(record.recordId);
+    if (new Set(record.evidenceIds).size !== record.evidenceIds.length) {
+      issue(["records", index, "evidenceIds"], "duplicate evidenceId");
+    }
+    const identity = JSON.stringify(record.sourceReference.source);
+    const priorIdentity = sourceIdentities.get(record.sourceReference.sourceId);
+    if (priorIdentity !== undefined && priorIdentity !== identity) {
+      issue(
+        ["records", index, "sourceReference", "sourceId"],
+        "sourceId must identify exactly one source identity",
+      );
+    }
+    sourceIdentities.set(record.sourceReference.sourceId, identity);
+    if (
+      Date.parse(record.sourceReference.freshness.asOf) < start ||
+      Date.parse(record.sourceReference.provenance.collectedAt) < start
+    ) {
+      issue(
+        ["records", index, "sourceReference"],
+        "source collection and freshness must fall within the snapshot window",
+      );
+    }
     if (Date.parse(record.sourceReference.freshness.asOf) > generated) {
       issue(
         ["records", index, "sourceReference", "freshness", "asOf"],
@@ -253,6 +285,10 @@ export const operationalTriageSnapshotSchema = z.strictObject({
   const available = new Set(
     snapshot.records.flatMap((record) => record.evidenceIds),
   );
+  if (
+    new Set(snapshot.escalation.evidenceIds).size !==
+      snapshot.escalation.evidenceIds.length
+  ) issue(["escalation", "evidenceIds"], "duplicate escalation evidenceId");
   if (
     snapshot.escalation.disposition === "none" &&
     (snapshot.escalation.evidenceIds.length ||
