@@ -21,7 +21,9 @@ function sdk(overrides: Partial<LinearSDKLike> = {}): LinearSDKLike {
     issues: unsupported,
     teams: unsupported,
     team: unsupported,
+    project: unsupported,
     projects: unsupported,
+    document: unsupported,
     workflowStates: unsupported,
     issueLabels: unsupported,
     createComment: unsupported,
@@ -48,6 +50,21 @@ function issueNode() {
   };
 }
 
+function documentNode() {
+  return {
+    id: "document-1",
+    slugId: "998cb1fe27f8",
+    title: "Automated MS Foundations Video Transcript",
+    content: "# Transcript\n\nHello",
+    url:
+      "https://linear.app/example/document/automated-ms-foundations-video-transcript-998cb1fe27f8",
+    sortOrder: 4,
+    createdAt: new Date("2026-08-24T12:00:00.000Z"),
+    updatedAt: "2026-08-25T12:00:00.000Z",
+    project: Promise.resolve({ id: "project-1", name: "Foundations" }),
+  };
+}
+
 Deno.test("global arguments require an API key and preserve optional defaults", () => {
   assertEquals(model.globalArguments.parse({
     apiKey: "lin_api_key",
@@ -69,6 +86,24 @@ Deno.test("issue method schemas enforce required identifiers and priority bounds
   );
   assertThrows(() =>
     model.methods.updateIssue.arguments.parse({ identifier: "ENG-42", priority: 5 })
+  );
+});
+
+Deno.test("document methods accept URLs and require a project ID", () => {
+  const url =
+    "https://linear.app/example/document/automated-ms-foundations-video-transcript-998cb1fe27f8";
+  assertEquals(model.methods.getDocument.arguments.parse({ idOrUrl: url }), {
+    idOrUrl: url,
+  });
+  assertThrows(() => model.methods.getDocument.arguments.parse({ idOrUrl: "" }));
+  assertEquals(
+    model.methods.listProjectResources.arguments.parse({
+      projectId: "project-1",
+    }),
+    { projectId: "project-1" },
+  );
+  assertThrows(() =>
+    model.methods.listProjectResources.arguments.parse({ projectId: "" })
   );
 });
 
@@ -370,6 +405,171 @@ Deno.test("client adapter chooses team-scoped and global project sources", async
   assertEquals(teamRequested, "team-1");
   assertEquals(await client.listProjects(), [
     { id: "p2", name: "Global", state: "planned" },
+  ]);
+});
+
+Deno.test("client adapter resolves a document URL to its slug ID", async () => {
+  let requested = "";
+  const client = buildLinearClient(sdk({
+    document: (id) => {
+      requested = id;
+      return Promise.resolve(documentNode());
+    },
+  }));
+  const document = await client.getDocument(
+    "https://linear.app/example/document/automated-ms-foundations-video-transcript-998cb1fe27f8",
+  );
+  assertEquals(requested, "998cb1fe27f8");
+  assertEquals(document, {
+    id: "document-1",
+    slugId: "998cb1fe27f8",
+    title: "Automated MS Foundations Video Transcript",
+    content: "# Transcript\n\nHello",
+    url:
+      "https://linear.app/example/document/automated-ms-foundations-video-transcript-998cb1fe27f8",
+    sortOrder: 4,
+    project: { id: "project-1", name: "Foundations" },
+    createdAt: "2026-08-24T12:00:00.000Z",
+    updatedAt: "2026-08-25T12:00:00.000Z",
+  });
+});
+
+Deno.test("client adapter lists project documents and external links", async () => {
+  const emptyNextPage = () => Promise.reject(new Error("unexpected next page"));
+  const client = buildLinearClient(sdk({
+    project: () => Promise.resolve({
+      id: "project-1",
+      name: "Foundations",
+      state: "started",
+      documents: () => Promise.resolve({
+        nodes: [documentNode()],
+        pageInfo: { hasNextPage: false, endCursor: "" },
+        fetchNext: emptyNextPage,
+      }),
+      externalLinks: () => Promise.resolve({
+        nodes: [{
+          id: "link-1",
+          label: "Runbook",
+          url: "https://example.test/runbook",
+          sortOrder: 5,
+          createdAt: "2026-08-24T13:00:00.000Z",
+          updatedAt: new Date("2026-08-25T13:00:00.000Z"),
+        }],
+        pageInfo: { hasNextPage: false, endCursor: "" },
+        fetchNext: emptyNextPage,
+      }),
+    }),
+  }));
+
+  const resources = await client.listProjectResources("project-1");
+  assertEquals(resources.project, {
+    id: "project-1",
+    name: "Foundations",
+    state: "started",
+  });
+  assertEquals(resources.documents[0].project, {
+    id: "project-1",
+    name: "Foundations",
+  });
+  assertEquals(resources.externalLinks, [{
+    id: "link-1",
+    label: "Runbook",
+    url: "https://example.test/runbook",
+    sortOrder: 5,
+    project: { id: "project-1", name: "Foundations" },
+    createdAt: "2026-08-24T13:00:00.000Z",
+    updatedAt: "2026-08-25T13:00:00.000Z",
+  }]);
+});
+
+Deno.test("client adapter paginates and deduplicates project resources", async () => {
+  const secondDocument = {
+    ...documentNode(),
+    id: "document-2",
+    slugId: "abcdef123456",
+    title: "Second document",
+  };
+  const secondPage = {
+    nodes: [documentNode(), secondDocument],
+    pageInfo: { hasNextPage: false, endCursor: "" },
+    fetchNext: () => Promise.reject(new Error("unexpected third page")),
+  };
+  const client = buildLinearClient(sdk({
+    project: () => Promise.resolve({
+      id: "project-1",
+      name: "Foundations",
+      state: "started",
+      documents: () => Promise.resolve({
+        nodes: [documentNode()],
+        pageInfo: { hasNextPage: true, endCursor: "cursor-1" },
+        fetchNext: () => Promise.resolve(secondPage),
+      }),
+      externalLinks: () => Promise.resolve({
+        nodes: [],
+        pageInfo: { hasNextPage: false, endCursor: "" },
+        fetchNext: () => Promise.reject(new Error("unexpected next page")),
+      }),
+    }),
+  }));
+
+  const resources = await client.listProjectResources("project-1");
+  assertEquals(resources.documents.map((document) => document.id), [
+    "document-1",
+    "document-2",
+  ]);
+});
+
+Deno.test("document methods write distinct document and link resources", async () => {
+  const client = buildLinearClient(sdk({
+    document: () => Promise.resolve(documentNode()),
+    project: () => Promise.resolve({
+      id: "project-1",
+      name: "Foundations",
+      state: "started",
+      documents: () => Promise.resolve({
+        nodes: [documentNode()],
+        pageInfo: { hasNextPage: false, endCursor: "" },
+        fetchNext: () => Promise.reject(new Error("unexpected next page")),
+      }),
+      externalLinks: () => Promise.resolve({
+        nodes: [{
+          id: "link-1",
+          label: "Runbook",
+          url: "https://example.test/runbook",
+          sortOrder: 5,
+          createdAt: "2026-08-24T13:00:00.000Z",
+          updatedAt: "2026-08-25T13:00:00.000Z",
+        }],
+        pageInfo: { hasNextPage: false, endCursor: "" },
+        fetchNext: () => Promise.reject(new Error("unexpected next page")),
+      }),
+    }),
+  }));
+  const written: Array<{ spec: string; instance: string }> = [];
+  const context = {
+    globalArgs: { apiKey: "k" },
+    logger: { info: () => {} },
+    writeResource: (
+      spec: string,
+      instance: string,
+      data: Record<string, unknown>,
+    ) => {
+      written.push({ spec, instance });
+      return Promise.resolve({ spec, instance, data });
+    },
+  };
+  const { getDocument, listProjectResources } = await import(
+    "./linear/methods.ts"
+  );
+
+  await getDocument(client, context, { idOrUrl: "998cb1fe27f8" });
+  await listProjectResources(client, context, { projectId: "project-1" });
+
+  assertEquals(written, [
+    { spec: "document", instance: "document-998cb1fe27f8" },
+    { spec: "project", instance: "project-1" },
+    { spec: "document", instance: "document-998cb1fe27f8" },
+    { spec: "projectExternalLink", instance: "project-link-link-1" },
   ]);
 });
 

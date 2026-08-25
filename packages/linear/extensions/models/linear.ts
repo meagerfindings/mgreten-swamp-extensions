@@ -2,8 +2,9 @@
  * @mgreten/linear — Linear project management integration for swamp.
  *
  * Provides issue CRUD, viewer resolution, label management, comment threads,
- * and team/project/state listing via the official `@linear/sdk`. All data is
- * written as swamp resources for downstream CEL access and workflow chaining.
+ * documents, project resources, and team/project/state listing via the
+ * official `@linear/sdk`. All data is written as swamp resources for
+ * downstream CEL access and workflow chaining.
  *
  * Client abstraction pattern derived from `@hivemq/linear` by HiveMQ.
  *
@@ -21,11 +22,13 @@ import {
   createIssue,
   createMyIssue,
   deleteIssue,
+  getDocument,
   getIssue,
   getViewer,
   listComments,
   listIssues,
   listLabels,
+  listProjectResources,
   listProjects,
   listStates,
   listTeams,
@@ -117,6 +120,32 @@ const ProjectSchema = z.object({
   syncedAt: z.string(),
 });
 
+const DocumentSchema = z.object({
+  id: z.string(),
+  slugId: z.string(),
+  title: z.string(),
+  content: z.string(),
+  url: z.string(),
+  sortOrder: z.number(),
+  projectId: z.string(),
+  projectName: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  syncedAt: z.string(),
+});
+
+const ProjectExternalLinkSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  url: z.string(),
+  sortOrder: z.number(),
+  projectId: z.string(),
+  projectName: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  syncedAt: z.string(),
+});
+
 const WorkflowStateSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -176,13 +205,14 @@ function getClient(
 /**
  * Linear project management model for swamp.
  *
- * Provides 15 methods for managing Linear issues, teams, projects, labels,
- * comments, and workflow states. Supports auto-assignment via viewer
- * resolution, label attachment by name, and full comment-thread sync.
+ * Provides 17 methods for managing Linear issues and reading teams, projects,
+ * documents, project resources, labels, comments, and workflow states.
+ * Supports auto-assignment via viewer resolution, label attachment by name,
+ * and full comment-thread sync.
  */
 export const model = {
   type: "@mgreten/linear",
-  version: "2026.08.21.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
   // Additive releases leave globalArguments unchanged, so existing instances
   // migrate with their configuration untouched.
@@ -197,6 +227,12 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Add verified issue deletion and immutable deletion evidence; config unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description:
+        "Add read-only Linear document and project-resource retrieval; config unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
     },
   ],
@@ -218,6 +254,18 @@ export const model = {
       schema: ProjectSchema,
       lifetime: "infinite" as const,
       garbageCollection: 100,
+    },
+    document: {
+      description: "A Linear document with Markdown content",
+      schema: DocumentSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 200,
+    },
+    projectExternalLink: {
+      description: "An external link in a Linear project's Resources section",
+      schema: ProjectExternalLinkSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 200,
     },
     workflowState: {
       description: "A Linear workflow state (e.g. Backlog, In Progress, Done)",
@@ -541,6 +589,37 @@ export const model = {
           getClient(context as MethodContext),
           context as MethodContext,
           args as { teamId?: string; filter?: string },
+        ),
+    },
+
+    getDocument: {
+      description:
+        "Fetch a Linear document by UUID, slug ID, or canonical document URL",
+      arguments: z.object({
+        idOrUrl: z
+          .string()
+          .min(1)
+          .describe("Document UUID, slug ID, or linear.app document URL"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        getDocument(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { idOrUrl: string },
+        ),
+    },
+
+    listProjectResources: {
+      description:
+        "Fetch all documents and external links in a Linear project's Resources section",
+      arguments: z.object({
+        projectId: z.string().min(1).describe("Linear project UUID"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listProjectResources(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { projectId: string },
         ),
     },
 

@@ -2,9 +2,10 @@
 
 Linear project management integration for swamp. Provides verified issue CRUD, viewer
 auto-assignment, label management by name, comment threads, and
-team/project/state listing — all backed by the official `@linear/sdk`. Every
-API response is written as a swamp resource, making it available for CEL
-expressions, data queries, and workflow chaining.
+document/project-resource retrieval alongside team/project/state listing — all
+backed by the official `@linear/sdk`. Every API response is written as a swamp
+resource, making it available for CEL expressions, data queries, and workflow
+chaining.
 
 ## Installation
 
@@ -73,6 +74,14 @@ swamp model method run my-linear listLabels
 swamp model method run my-linear listTeams
 swamp model method run my-linear listProjects
 swamp model method run my-linear listStates
+
+# Fetch a document by UUID, slug ID, or canonical Linear URL
+swamp model method run my-linear getDocument \
+  --input idOrUrl="https://linear.app/acme/document/runbook-998cb1fe27f8"
+
+# Fetch every document and external link in a project's Resources section
+swamp model method run my-linear listProjectResources \
+  --input projectId="<project-uuid>"
 
 # Fetch the full comment thread on an issue
 swamp model method run my-linear listComments --input identifier="ENG-123"
@@ -184,6 +193,22 @@ List all Linear teams. Writes each team as a `team` resource.
 List projects, optionally filtered by team or name substring. Writes each
 project as a `project` resource.
 
+### getDocument
+
+Fetch one Linear document by UUID, 12-character slug ID, or canonical
+`linear.app/.../document/...` URL. Writes a `document` resource containing the
+title, Markdown content, canonical URL, sort order, timestamps, and associated
+project. Documents without a project use empty `projectId` and `projectName`
+fields.
+
+### listProjectResources
+
+Fetch all entries displayed in a Linear project's **Resources** section. The
+method follows pagination for both entity types and writes Documents as
+`document` resources and external links as `projectExternalLink` resources. It
+also refreshes the owning `project` resource, including when the Resources
+section is empty.
+
 ### listStates
 
 List workflow states for a team. Writes each state as a `workflowState`
@@ -202,16 +227,18 @@ refreshed `commentThread` resource so consumers always read from one spec.
 
 ## Resources
 
-| Resource        | Description                     | Lifetime | GC  |
-| --------------- | ------------------------------- | -------- | --- |
-| `issue`         | Linear issue with relations     | infinite | 200 |
-| `team`          | Linear team                     | infinite | 50  |
-| `project`       | Linear project                  | infinite | 100 |
-| `workflowState` | Workflow state (Backlog, etc.)  | infinite | 50  |
-| `viewer`        | Authenticated Linear user       | infinite | 5   |
-| `label`         | Issue label                     | infinite | 100 |
-| `commentThread` | Full comment thread on an issue | infinite | 200 |
-| `issueDeletion` | Verified issue deletion audit    | infinite | 50  |
+| Resource              | Description                              | Lifetime | GC  |
+| --------------------- | ---------------------------------------- | -------- | --- |
+| `issue`               | Linear issue with relations              | infinite | 200 |
+| `team`                | Linear team                              | infinite | 50  |
+| `project`             | Linear project                           | infinite | 100 |
+| `document`            | Document with Markdown and project       | infinite | 200 |
+| `projectExternalLink` | External link from a project's Resources | infinite | 200 |
+| `workflowState`       | Workflow state (Backlog, etc.)           | infinite | 50  |
+| `viewer`              | Authenticated Linear user                | infinite | 5   |
+| `label`               | Issue label                              | infinite | 100 |
+| `commentThread`       | Full comment thread on an issue          | infinite | 200 |
+| `issueDeletion`       | Verified issue deletion audit            | infinite | 50  |
 
 ## How It Works
 
@@ -221,7 +248,9 @@ Linear's GraphQL API. The SDK is instantiated at method execution time from the
 
 The client layer normalizes the SDK's promise-based relation loading (where
 `issue.state`, `issue.team`, etc. are separate promises) into flat data objects
-before writing them as swamp resources.
+before writing them as swamp resources. Linear Documents and external project
+links are separate API entities; `listProjectResources` preserves that
+distinction while retrieving both parts of the Resources UI.
 
 ## Acknowledgments
 

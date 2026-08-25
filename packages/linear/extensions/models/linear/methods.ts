@@ -88,6 +88,25 @@ function commentThreadResourceData(
   };
 }
 
+/** Map a Linear document to the flat `document` resource shape. */
+function documentResourceData(
+  document: Awaited<ReturnType<LinearClient["getDocument"]>>,
+): Record<string, unknown> {
+  return {
+    id: document.id,
+    slugId: document.slugId,
+    title: document.title,
+    content: document.content,
+    url: document.url,
+    sortOrder: document.sortOrder,
+    projectId: document.project?.id ?? "",
+    projectName: document.project?.name ?? "",
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
+    syncedAt: new Date().toISOString(),
+  };
+}
+
 /** Resolve the authenticated user's ID, name, and email. */
 export async function getViewer(
   client: LinearClient,
@@ -588,6 +607,85 @@ export async function listProjects(
     );
   }
 
+  return { dataHandles: handles };
+}
+
+/** Fetch one Linear document by UUID, slug ID, or canonical document URL. */
+export async function getDocument(
+  client: LinearClient,
+  context: MethodContext,
+  args: { idOrUrl: string },
+): Promise<MethodResult> {
+  context.logger.info(`Fetching Linear document ${args.idOrUrl}`);
+  const document = await client.getDocument(args.idOrUrl);
+  const handle = await context.writeResource(
+    "document",
+    `document-${document.slugId}`,
+    documentResourceData(document),
+  );
+  context.logger.info(`Fetched Linear document ${document.slugId}`);
+  return { dataHandles: [handle] };
+}
+
+/**
+ * List every document and external link in a Linear project's Resources.
+ *
+ * The project itself is always refreshed, even when its Resources section is
+ * empty. Documents and external links remain separate swamp resource specs to
+ * preserve Linear's entity distinction.
+ */
+export async function listProjectResources(
+  client: LinearClient,
+  context: MethodContext,
+  args: { projectId: string },
+): Promise<MethodResult> {
+  context.logger.info(`Listing Resources for Linear project ${args.projectId}`);
+  const resources = await client.listProjectResources(args.projectId);
+  const syncedAt = new Date().toISOString();
+  const handles: DataHandle[] = [
+    await context.writeResource("project", resources.project.id, {
+      id: resources.project.id,
+      name: resources.project.name,
+      state: resources.project.state,
+      syncedAt,
+    }),
+  ];
+
+  for (const document of resources.documents) {
+    handles.push(
+      await context.writeResource(
+        "document",
+        `document-${document.slugId}`,
+        documentResourceData(document),
+      ),
+    );
+  }
+
+  for (const link of resources.externalLinks) {
+    handles.push(
+      await context.writeResource(
+        "projectExternalLink",
+        `project-link-${link.id}`,
+        {
+          id: link.id,
+          label: link.label,
+          url: link.url,
+          sortOrder: link.sortOrder,
+          projectId: link.project.id,
+          projectName: link.project.name,
+          createdAt: link.createdAt,
+          updatedAt: link.updatedAt,
+          syncedAt,
+        },
+      ),
+    );
+  }
+
+  context.logger.info(
+    `Fetched ${resources.documents.length} document(s) and ` +
+      `${resources.externalLinks.length} external link(s) for Linear project ` +
+      `${resources.project.id}`,
+  );
   return { dataHandles: handles };
 }
 

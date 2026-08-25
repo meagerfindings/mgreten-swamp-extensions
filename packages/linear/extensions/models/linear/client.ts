@@ -35,6 +35,37 @@ export interface ProjectData {
   state: string;
 }
 
+/** Flat representation of a Linear document and its project association. */
+export interface DocumentData {
+  id: string;
+  slugId: string;
+  title: string;
+  content: string;
+  url: string;
+  sortOrder: number;
+  project: { id: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Flat representation of an external link in a Linear project's resources. */
+export interface ProjectExternalLinkData {
+  id: string;
+  label: string;
+  url: string;
+  sortOrder: number;
+  project: { id: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Documents and external links displayed in a Linear project's Resources. */
+export interface ProjectResourcesData {
+  project: ProjectData;
+  documents: DocumentData[];
+  externalLinks: ProjectExternalLinkData[];
+}
+
 /** Flat representation of a Linear workflow state. */
 export interface WorkflowStateData {
   id: string;
@@ -119,6 +150,39 @@ interface SDKCommentNode {
   botActor?: { id?: string; name?: string } | undefined;
 }
 
+interface SDKDocumentNode {
+  id: string;
+  slugId: string;
+  title: string;
+  content?: string | null;
+  url: string;
+  sortOrder: number;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  project?: Promise<{ id: string; name: string } | undefined>;
+}
+
+interface SDKProjectExternalLinkNode {
+  id: string;
+  label: string;
+  url: string;
+  sortOrder: number;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
+
+interface SDKProjectNode {
+  id: string;
+  name: string;
+  state: string;
+  documents: (
+    variables?: { first?: number },
+  ) => Promise<SDKConnection<SDKDocumentNode>>;
+  externalLinks: (
+    variables?: { first?: number },
+  ) => Promise<SDKConnection<SDKProjectExternalLinkNode>>;
+}
+
 interface SDKIssueNode {
   id: string;
   identifier: string;
@@ -170,9 +234,11 @@ export interface LinearSDKLike {
       { nodes: Array<{ id: string; name: string; state: string }> }
     >;
   }>;
+  project(id: string): Promise<SDKProjectNode>;
   projects(): Promise<
     { nodes: Array<{ id: string; name: string; state: string }> }
   >;
+  document(id: string): Promise<SDKDocumentNode>;
   workflowStates(opts?: unknown): Promise<{
     nodes: Array<{ id: string; name: string; type: string; color: string }>;
   }>;
@@ -203,6 +269,51 @@ async function resolveComment(comment: SDKCommentNode): Promise<CommentData> {
     isBot,
     createdAt,
   };
+}
+
+function isoDate(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+async function allConnectionNodes<TNode extends { id: string }>(
+  firstPage: SDKConnection<TNode>,
+): Promise<TNode[]> {
+  const nodes = new Map(firstPage.nodes.map((node) => [node.id, node]));
+  let page = firstPage;
+  while (page.pageInfo.hasNextPage) {
+    page = await page.fetchNext();
+    for (const node of page.nodes) nodes.set(node.id, node);
+  }
+  return [...nodes.values()];
+}
+
+async function resolveDocument(
+  document: SDKDocumentNode,
+  knownProject?: { id: string; name: string },
+): Promise<DocumentData> {
+  const project = knownProject ??
+    (document.project ? await document.project : undefined);
+  return {
+    id: document.id,
+    slugId: document.slugId,
+    title: document.title,
+    content: document.content ?? "",
+    url: document.url,
+    sortOrder: document.sortOrder,
+    project: project ?? null,
+    createdAt: isoDate(document.createdAt),
+    updatedAt: isoDate(document.updatedAt),
+  };
+}
+
+function documentLookupId(idOrUrl: string): string {
+  try {
+    const url = new URL(idOrUrl);
+    const pathPart = url.pathname.split("/").filter(Boolean).at(-1) ?? "";
+    return pathPart.match(/-([a-z0-9]{12})$/i)?.[1] ?? pathPart;
+  } catch {
+    return idOrUrl;
+  }
 }
 
 /** Fetch every comment on an issue, oldest first, paginating to exhaustion. */
@@ -270,6 +381,10 @@ export interface LinearClient {
   listTeams(): Promise<TeamData[]>;
   /** List projects, optionally scoped to a team. */
   listProjects(teamId?: string): Promise<ProjectData[]>;
+  /** Fetch one document by UUID, slug ID, or Linear document URL. */
+  getDocument(idOrUrl: string): Promise<DocumentData>;
+  /** List documents and external links in a project's Resources section. */
+  listProjectResources(projectId: string): Promise<ProjectResourcesData>;
   /** List workflow states for a team. */
   listStates(teamId: string): Promise<WorkflowStateData[]>;
   /** List issue labels for a team. */
@@ -378,6 +493,50 @@ export function buildLinearClient(sdk: LinearSDKLike): LinearClient {
         name: p.name,
         state: p.state,
       }));
+    },
+
+    async getDocument(idOrUrl: string): Promise<DocumentData> {
+      const document = await sdk.document(documentLookupId(idOrUrl));
+      return resolveDocument(document);
+    },
+
+    async listProjectResources(
+      projectId: string,
+    ): Promise<ProjectResourcesData> {
+      const project = await sdk.project(projectId);
+      const [documentConnection, linkConnection] = await Promise.all([
+        project.documents({ first: 50 }),
+        project.externalLinks({ first: 50 }),
+      ]);
+      const [documentNodes, linkNodes] = await Promise.all([
+        allConnectionNodes(documentConnection),
+        allConnectionNodes(linkConnection),
+      ]);
+      const projectData = {
+        id: project.id,
+        name: project.name,
+        state: project.state,
+      };
+      return {
+        project: projectData,
+        documents: await Promise.all(
+          documentNodes.map((document) =>
+            resolveDocument(document, {
+              id: projectData.id,
+              name: projectData.name,
+            })
+          ),
+        ),
+        externalLinks: linkNodes.map((link) => ({
+          id: link.id,
+          label: link.label,
+          url: link.url,
+          sortOrder: link.sortOrder,
+          project: { id: projectData.id, name: projectData.name },
+          createdAt: isoDate(link.createdAt),
+          updatedAt: isoDate(link.updatedAt),
+        })),
+      };
     },
 
     async listStates(teamId: string): Promise<WorkflowStateData[]> {
