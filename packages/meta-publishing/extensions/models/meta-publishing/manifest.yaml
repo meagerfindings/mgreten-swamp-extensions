@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@mgreten/meta-publishing"
+version: "2026.08.26.1"
+description: >-
+  Fail-closed Meta Graph API models for exact-approved Facebook and Instagram
+  publication and PAUSED-only Meta Ads draft creation.
+repository: "https://github.com/meagerfindings/moment-savor"
+paths:
+  base: manifest
+models:
+  - meta_social_publisher.ts
+  - meta_ads_publisher.ts
+additionalFiles:
+  - README.md
+platforms: []
+labels:
+  - meta
+  - facebook
+  - instagram
+  - social-media
+  - ads
