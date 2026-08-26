@@ -17,7 +17,7 @@ const manifest = {
   campaignVersion: 1,
   promise: "Scrapbook the moments that usually don't get scrapbooked.",
   landingPage: {
-    url: "https://momentsavor.app/campaigns/s4v8m2k7p9qx",
+    url: "https://www.example.com/campaigns/example-campaign",
     headline: "Scrapbook the moments that usually don't get scrapbooked.",
     paragraphs: [
       ["The funny phrase. The ordinary errand. The small story you still want to remember."],
@@ -110,7 +110,7 @@ function context(
         graphVersion: "v26.0",
         requestTimeoutMs: 10000,
         instagramContainerPollAttempts: 3,
-        instagramContainerPollDelayMs: 100,
+        instagramContainerPollDelayMs: 60000,
       },
       readResource: async () => existing,
       writeResource: async (
@@ -125,7 +125,7 @@ function context(
   };
 }
 
-Deno.test("readiness preserves exact cohesive landing/social digests and account blockers", async () => {
+Deno.test("readiness is credential-free and preserves cohesive content digests", async () => {
   const ctx = context(null, false);
   const value = await packet();
   const result = await model.methods.readiness.execute(
@@ -135,17 +135,29 @@ Deno.test("readiness preserves exact cohesive landing/social digests and account
   assertEquals(result.dataHandles, [{
     name: `readiness-${value.socialPacketDigest}`,
   }]);
-  assertEquals(ctx.writes[0][2].status, "blocked");
+  assertEquals(ctx.writes[0][2].status, "ready");
   assertEquals(
     ctx.writes[0][2].landingPageDigest,
     value.landingPageDigest,
   );
-  assertEquals(ctx.writes[0][2].missing, [
-    "vaultCredentialSource",
-    "accessToken",
-    "facebookPageId",
-    "instagramBusinessAccountId",
-  ]);
+  assertEquals(ctx.writes[0][2].missing, []);
+  assertEquals(ctx.writes[0][2].credentialReadinessNotChecked, true);
+  assertEquals(ctx.writes[0][2].accountReadinessNotChecked, true);
+});
+
+Deno.test("publication policy check fails closed on missing credential configuration", async () => {
+  const check = model.checks["meta-social-mutation-configuration"];
+  assertEquals(check.labels, ["policy"]);
+  assertEquals(check.appliesTo, ["publish"]);
+  assertEquals(await check.execute(context().value), { pass: true });
+  assertEquals(await check.execute(context(null, false).value), {
+    pass: false,
+    errors: [
+      "credentialSource must attest a Swamp vault binding",
+      "accessToken must resolve from a Swamp vault",
+      "at least one Meta account ID must be configured",
+    ],
+  });
 });
 
 Deno.test("rejects campaign, landing, copy, social, rights, and approval drift before fetch", async () => {
@@ -276,6 +288,63 @@ Deno.test("retains Instagram container checkpoint when bounded readiness fails",
   );
 });
 
+Deno.test("already-published Instagram containers require reconciliation", async () => {
+  const ctx = context();
+  const instagramPacket = await packet(["instagram"]);
+  const instagramApproval = await approval(["instagram"]);
+  const error = await assertRejects(() =>
+    publishPacket(
+      {
+        packet: instagramPacket,
+        approval: instagramApproval,
+        idempotencyKey: "already-published",
+        dryRun: false,
+      },
+      ctx.value,
+      (async (_url: string | URL | Request, init?: RequestInit) =>
+        (init?.method ?? "GET") === "GET"
+          ? Response.json({ status_code: "PUBLISHED" })
+          : Response.json({ id: "container-1" })) as typeof fetch,
+      async () => {},
+    )
+  ) as Error;
+  assert(error.message.includes("already published"));
+  assertEquals(ctx.writes.map((write) => write[2].status), [
+    "intent",
+    "instagram_container_created",
+  ]);
+});
+
+Deno.test("Graph failures are sanitized, classified, and never retried", async () => {
+  const ctx = context();
+  let calls = 0;
+  const value = await packet(["facebook"]);
+  const facebookApproval = await approval(["facebook"]);
+  const error = await assertRejects(() =>
+    publishPacket(
+      {
+        packet: value,
+        approval: facebookApproval,
+        idempotencyKey: "rate-limited",
+        dryRun: false,
+      },
+      ctx.value,
+      (async () => {
+        calls++;
+        return Response.json(
+          { error: { code: 4, message: "secret provider detail" } },
+          { status: 429 },
+        );
+      }) as typeof fetch,
+    )
+  ) as Error;
+  assertEquals(calls, 1);
+  assert(error.message.includes("Meta code 4"));
+  assert(error.message.includes("reconcile remote state"));
+  assert(!error.message.includes("secret provider detail"));
+  assertEquals(ctx.writes.map((write) => write[2].status), ["intent"]);
+});
+
 Deno.test("dry run makes no calls and exact/conflicting replays fail closed", async () => {
   let calls = 0;
   const value = await packet(["facebook"]);
@@ -296,6 +365,10 @@ Deno.test("dry run makes no calls and exact/conflicting replays fail closed", as
   );
   assertEquals(calls, 0);
   assertEquals(ctx.writes[0][2].status, "dry_run");
+  assertEquals(ctx.writes[0][2].requests, [{
+    platform: "facebook",
+    mediaUrl: "https://cdn.example.test/facebook.jpg",
+  }]);
   const exact = {
     campaignPacketDigest: value.campaignPacketDigest,
     socialPacketDigest: value.socialPacketDigest,
@@ -340,7 +413,8 @@ Deno.test("workflow preserves one exact founder approval boundary", async () => 
   for (
     const text of [
       "manual_approval",
-      "founder-approve-exact-social-packet, condition: { type: succeeded }",
+      "step: founder-approve-exact-social-packet",
+      "condition: { type: succeeded }",
       "campaignPacketDigest",
       "landingPageDigest",
       "socialPacketDigest",

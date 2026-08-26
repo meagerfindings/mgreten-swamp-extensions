@@ -8,7 +8,7 @@ import {
 
 const hash = (character: string) => character.repeat(64);
 const destination =
-  "https://momentsavor.app/campaigns/s4v8m2k7p9qx?utm_source=facebook&utm_medium=paid_social&utm_campaign=unscrapbooked-moments&utm_content=ordinary-moments";
+  "https://www.example.com/campaigns/example-campaign?utm_source=facebook&utm_medium=paid_social&utm_campaign=unscrapbooked-moments&utm_content=ordinary-moments";
 
 const baseManifest = {
   schemaVersion: "1.0" as const,
@@ -120,11 +120,9 @@ function context(
       globalArgs: {
         accessToken: configured ? "system-user-secret" : "",
         credentialSource: configured ? "vault" : "unconfigured",
-        businessId: configured ? "1" : "",
         adAccountId: configured ? "2" : "",
         pageId: configured ? "3" : "",
         pixelId: configured ? "4" : "",
-        appId: configured ? "5" : "",
         graphVersion: "v26.0",
         requestTimeoutMs: 10000,
         maxDailyBudgetMinor: 2000,
@@ -150,15 +148,27 @@ Deno.test("readiness verifies exact campaign, landing, creative, and ads packet 
     { packet: value } as never,
     ctx.value as never,
   );
-  assertEquals(ctx.writes[0].status, "blocked");
+  assertEquals(ctx.writes[0].status, "ready");
   assertEquals(ctx.writes[0].adsPacketDigest, value.adsPacketDigest);
-  assertEquals(ctx.writes[0].missing, [
-    "businessId",
-    "adAccountId",
-    "pageId",
-    "appId",
-  ]);
+  assertEquals(ctx.writes[0].missing, []);
   assertEquals(ctx.writes[0].credentialReadinessNotChecked, true);
+  assertEquals(ctx.writes[0].accountReadinessNotChecked, true);
+});
+
+Deno.test("draft policy check fails closed on missing credential configuration", async () => {
+  const check = model.checks["meta-ads-mutation-configuration"];
+  assertEquals(check.labels, ["policy"]);
+  assertEquals(check.appliesTo, ["createDraft"]);
+  assertEquals(await check.execute(context().value as never), { pass: true });
+  assertEquals(await check.execute(context(false).value as never), {
+    pass: false,
+    errors: [
+      "credentialSource must attest a Swamp vault binding",
+      "accessToken must resolve from a Swamp vault",
+      "adAccountId must be configured",
+      "pageId must be configured",
+    ],
+  });
 });
 
 Deno.test("creates Campaign, Ad Set, Creative, and Ad with paused delivery objects", async () => {
@@ -193,6 +203,14 @@ Deno.test("creates Campaign, Ad Set, Creative, and Ad with paused delivery objec
   assertEquals(calls[0].body.get("status"), "PAUSED");
   assertEquals(calls[1].body.get("status"), "PAUSED");
   assertEquals(calls[1].body.get("destination_type"), "WEBSITE");
+  assertEquals(
+    JSON.parse(calls[1].body.get("targeting_automation")!),
+    { advantage_audience: 0 },
+  );
+  assertEquals(
+    "advantage_audience" in JSON.parse(calls[1].body.get("targeting")!),
+    false,
+  );
   assertEquals(calls[3].body.get("status"), "PAUSED");
   assert(
     calls.every((call) =>
@@ -317,7 +335,7 @@ Deno.test("rejects category ambiguity, country codes, chronology, UTM, minors, a
       campaign: { ...value.campaign, specialAdCategories: ["NONE", "HOUSING"] },
     }),
     await packet({
-      destination: { ...value.destination, url: "https://momentsavor.app/x" },
+      destination: { ...value.destination, url: "https://www.example.com/x" },
     }),
     await packet({
       adSet: {
@@ -372,7 +390,7 @@ Deno.test("API failures retain the last successful remote-object checkpoint", as
     });
   }) as typeof fetch;
   const approved = await approval(value);
-  await assertRejects(
+  const error = await assertRejects(
     () =>
       createPausedDraft(
         { packet: value, approval: approved, idempotencyKey: "fail" },
@@ -381,7 +399,9 @@ Deno.test("API failures retain the last successful remote-object checkpoint", as
       ),
     Error,
     "request failed (400)",
-  );
+  ) as Error;
+  assert(error.message.includes("request rejected"));
+  assert(!error.message.includes("secret details"));
   assertEquals(calls, 2);
   assertEquals(ctx.writes.map((row) => row.status), [
     "intent",

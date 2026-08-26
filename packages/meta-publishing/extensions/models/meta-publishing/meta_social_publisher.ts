@@ -20,9 +20,9 @@ export const globalArgumentsSchema = z.strictObject({
   instagramBusinessAccountId: OptionalMetaId.default(""),
   graphVersion: z.string().regex(/^v\d+\.\d+$/).default("v26.0"),
   requestTimeoutMs: z.number().int().min(1000).max(30000).default(10000),
-  instagramContainerPollAttempts: z.number().int().min(1).max(20).default(5),
-  instagramContainerPollDelayMs: z.number().int().min(100).max(10000).default(
-    1000,
+  instagramContainerPollAttempts: z.number().int().min(1).max(5).default(5),
+  instagramContainerPollDelayMs: z.number().int().min(1000).max(60000).default(
+    60000,
   ),
 });
 
@@ -168,6 +168,8 @@ const evidenceSchema = z.strictObject({
   })).optional(),
   rightsId: marketingCampaignIdSchema.optional(),
   missing: z.array(z.string().min(1)).optional(),
+  credentialReadinessNotChecked: z.literal(true).optional(),
+  accountReadinessNotChecked: z.literal(true).optional(),
   instagramRequiresPublicHttpsMedia: z.literal(true).optional(),
   requests: z.array(z.strictObject({
     platform: Platform,
@@ -255,6 +257,22 @@ function boundedSignal(timeoutMs: number, signal?: AbortSignal) {
     : AbortSignal.timeout(timeoutMs);
 }
 
+function graphFailure(status: number, payload: Record<string, unknown>) {
+  const detail = payload.error;
+  const code = detail && typeof detail === "object" &&
+      typeof (detail as Record<string, unknown>).code === "number"
+    ? `; Meta code ${(detail as Record<string, unknown>).code}`
+    : "";
+  const disposition = status === 429 || status >= 500
+    ? "transient response; reconcile remote state before retrying"
+    : status >= 200 && status < 300
+    ? "malformed success response; reconcile remote state before retrying"
+    : "request rejected";
+  return new Error(
+    `Meta Graph request failed (${status})${code}; ${disposition}`,
+  );
+}
+
 async function graphPost(
   fetcher: Fetcher,
   url: string,
@@ -273,7 +291,7 @@ async function graphPost(
     unknown
   >;
   if (!response.ok || typeof payload.id !== "string") {
-    throw new Error(`Meta Graph request failed (${response.status})`);
+    throw graphFailure(response.status, payload);
   }
   return payload.id;
 }
@@ -307,6 +325,11 @@ async function waitForInstagramContainer(
       throw new Error(`Instagram container status failed (${response.status})`);
     }
     if (status === "FINISHED") return;
+    if (status === "PUBLISHED") {
+      throw new Error(
+        "Instagram container is already published; reconcile the remote media before retrying",
+      );
+    }
     if (["ERROR", "EXPIRED"].includes(status)) {
       throw new Error(`Instagram container entered terminal status ${status}`);
     }
@@ -326,6 +349,7 @@ export async function publishPacket(
   fetcher: Fetcher = fetch,
   sleep?: Sleeper,
 ) {
+  context.logger.info("Validating Meta publication request");
   const args = publishArgumentsSchema.parse(raw);
   const packet = await verifyPacket(args.packet);
   await verifyApproval(packet, args.approval);
@@ -374,7 +398,10 @@ export async function publishPacket(
     const handle = await context.writeResource("evidence", name, {
       ...evidence,
       status: "dry_run",
-      requests: [],
+      requests: packet.posts.map((post) => ({
+        platform: post.platform,
+        mediaUrl: post.mediaUrl ?? null,
+      })),
     });
     context.logger.info("Recorded Meta publication dry run", {
       campaignId: packet.manifest.campaignId,
@@ -483,6 +510,25 @@ export const model = {
       garbageCollection: 1000,
     },
   },
+  checks: {
+    "meta-social-mutation-configuration": {
+      description:
+        "Require an explicitly vault-configured token and at least one Meta account before publication",
+      labels: ["policy"],
+      appliesTo: ["publish"],
+      execute: (context: Context) => {
+        const config = globalArgumentsSchema.parse(context.globalArgs);
+        const errors = [
+          config.credentialSource !== "vault" &&
+          "credentialSource must attest a Swamp vault binding",
+          !config.accessToken && "accessToken must resolve from a Swamp vault",
+          !config.facebookPageId && !config.instagramBusinessAccountId &&
+          "at least one Meta account ID must be configured",
+        ].filter(Boolean) as string[];
+        return errors.length ? { pass: false, errors } : { pass: true };
+      },
+    },
+  },
   methods: {
     readiness: {
       description:
@@ -492,37 +538,29 @@ export const model = {
         args: z.infer<typeof readinessArgumentsSchema>,
         context: Context,
       ) => {
+        context.logger.info("Validating Meta publication readiness packet");
         const packet = await verifyPacket(args.packet);
         context.logger.info("Checking Meta publication readiness", {
           campaignId: packet.manifest.campaignId,
         });
-        const platforms = packet.posts.map((post) => post.platform);
-        const missing = [
-          context.globalArgs.credentialSource !== "vault" &&
-          "vaultCredentialSource",
-          !context.globalArgs.accessToken && "accessToken",
-          platforms.includes("facebook") &&
-          !context.globalArgs.facebookPageId && "facebookPageId",
-          platforms.includes("instagram") &&
-          !context.globalArgs.instagramBusinessAccountId &&
-          "instagramBusinessAccountId",
-        ].filter(Boolean);
         const handle = await context.writeResource(
           "evidence",
           `readiness-${packet.socialPacketDigest}`,
           {
-            status: missing.length ? "blocked" : "ready",
+            status: "ready",
             campaignPacketDigest: packet.campaignPacketDigest,
             landingPageDigest: packet.landingPageDigest,
             socialPacketDigest: packet.socialPacketDigest,
-            missing,
+            missing: [],
+            credentialReadinessNotChecked: true,
+            accountReadinessNotChecked: true,
             instagramRequiresPublicHttpsMedia: true,
             rightsId: packet.rights.rightsId,
           },
         );
         context.logger.info("Completed Meta publication readiness", {
           campaignId: packet.manifest.campaignId,
-          status: missing.length ? "blocked" : "ready",
+          status: "ready",
         });
         return { dataHandles: [handle] };
       },

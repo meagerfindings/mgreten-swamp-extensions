@@ -21,10 +21,15 @@ external call. They persist redacted intent before effects and checkpoint every
 partial success. Exact and conflicting idempotency-key replays fail closed so an
 operator reconciles an uncertain call instead of blindly retrying it.
 
-Credentials must come from a Swamp vault. Literal tokens are not accepted as a
-valid configured credential source and tokens or raw Meta error bodies are never
-persisted. Readiness methods perform credential-free packet validation; they do
-not prove that a token or account is live.
+Configure credentials through a Swamp vault expression and set
+`credentialSource: vault` only as an explicit operator attestation of that
+binding. Swamp resolves expressions before model execution, so the extension
+cannot independently distinguish the resolved secret from a literal global
+argument; review the model definition as part of credential setup. Tokens are
+marked sensitive, and neither tokens nor raw Meta error bodies are persisted.
+Readiness methods perform credential- and account-independent packet validation;
+they do not prove that a token or account is live. Mutating methods additionally
+run a labeled configuration preflight.
 
 ## Organic social model
 
@@ -43,7 +48,7 @@ globalArguments:
   graphVersion: v26.0
   requestTimeoutMs: 10000
   instagramContainerPollAttempts: 5
-  instagramContainerPollDelayMs: 1000
+  instagramContainerPollDelayMs: 60000
 methods: {}
 ```
 
@@ -52,6 +57,12 @@ bindings. `publish` additionally requires the exact human approval, idempotency
 key, vault-backed credentials, and relevant account IDs. Instagram media must be
 reachable through a public HTTPS URL. Container status polling is bounded and
 checkpointed before `/media_publish`.
+
+The v26 Facebook Login path requires a Page access token and Meta's current Page
+and Instagram publishing permissions. Follow Meta's official Pages API and
+Instagram Content Publishing documentation when provisioning an app; account
+roles, Page Publishing Authorization, app review, public JPEG media, and rate
+limits cannot be proven by credential-free readiness.
 
 ## Paused Meta Ads model
 
@@ -64,11 +75,9 @@ name: my-meta-ads-publisher
 globalArguments:
   accessToken: ""
   credentialSource: unconfigured
-  businessId: ""
   adAccountId: ""
   pageId: ""
   pixelId: ""
-  appId: ""
   graphVersion: v26.0
   requestTimeoutMs: 10000
   maxDailyBudgetMinor: 2000
@@ -80,7 +89,9 @@ methods: {}
 optimization compatibility, adult ISO-country targeting, Special Ad Category,
 rights, chronology, and budget ceilings. `createDraft` requires exact human
 approval and creates Campaign → Ad Set → Creative → Ad with Campaign, Ad Set,
-and Ad fixed to `PAUSED`. There is no activation or spend method.
+and Ad fixed to `PAUSED`. Marketing API v26's
+`targeting_automation.advantage_audience` value is always explicit. There is no
+activation or spend method.
 
 Automated tests should inject deterministic Graph responses. Before any live
 use, verify current Meta permissions and API behavior, use rights-cleared test

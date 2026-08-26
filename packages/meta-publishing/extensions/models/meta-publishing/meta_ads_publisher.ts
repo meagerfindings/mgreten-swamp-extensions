@@ -20,11 +20,9 @@ const Timestamp = z.iso.datetime({ offset: true });
 export const globalArgumentsSchema = z.strictObject({
   accessToken: z.string().default("").meta({ sensitive: true }),
   credentialSource: z.enum(["unconfigured", "vault"]).default("unconfigured"),
-  businessId: OptionalMetaId.default(""),
   adAccountId: OptionalAdAccountId.default(""),
   pageId: OptionalMetaId.default(""),
   pixelId: OptionalMetaId.default(""),
-  appId: OptionalMetaId.default(""),
   graphVersion: z.string().regex(/^v\d+\.\d+$/).default("v26.0"),
   requestTimeoutMs: z.number().int().min(1000).max(30000).default(10000),
   maxDailyBudgetMinor: z.number().int().min(100).max(100000).default(2000),
@@ -267,16 +265,12 @@ function verifyApproval(
 function missingConfiguration(
   packet: Packet,
   config: z.infer<typeof globalArgumentsSchema>,
-  credentials = true,
 ) {
   return [
-    credentials && config.credentialSource !== "vault" &&
-    "vaultCredentialSource",
-    credentials && !config.accessToken && "systemUserAccessToken",
-    !config.businessId && "businessId",
+    config.credentialSource !== "vault" && "vaultCredentialSource",
+    !config.accessToken && "systemUserAccessToken",
     !config.adAccountId && "adAccountId",
     !config.pageId && "pageId",
-    !config.appId && "appId",
     packet.campaign.objective === "OUTCOME_SALES" && !config.pixelId &&
     "pixelId",
   ].filter(Boolean) as string[];
@@ -292,6 +286,22 @@ function validateBudget(
   if ((packet.adSet.lifetimeBudgetMinor ?? 0) > config.maxLifetimeBudgetMinor) {
     throw new TypeError("lifetime budget exceeds configured bound");
   }
+}
+
+function graphFailure(status: number, payload: Record<string, unknown>) {
+  const detail = payload.error;
+  const code = detail && typeof detail === "object" &&
+      typeof (detail as Record<string, unknown>).code === "number"
+    ? `; Meta code ${(detail as Record<string, unknown>).code}`
+    : "";
+  const disposition = status === 429 || status >= 500
+    ? "transient response; reconcile remote state before retrying"
+    : status >= 200 && status < 300
+    ? "malformed success response; reconcile remote state before retrying"
+    : "request rejected";
+  return new Error(
+    `Meta Marketing API request failed (${status})${code}; ${disposition}`,
+  );
 }
 
 async function graphPost(
@@ -315,7 +325,7 @@ async function graphPost(
     unknown
   >;
   if (!response.ok || typeof payload.id !== "string") {
-    throw new Error(`Meta Marketing API request failed (${response.status})`);
+    throw graphFailure(response.status, payload);
   }
   return payload.id;
 }
@@ -328,6 +338,7 @@ export async function createPausedDraft(
   context: Context,
   fetcher: Fetcher = fetch,
 ) {
+  context.logger.info("Validating PAUSED Meta Ads draft request");
   const args = createDraftArgumentsSchema.parse(raw);
   const packet = await verifyPacket(args.packet);
   verifyApproval(packet, args.approval);
@@ -336,7 +347,7 @@ export async function createPausedDraft(
     campaignId: packet.manifest.campaignId,
     idempotencyKey: args.idempotencyKey,
   });
-  const missing = missingConfiguration(packet, context.globalArgs, true);
+  const missing = missingConfiguration(packet, context.globalArgs);
   if (missing.length) {
     throw new Error(`Meta Ads configuration blocked: ${missing.join(", ")}`);
   }
@@ -428,6 +439,8 @@ export async function createPausedDraft(
     targeting: json({
       age_min: packet.adSet.targeting.minimumAge,
       geo_locations: { countries: packet.adSet.targeting.geographies },
+    }),
+    targeting_automation: json({
       advantage_audience: packet.adSet.targeting.mode === "advantage_plus"
         ? 1
         : 0,
@@ -567,6 +580,7 @@ const evidenceSchema = z.strictObject({
   }).optional(),
   missing: z.array(z.string().min(1)).optional(),
   credentialReadinessNotChecked: z.literal(true).optional(),
+  accountReadinessNotChecked: z.literal(true).optional(),
   createsOnlyPausedDeliveryObjects: z.literal(true).optional(),
 });
 
@@ -584,6 +598,25 @@ export const model = {
       garbageCollection: 1000,
     },
   },
+  checks: {
+    "meta-ads-mutation-configuration": {
+      description:
+        "Require explicitly vault-configured Meta Ads credentials and account IDs before creating remote drafts",
+      labels: ["policy"],
+      appliesTo: ["createDraft"],
+      execute: (context: Context) => {
+        const config = globalArgumentsSchema.parse(context.globalArgs);
+        const errors = [
+          config.credentialSource !== "vault" &&
+          "credentialSource must attest a Swamp vault binding",
+          !config.accessToken && "accessToken must resolve from a Swamp vault",
+          !config.adAccountId && "adAccountId must be configured",
+          !config.pageId && "pageId must be configured",
+        ].filter(Boolean) as string[];
+        return errors.length ? { pass: false, errors } : { pass: true };
+      },
+    },
+  },
   methods: {
     readiness: {
       description:
@@ -593,32 +626,33 @@ export const model = {
         args: z.infer<typeof readinessArgumentsSchema>,
         context: Context,
       ) => {
+        context.logger.info("Validating Meta Ads readiness packet");
         const packet = await verifyPacket(args.packet);
         context.logger.info("Checking Meta Ads draft readiness", {
           campaignId: packet.manifest.campaignId,
         });
         validateBudget(packet, context.globalArgs);
-        const missing = missingConfiguration(packet, context.globalArgs, false);
         const handle = await context.writeResource(
           "evidence",
           `readiness-${packet.adsPacketDigest}`,
           {
-            status: missing.length ? "blocked" : "ready",
+            status: "ready",
             campaignId: packet.manifest.campaignId,
             campaignPacketDigest: packet.campaignPacketDigest,
             landingPageDigest: packet.landingPageDigest,
             socialPacketDigest: packet.socialPacketDigest,
             creativeDigest: packet.creativeDigest,
             adsPacketDigest: packet.adsPacketDigest,
-            missing,
+            missing: [],
             credentialReadinessNotChecked: true,
+            accountReadinessNotChecked: true,
             createsOnlyPausedDeliveryObjects: true,
             rightsId: packet.rights.rightsId,
           },
         );
         context.logger.info("Completed Meta Ads draft readiness", {
           campaignId: packet.manifest.campaignId,
-          status: missing.length ? "blocked" : "ready",
+          status: "ready",
         });
         return { dataHandles: [handle] };
       },
