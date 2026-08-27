@@ -131,6 +131,59 @@ const approvalSchema = z.strictObject({
   socialPacketDigest: marketingDigestSchema,
 });
 
+const scheduledApprovalSchema = approvalSchema.extend({
+  idempotencyKey: marketingCampaignIdSchema,
+  revision: z.number().int().positive(),
+  scheduledFor: z.iso.datetime({ offset: true }),
+});
+
+const scheduleArgumentsSchema = z.strictObject({
+  packet: packetSchema,
+  approval: scheduledApprovalSchema,
+  idempotencyKey: marketingCampaignIdSchema,
+  scheduledFor: z.iso.datetime({ offset: true }),
+});
+const inspectDayArgumentsSchema = z.strictObject({
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+const rescheduleArgumentsSchema = z.strictObject({
+  idempotencyKey: marketingCampaignIdSchema,
+  scheduledFor: z.iso.datetime({ offset: true }),
+  approval: scheduledApprovalSchema,
+});
+const dispatchDueArgumentsSchema = z.strictObject({});
+
+const scheduleStatusSchema = z.enum([
+  "queued",
+  "dispatching",
+  "published",
+  "failed_before_effect",
+  "reconciliation_required",
+]);
+const scheduleEntrySchema = z.strictObject({
+  idempotencyKey: marketingCampaignIdSchema,
+  revision: z.number().int().positive(),
+  status: scheduleStatusSchema,
+  scheduledFor: z.iso.datetime({ offset: true }),
+  priorScheduledFor: z.array(z.iso.datetime({ offset: true })),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  packet: packetSchema,
+  approval: scheduledApprovalSchema,
+  campaignPacketDigest: marketingDigestSchema,
+  landingPageDigest: marketingDigestSchema,
+  socialPacketDigest: marketingDigestSchema,
+  updatedAt: z.iso.datetime({ offset: true }),
+  failure: z.string().optional(),
+});
+const scheduleLedgerSchema = z.strictObject({
+  entries: z.array(scheduleEntrySchema).max(250),
+});
+const scheduleInspectionSchema = z.strictObject({
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  entries: z.array(scheduleEntrySchema).max(250),
+});
+type ScheduleEntry = z.infer<typeof scheduleEntrySchema>;
+
 /** Arguments for credential-free campaign and social packet readiness. */
 export const readinessArgumentsSchema = z.strictObject({
   packet: packetSchema,
@@ -198,6 +251,76 @@ type Context = {
 type Fetcher = typeof fetch;
 type Sleeper = (milliseconds: number) => Promise<void>;
 
+const LEDGER_NAME = "schedule-ledger";
+const MAX_SCHEDULE_ENTRIES = 250;
+const PRUNE_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+function canonicalInstant(value: string): string {
+  // z.iso.datetime has already established RFC3339 syntax and an explicit offset.
+  return new Date(value).toISOString();
+}
+
+function denverDate(instant: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Denver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(instant));
+  const part = (type: string) =>
+    parts.find((value) => value.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function ensureExactDate(value: string): void {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.toISOString().slice(0, 10) !== value) {
+    throw new TypeError("localDate must be an exact calendar date");
+  }
+}
+
+async function readLedger(context: Context): Promise<ScheduleEntry[]> {
+  const raw = await context.readResource(LEDGER_NAME);
+  return raw ? scheduleLedgerSchema.parse(raw).entries : [];
+}
+
+async function writeLedger(context: Context, entries: ScheduleEntry[]) {
+  return await context.writeResource("schedule", LEDGER_NAME, { entries });
+}
+
+function ensureScheduleInstant(
+  value: string,
+  packet: z.infer<typeof packetSchema>,
+  now = Date.now(),
+): string {
+  const instant = canonicalInstant(value);
+  const milliseconds = Date.parse(instant);
+  if (milliseconds <= now) {
+    throw new TypeError("scheduledFor must be in the future");
+  }
+  if (
+    milliseconds < Date.parse(packet.rights.effectiveAt) ||
+    milliseconds >= Date.parse(packet.rights.expiresAt)
+  ) throw new TypeError("scheduledFor must be within the social rights window");
+  return instant;
+}
+
+function ensureCapacity(entries: ScheduleEntry[], now = Date.now()) {
+  if (entries.length < MAX_SCHEDULE_ENTRIES) return entries;
+  const cutoff = now - PRUNE_AGE_MS;
+  const retained = entries.filter((entry) =>
+    !(["published", "failed_before_effect"].includes(entry.status) &&
+      Date.parse(entry.updatedAt) < cutoff)
+  );
+  if (retained.length >= MAX_SCHEDULE_ENTRIES) {
+    throw new Error(
+      "schedule ledger capacity exhausted; no safe entries can be pruned",
+    );
+  }
+  return retained;
+}
+
 /** Compute the SHA-256 digest of one exact copy string. */
 export const digestText = marketingSha256;
 
@@ -208,7 +331,7 @@ export function digestSocialPacket(
   return digestMarketingValue(packet);
 }
 
-async function verifyPacket(raw: unknown) {
+async function verifyPacket(raw: unknown, rightsAt = Date.now()) {
   const packet = packetSchema.parse(raw);
   await verifyCampaignManifest(packet.manifest, packet.campaignPacketDigest);
   if (
@@ -227,10 +350,12 @@ async function verifyPacket(raw: unknown) {
     throw new TypeError("social packet digest mismatch");
   }
   if (
-    Date.parse(packet.rights.effectiveAt) > Date.now() ||
-    Date.parse(packet.rights.expiresAt) <= Date.now()
+    Date.parse(packet.rights.effectiveAt) > rightsAt ||
+    Date.parse(packet.rights.expiresAt) <= rightsAt
   ) {
-    throw new TypeError("social media rights are not currently effective");
+    throw new TypeError(
+      "social media rights are not effective at required time",
+    );
   }
   return packet;
 }
@@ -496,10 +621,84 @@ export async function publishPacket(
   return handle;
 }
 
+/** Reconcile interrupted claims, then isolate and dispatch every due entry. */
+export async function dispatchDue(
+  context: Context,
+  fetcher: Fetcher = fetch,
+) {
+  const entries = await readLedger(context);
+  for (
+    const entry of entries.filter((candidate) =>
+      candidate.status === "dispatching"
+    )
+  ) {
+    const evidence = await context.readResource(
+      `publication-${entry.idempotencyKey}`,
+    );
+    if (!evidence) entry.status = "queued";
+    else if (evidence.status === "published") entry.status = "published";
+    else entry.status = "reconciliation_required";
+    entry.updatedAt = new Date().toISOString();
+  }
+  await writeLedger(context, entries);
+  const now = Date.now();
+  for (
+    const entry of entries.filter((candidate) =>
+      candidate.status === "queued" &&
+      Date.parse(candidate.scheduledFor) <= now
+    )
+  ) {
+    const evidence = await context.readResource(
+      `publication-${entry.idempotencyKey}`,
+    );
+    if (evidence) {
+      entry.status = evidence.status === "published"
+        ? "published"
+        : "reconciliation_required";
+      entry.updatedAt = new Date().toISOString();
+      await writeLedger(context, entries);
+      continue;
+    }
+    entry.status = "dispatching";
+    entry.updatedAt = new Date().toISOString();
+    await writeLedger(context, entries);
+    try {
+      const {
+        scheduledFor: _scheduledFor,
+        idempotencyKey: _approvedIdempotencyKey,
+        revision: _approvedRevision,
+        ...publicationApproval
+      } = entry.approval;
+      await publishPacket(
+        {
+          packet: entry.packet,
+          approval: publicationApproval,
+          idempotencyKey: entry.idempotencyKey,
+          dryRun: false,
+        },
+        context,
+        fetcher,
+      );
+      entry.status = "published";
+    } catch (error) {
+      const after = await context.readResource(
+        `publication-${entry.idempotencyKey}`,
+      );
+      entry.status = after ? "reconciliation_required" : "failed_before_effect";
+      entry.failure = error instanceof Error
+        ? error.message
+        : "publication failed";
+    }
+    entry.updatedAt = new Date().toISOString();
+    await writeLedger(context, entries);
+  }
+  return await writeLedger(context, entries);
+}
+
 /** Swamp model for fail-closed Facebook Page and Instagram publication. */
 export const model = {
   type: "@mgreten/meta-social-publisher",
-  version: "2026.08.26.3",
+  version: "2026.08.27.1",
   globalArguments: globalArgumentsSchema,
   resources: {
     evidence: {
@@ -509,13 +708,26 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 1000,
     },
+    schedule: {
+      description:
+        "Bounded durable America/Denver social publication schedule ledger",
+      schema: scheduleLedgerSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 1,
+    },
+    scheduleInspection: {
+      description: "Credential-free snapshot of one inspected calendar day",
+      schema: scheduleInspectionSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 31,
+    },
   },
   checks: {
     "meta-social-mutation-configuration": {
       description:
         "Require an explicitly vault-configured token and at least one Meta account before publication",
       labels: ["policy"],
-      appliesTo: ["publish"],
+      appliesTo: ["publish", "dispatchDue"],
       execute: (context: Context) => {
         const config = globalArgumentsSchema.parse(context.globalArgs);
         const errors = [
@@ -530,6 +742,132 @@ export const model = {
     },
   },
   methods: {
+    schedule: {
+      description:
+        "Queue one exact founder-approved packet at an explicit future instant",
+      arguments: scheduleArgumentsSchema,
+      execute: async (
+        raw: z.infer<typeof scheduleArgumentsSchema>,
+        context: Context,
+      ) => {
+        const args = scheduleArgumentsSchema.parse(raw);
+        const scheduledFor = ensureScheduleInstant(
+          args.scheduledFor,
+          args.packet,
+        );
+        const packet = await verifyPacket(
+          args.packet,
+          Date.parse(scheduledFor),
+        );
+        verifyApproval(packet, args.approval);
+        if (
+          args.approval.idempotencyKey !== args.idempotencyKey ||
+          args.approval.revision !== 1
+        ) {
+          throw new TypeError(
+            "schedule approval identity or revision mismatch",
+          );
+        }
+        if (canonicalInstant(args.approval.scheduledFor) !== scheduledFor) {
+          throw new TypeError("approval scheduledFor mismatch");
+        }
+        let entries = await readLedger(context);
+        if (
+          entries.some((entry) => entry.idempotencyKey === args.idempotencyKey)
+        ) {
+          throw new Error("scheduled idempotency key replay rejected");
+        }
+        entries = ensureCapacity(entries);
+        const updatedAt = new Date().toISOString();
+        entries.push({
+          idempotencyKey: args.idempotencyKey,
+          revision: 1,
+          status: "queued",
+          scheduledFor,
+          priorScheduledFor: [],
+          localDate: denverDate(scheduledFor),
+          packet,
+          approval: { ...args.approval, scheduledFor },
+          campaignPacketDigest: packet.campaignPacketDigest,
+          landingPageDigest: packet.landingPageDigest,
+          socialPacketDigest: packet.socialPacketDigest,
+          updatedAt,
+        });
+        return { dataHandles: [await writeLedger(context, entries)] };
+      },
+    },
+    inspectDay: {
+      description:
+        "Return every retained schedule entry on one exact America/Denver date",
+      arguments: inspectDayArgumentsSchema,
+      execute: async (
+        raw: z.infer<typeof inspectDayArgumentsSchema>,
+        context: Context,
+      ) => {
+        const { localDate } = inspectDayArgumentsSchema.parse(raw);
+        ensureExactDate(localDate);
+        const entries = (await readLedger(context)).filter((entry) =>
+          entry.localDate === localDate
+        );
+        const handle = await context.writeResource(
+          "scheduleInspection",
+          `schedule-day-${localDate}`,
+          { localDate, entries },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    reschedule: {
+      description: "Move one queued entry using a successor founder approval",
+      arguments: rescheduleArgumentsSchema,
+      execute: async (
+        raw: z.infer<typeof rescheduleArgumentsSchema>,
+        context: Context,
+      ) => {
+        const args = rescheduleArgumentsSchema.parse(raw);
+        const entries = await readLedger(context);
+        const entry = entries.find((candidate) =>
+          candidate.idempotencyKey === args.idempotencyKey
+        );
+        if (!entry) throw new Error("scheduled entry not found");
+        if (entry.status !== "queued") {
+          throw new Error("only queued entries may be rescheduled");
+        }
+        verifyApproval(entry.packet, args.approval);
+        if (
+          args.approval.idempotencyKey !== entry.idempotencyKey ||
+          args.approval.revision !== entry.revision + 1 ||
+          args.approval.approvalId === entry.approval.approvalId
+        ) {
+          throw new TypeError(
+            "reschedule approval identity or revision mismatch",
+          );
+        }
+        const scheduledFor = ensureScheduleInstant(
+          args.scheduledFor,
+          entry.packet,
+        );
+        if (canonicalInstant(args.approval.scheduledFor) !== scheduledFor) {
+          throw new TypeError("approval scheduledFor mismatch");
+        }
+        entry.priorScheduledFor.push(entry.scheduledFor);
+        entry.scheduledFor = scheduledFor;
+        entry.localDate = denverDate(scheduledFor);
+        entry.approval = { ...args.approval, scheduledFor };
+        entry.revision++;
+        entry.updatedAt = new Date().toISOString();
+        return { dataHandles: [await writeLedger(context, entries)] };
+      },
+    },
+    dispatchDue: {
+      description:
+        "Reconcile interrupted claims and dispatch every due scheduled publication",
+      arguments: dispatchDueArgumentsSchema,
+      execute: async (
+        _raw: z.infer<typeof dispatchDueArgumentsSchema>,
+        context: Context,
+      ) => ({ dataHandles: [await dispatchDue(context)] }),
+    },
     readiness: {
       description:
         "Verify exact campaign/social digests and account-independent publication requirements",

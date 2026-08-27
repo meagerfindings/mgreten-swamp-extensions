@@ -3,6 +3,7 @@ import { digestMarketingValue } from "./marketing_campaign_contracts.ts";
 import {
   digestSocialPacket,
   digestText,
+  dispatchDue,
   model,
   publishPacket,
 } from "./meta_social_publisher.ts";
@@ -112,7 +113,7 @@ function context(
         instagramContainerPollAttempts: 3,
         instagramContainerPollDelayMs: 60000,
       },
-      readResource: async () => existing,
+      readResource: async (_name: string) => existing,
       writeResource: async (
         spec: string,
         name: string,
@@ -148,7 +149,7 @@ Deno.test("readiness is credential-free and preserves cohesive content digests",
 Deno.test("publication policy check fails closed on missing credential configuration", async () => {
   const check = model.checks["meta-social-mutation-configuration"];
   assertEquals(check.labels, ["policy"]);
-  assertEquals(check.appliesTo, ["publish"]);
+  assertEquals(check.appliesTo, ["publish", "dispatchDue"]);
   assertEquals(await check.execute(context().value), { pass: true });
   assertEquals(await check.execute(context(null, false).value), {
     pass: false,
@@ -158,6 +159,330 @@ Deno.test("publication policy check fails closed on missing credential configura
       "at least one Meta account ID must be configured",
     ],
   });
+});
+
+function scheduleContext(
+  ledger: Record<string, unknown> | null = null,
+  evidence: Record<string, Record<string, unknown>> = {},
+  credentials = false,
+) {
+  const resources = new Map<string, Record<string, unknown>>();
+  if (ledger) resources.set("schedule-ledger", structuredClone(ledger));
+  for (const [name, value] of Object.entries(evidence)) {
+    resources.set(name, value);
+  }
+  const base = context(null, credentials);
+  base.value.readResource = async (name: string) => resources.get(name) ?? null;
+  base.value.writeResource = async (
+    spec: string,
+    name: string,
+    data: Record<string, unknown>,
+  ) => {
+    resources.set(name, structuredClone(data));
+    base.writes.push([spec, name, structuredClone(data)]);
+    return { name };
+  };
+  return { ...base, resources };
+}
+
+async function scheduledApproval(
+  scheduledFor: string,
+  idempotencyKey: string,
+  revision = 1,
+) {
+  return {
+    ...await approval(["facebook"]),
+    approvalId: `${idempotencyKey}-schedule-r${revision}`,
+    idempotencyKey,
+    revision,
+    scheduledFor,
+  };
+}
+
+Deno.test("schedule canonicalizes offsets, binds approval, supports DST dates and same-day occupancy", async () => {
+  const value = await packet(["facebook"]);
+  const ctx = scheduleContext();
+  for (
+    const [key, instant] of [
+      ["spring", "2027-03-14T01:30:00-07:00"],
+      ["spring-later", "2027-03-14T03:30:00-06:00"],
+      ["fall", "2027-11-07T01:30:00-06:00"],
+      ["rollover", "2027-03-15T00:30:00-06:00"],
+    ]
+  ) {
+    await model.methods.schedule.execute({
+      packet: value,
+      approval: await scheduledApproval(instant, key),
+      idempotencyKey: key,
+      scheduledFor: instant,
+    }, ctx.value);
+  }
+  const entries = ctx.resources.get("schedule-ledger")!.entries as Array<
+    Record<string, unknown>
+  >;
+  assertEquals(entries.map((entry) => entry.localDate), [
+    "2027-03-14",
+    "2027-03-14",
+    "2027-11-07",
+    "2027-03-15",
+  ]);
+  assertEquals(entries[0].scheduledFor, "2027-03-14T08:30:00.000Z");
+  await model.methods.inspectDay.execute(
+    { localDate: "2027-03-14" },
+    ctx.value,
+  );
+  assertEquals(
+    (ctx.resources.get("schedule-day-2027-03-14")!.entries as unknown[]).length,
+    2,
+  );
+  assertEquals(ctx.value.globalArgs.credentialSource, "unconfigured");
+});
+
+Deno.test("schedule rejects malformed, past, rights-exceeding, and approval-drifted instants", async () => {
+  const value = await packet(["facebook"]);
+  for (
+    const [scheduledFor, approvedFor] of [
+      ["2027-03-14T01:30:00", "2027-03-14T01:30:00-07:00"],
+      ["2020-01-01T00:00:00Z", "2020-01-01T00:00:00Z"],
+      ["2031-01-01T00:00:00Z", "2031-01-01T00:00:00Z"],
+      ["2027-05-01T00:00:00Z", "2027-05-02T00:00:00Z"],
+    ]
+  ) {
+    const boundApproval = await scheduledApproval(approvedFor, "rejected");
+    await assertRejects(() =>
+      model.methods.schedule.execute({
+        packet: value,
+        approval: boundApproval,
+        idempotencyKey: "rejected",
+        scheduledFor,
+      }, scheduleContext().value)
+    );
+  }
+});
+
+Deno.test("schedule accepts rights that become effective before the approved future instant", async () => {
+  const value = await packet(["facebook"]);
+  value.rights.effectiveAt = "2027-01-01T00:00:00Z";
+  const { socialPacketDigest: _oldDigest, ...payload } = value;
+  value.socialPacketDigest = await digestSocialPacket(payload);
+  const scheduledFor = "2027-05-01T00:00:00Z";
+  const boundApproval = {
+    ...await scheduledApproval(scheduledFor, "future-rights"),
+    socialPacketDigest: value.socialPacketDigest,
+  };
+  const ctx = scheduleContext();
+
+  await model.methods.schedule.execute({
+    packet: value,
+    approval: boundApproval,
+    idempotencyKey: "future-rights",
+    scheduledFor,
+  }, ctx.value);
+
+  assertEquals(
+    (ctx.resources.get("schedule-ledger")!.entries as unknown[]).length,
+    1,
+  );
+});
+
+Deno.test("reschedule retains prior instant and increments a digest-bound successor revision", async () => {
+  const value = await packet(["facebook"]);
+  const ctx = scheduleContext();
+  const first = "2027-04-01T10:00:00-06:00";
+  const second = "2027-04-02T10:00:00-06:00";
+  await model.methods.schedule.execute({
+    packet: value,
+    approval: await scheduledApproval(first, "move"),
+    idempotencyKey: "move",
+    scheduledFor: first,
+  }, ctx.value);
+  await assertRejects(
+    async () =>
+      model.methods.reschedule.execute({
+        idempotencyKey: "move",
+        scheduledFor: second,
+        approval: await scheduledApproval(second, "move", 1),
+      }, ctx.value),
+    Error,
+    "revision mismatch",
+  );
+  const reusedIdentity = await scheduledApproval(second, "move", 2);
+  reusedIdentity.approvalId = "move-schedule-r1";
+  await assertRejects(
+    () =>
+      model.methods.reschedule.execute({
+        idempotencyKey: "move",
+        scheduledFor: second,
+        approval: reusedIdentity,
+      }, ctx.value),
+    Error,
+    "identity or revision mismatch",
+  );
+  await model.methods.reschedule.execute({
+    idempotencyKey: "move",
+    scheduledFor: second,
+    approval: await scheduledApproval(second, "move", 2),
+  }, ctx.value);
+  const entry = (ctx.resources.get("schedule-ledger")!.entries as Array<
+    Record<string, unknown>
+  >)[0];
+  assertEquals(entry.revision, 2);
+  assertEquals(entry.priorScheduledFor, ["2027-04-01T16:00:00.000Z"]);
+  assertEquals(entry.socialPacketDigest, value.socialPacketDigest);
+});
+
+Deno.test("schedule approval cannot be replayed under another idempotency key", async () => {
+  const value = await packet(["facebook"]);
+  const scheduledFor = "2027-04-03T10:00:00-06:00";
+  await assertRejects(
+    async () =>
+      model.methods.schedule.execute({
+        packet: value,
+        approval: await scheduledApproval(scheduledFor, "approved-key"),
+        idempotencyKey: "different-key",
+        scheduledFor,
+      }, scheduleContext().value),
+    Error,
+    "identity or revision mismatch",
+  );
+});
+
+Deno.test("bounded ledger prunes only old safe terminal entries and fails closed for active capacity", async () => {
+  const value = await packet(["facebook"]);
+  const approved = await scheduledApproval(
+    "2027-05-01T00:00:00Z",
+    "entry-template",
+  );
+  const make = (index: number, status: "queued" | "published") => ({
+    idempotencyKey: `entry-${index}`,
+    revision: 1,
+    status,
+    scheduledFor: "2027-05-01T00:00:00Z",
+    priorScheduledFor: [],
+    localDate: "2027-04-30",
+    packet: value,
+    approval: approved,
+    campaignPacketDigest: value.campaignPacketDigest,
+    landingPageDigest: value.landingPageDigest,
+    socialPacketDigest: value.socialPacketDigest,
+    updatedAt: "2020-01-01T00:00:00Z",
+  });
+  const active = Array.from(
+    { length: 250 },
+    (_, index) => make(index, "queued"),
+  );
+  await assertRejects(
+    () =>
+      model.methods.schedule.execute({
+        packet: value,
+        approval: { ...approved, idempotencyKey: "overflow" },
+        idempotencyKey: "overflow",
+        scheduledFor: approved.scheduledFor,
+      }, scheduleContext({ entries: active }).value),
+    Error,
+    "capacity exhausted",
+  );
+  active[0] = make(0, "published");
+  const ctx = scheduleContext({ entries: active });
+  await model.methods.schedule.execute({
+    packet: value,
+    approval: { ...approved, idempotencyKey: "replacement" },
+    idempotencyKey: "replacement",
+    scheduledFor: approved.scheduledFor,
+  }, ctx.value);
+  const entries = ctx.resources.get("schedule-ledger")!.entries as Array<
+    Record<string, unknown>
+  >;
+  assertEquals(entries.length, 250);
+  assert(entries.some((entry) => entry.idempotencyKey === "replacement"));
+});
+
+Deno.test("dispatch reconciles interrupted claims, skips early entries, and never duplicates evidence", async () => {
+  const value = await packet(["facebook"]);
+  const future = "2027-06-01T00:00:00Z";
+  const ctx = scheduleContext();
+  for (
+    const key of ["published-claim", "ambiguous-claim", "safe-claim", "early"]
+  ) {
+    await model.methods.schedule.execute({
+      packet: value,
+      approval: await scheduledApproval(future, key),
+      idempotencyKey: key,
+      scheduledFor: future,
+    }, ctx.value);
+  }
+  const entries = ctx.resources.get("schedule-ledger")!.entries as Array<
+    Record<string, unknown>
+  >;
+  entries[0].status = "dispatching";
+  entries[1].status = "dispatching";
+  entries[2].status = "dispatching";
+  ctx.resources.set("schedule-ledger", { entries });
+  ctx.resources.set("publication-published-claim", { status: "published" });
+  ctx.resources.set("publication-ambiguous-claim", { status: "intent" });
+  let calls = 0;
+  await dispatchDue(
+    ctx.value,
+    (async () => {
+      calls++;
+      return Response.json({ id: "unexpected" });
+    }) as typeof fetch,
+  );
+  const reconciled = ctx.resources.get("schedule-ledger")!.entries as Array<
+    Record<string, unknown>
+  >;
+  assertEquals(reconciled.map((entry) => entry.status), [
+    "published",
+    "reconciliation_required",
+    "queued",
+    "queued",
+  ]);
+  assertEquals(calls, 0);
+});
+
+Deno.test("dispatch claims each due entry, isolates failures, and does not retry ambiguous effects", async () => {
+  const value = await packet(["facebook"]);
+  const future = "2027-06-01T00:00:00Z";
+  const ctx = scheduleContext(null, {}, true);
+  for (const key of ["fails", "succeeds"]) {
+    await model.methods.schedule.execute({
+      packet: value,
+      approval: await scheduledApproval(future, key),
+      idempotencyKey: key,
+      scheduledFor: future,
+    }, ctx.value);
+  }
+  const entries = ctx.resources.get("schedule-ledger")!.entries as Array<
+    Record<string, unknown>
+  >;
+  for (const entry of entries) entry.scheduledFor = "2026-08-27T00:00:00Z";
+  ctx.resources.set("schedule-ledger", { entries });
+  let calls = 0;
+  await dispatchDue(
+    ctx.value,
+    (async () => {
+      calls++;
+      return calls === 1
+        ? Response.json({ error: { code: 4 } }, { status: 500 })
+        : Response.json({ id: "published-id" });
+    }) as typeof fetch,
+  );
+  assertEquals(calls, 2);
+  const dispatched = ctx.resources.get("schedule-ledger")!.entries as Array<
+    Record<string, unknown>
+  >;
+  assertEquals(dispatched.map((entry) => entry.status), [
+    "reconciliation_required",
+    "published",
+  ]);
+  assertEquals(
+    ctx.writes.filter((write) => write[1] === "schedule-ledger").some((write) =>
+      (write[2].entries as Array<Record<string, unknown>>).some((entry) =>
+        entry.status === "dispatching"
+      )
+    ),
+    true,
+  );
 });
 
 Deno.test("rejects campaign, landing, copy, social, rights, and approval drift before fetch", async () => {
