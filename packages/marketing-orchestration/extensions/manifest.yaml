@@ -1,0 +1,17 @@
+manifestVersion: 1
+name: "@mgreten/marketing-orchestration"
+version: 2026.08.28.1
+description: Approval-gated, digest-bound marketing release orchestration with a content calendar report.
+repository: https://github.com/meagerfindings/swamp-marketing-orchestration
+models:
+  - marketing_orchestration.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports:
+  - marketing_content_calendar.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+dependencies: []
