@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-ai-provider",
+  "runAt": "2026-08-28T12:00:00Z",
+  "outcome": "passed",
+  "cleanupOutcome": "not-applicable",
+  "details": {
+    "transcription": {
+      "model": "speech-model",
+      "durationMs": 20,
+      "audioSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expectedKeywords": ["cedar", "river", "silver"],
+      "matchedKeywords": ["cedar", "river"],
+      "transcriptWordCount": 4
+    },
+    "metadata": {
+      "model": "metadata-model",
+      "durationMs": 10,
+      "schemaVersion": 1,
+      "titlePresent": true,
+      "themes": ["travel"],
+      "sentiment": "happy",
+      "summaryWordCount": 5,
+      "validationErrors": []
+    }
+  }
+}

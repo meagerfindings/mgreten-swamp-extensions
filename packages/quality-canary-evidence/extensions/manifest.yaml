@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@mgreten/quality-canary-evidence"
+version: "2026.08.28.1"
+description: "Strictly normalizes and durably records bounded live-AI-provider and physical-device quality canary evidence with policy consistency and SHA-256 provenance."
+repository: https://github.com/meagerfindings/swamp-quality-canary-evidence
+additionalFiles:
+  - README.md
+  - LICENSE
+  - fixtures/live-provider.json
+models:
+  - quality_canary_evidence.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+dependencies: []
+platforms: []
