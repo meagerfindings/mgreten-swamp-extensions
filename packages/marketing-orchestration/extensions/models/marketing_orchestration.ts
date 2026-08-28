@@ -2,7 +2,7 @@
 import { z } from "npm:zod@4";
 
 /** Package CalVer shared with the manifest. */
-export const MARKETING_ORCHESTRATION_VERSION = "2026.08.28.1" as const;
+export const MARKETING_ORCHESTRATION_VERSION = "2026.08.28.2" as const;
 /** Stable model type used by the coupled report. */
 export const MARKETING_ORCHESTRATION_TYPE =
   "@mgreten/marketing-orchestration" as const;
@@ -515,9 +515,16 @@ const calendarArgumentsSchema = z.strictObject({
 
 /** Swamp model definition. */
 export const model = {
-  type: MARKETING_ORCHESTRATION_TYPE,
-  version: MARKETING_ORCHESTRATION_VERSION,
+  type: "@mgreten/marketing-orchestration",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgs,
+  upgrades: [
+    {
+      toVersion: "2026.08.28.2",
+      description: "Expose the model type in registry metadata",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   checks: {
     "valid-orchestration-configuration": {
       description:
