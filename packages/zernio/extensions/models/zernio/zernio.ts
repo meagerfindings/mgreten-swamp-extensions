@@ -30,7 +30,6 @@ export const globalArgumentsSchema = z.strictObject({
   requestTimeoutMs: z.number().int().min(1000).max(30000).default(10000),
 });
 
-const inspectAccountsArgumentsSchema = z.strictObject({});
 const accountSchema = z.strictObject({
   platform: platformSchema,
   accountId: idSchema,
@@ -419,7 +418,7 @@ export async function discoverAccounts(
 /** Read-only Zernio Swamp model; no provider mutation methods are defined. */
 export const model = {
   type: "@mgreten/zernio",
-  version: "2026.09.04.4",
+  version: "2026.09.04.5",
   globalArguments: globalArgumentsSchema,
   upgrades: [
     {
@@ -436,6 +435,11 @@ export const model = {
       toVersion: "2026.09.04.4",
       description:
         "Allow read-only discovery before an allowlist is configured",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.04.5",
+      description: "Accept resolved global configuration at method validation",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -482,7 +486,7 @@ export const model = {
     discoverAccounts: {
       description:
         "Discover profiles and connected accounts without provider writes",
-      arguments: inspectAccountsArgumentsSchema,
+      arguments: globalArgumentsSchema,
       execute: async (_args: Record<string, never>, context: Context) => ({
         dataHandles: [await discoverAccounts(context)],
       }),
@@ -490,7 +494,7 @@ export const model = {
     inspectAccounts: {
       description:
         "Read and verify the configured Facebook and Instagram accounts without external writes",
-      arguments: inspectAccountsArgumentsSchema,
+      arguments: globalArgumentsSchema,
       execute: async (_args: Record<string, never>, context: Context) => ({
         dataHandles: [await inspectAccounts(context)],
       }),
@@ -498,7 +502,7 @@ export const model = {
     inspectAccountHealth: {
       description:
         "Read and verify health for configured accounts without external writes",
-      arguments: inspectAccountsArgumentsSchema,
+      arguments: globalArgumentsSchema,
       execute: async (_args: Record<string, never>, context: Context) => ({
         dataHandles: [await inspectAccountHealth(context)],
       }),
