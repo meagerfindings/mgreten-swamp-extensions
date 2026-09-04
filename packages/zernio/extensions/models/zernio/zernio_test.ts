@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
-import { inspectAccounts } from "./zernio.ts";
+import { discoverAccounts, inspectAccounts } from "./zernio.ts";
 
 // All provider requests are injected; no live Zernio account is required.
 const config = {
@@ -151,5 +151,38 @@ Deno.test("inspectAccounts fails closed when the configured profile is absent", 
       ),
     Error,
     "Configured Zernio profile was not returned",
+  );
+});
+
+Deno.test("discoverAccounts uses GET-only requests and does not retain the API key", async () => {
+  const ctx = context();
+  const requests: Request[] = [];
+  await discoverAccounts({
+    ...ctx.value,
+    globalArgs: { ...config, profileId: "", expectedAccounts: [] },
+  }, async (input, init) => {
+    requests.push(new Request(input, init));
+    return new Response(JSON.stringify(
+      new URL(input.toString()).pathname.endsWith("profiles")
+        ? { profiles: [{ id: "profile-1", name: "Primary" }] }
+        : {
+          accounts: [{
+            id: "facebook-1",
+            platform: "facebook",
+            profileId: "profile-1",
+            isActive: true,
+          }],
+        },
+    ));
+  });
+  assertEquals(requests.map((request) => request.method), ["GET", "GET"]);
+  assertEquals(ctx.writes[0][0], "discovery");
+  assertEquals(ctx.writes[0][2].profiles, [{
+    id: "profile-1",
+    name: "Primary",
+  }]);
+  assertEquals(
+    JSON.stringify(ctx.writes[0][2]).includes("zernio-secret"),
+    false,
   );
 });

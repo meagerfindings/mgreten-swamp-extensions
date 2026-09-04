@@ -9,11 +9,11 @@ const ACCOUNTS_PER_PAGE = 100;
 export const globalArgumentsSchema = z.strictObject({
   apiKey: z.string().min(1).meta({ sensitive: true }),
   credentialSource: z.literal("vault"),
-  profileId: idSchema,
+  profileId: z.union([idSchema, z.literal("")]).default(""),
   expectedAccounts: z.array(z.strictObject({
     platform: platformSchema,
     accountId: idSchema,
-  })).min(1).max(100).superRefine((accounts, context) => {
+  })).max(100).default([]).superRefine((accounts, context) => {
     const keys = accounts.map((account) =>
       `${account.platform}:${account.accountId}`
     );
@@ -69,6 +69,22 @@ const healthReceiptSchema = z.strictObject({
   accounts: z.array(healthAccountSchema).min(1).max(100),
   missing: z.array(z.string()),
 });
+const discoverySchema = z.strictObject({
+  apiVersion: z.literal("2026-09-04"),
+  provider: z.literal("zernio"),
+  observedAt: z.iso.datetime(),
+  profiles: z.array(
+    z.strictObject({ id: idSchema, name: z.string().nullable() }),
+  ).max(100),
+  accounts: z.array(z.strictObject({
+    accountId: idSchema,
+    platform: platformSchema,
+    profileId: z.string().nullable(),
+    displayName: z.string().nullable(),
+    username: z.string().nullable(),
+    connected: z.boolean(),
+  })).max(1000),
+});
 
 type Context = {
   globalArgs: z.infer<typeof globalArgumentsSchema>;
@@ -103,6 +119,14 @@ function hasMorePages(payload: unknown): boolean {
   if (payload.hasMore === true) return true;
   return isRecord(payload.pagination) && payload.pagination.hasMore === true ||
     isRecord(payload.meta) && payload.meta.hasMore === true;
+}
+
+function requireAllowlist(config: z.infer<typeof globalArgumentsSchema>) {
+  if (!config.profileId || config.expectedAccounts.length === 0) {
+    throw new Error(
+      "profileId and expectedAccounts are required for allowlisted inspection",
+    );
+  }
 }
 
 async function getJson(
@@ -178,6 +202,7 @@ export async function inspectAccounts(
   fetcher: Fetcher = fetch,
 ): Promise<{ name: string }> {
   const config = globalArgumentsSchema.parse(context.globalArgs);
+  requireAllowlist(config);
   context.logger.info("Inspecting allowlisted Zernio social accounts", {
     profileId: config.profileId,
     platforms: config.expectedAccounts.map((account) => account.platform),
@@ -277,6 +302,7 @@ export async function inspectAccountHealth(
   fetcher: Fetcher = fetch,
 ): Promise<{ name: string }> {
   const config = globalArgumentsSchema.parse(context.globalArgs);
+  requireAllowlist(config);
   context.logger.info("Inspecting Zernio account health", {
     profileId: config.profileId,
     accountCount: config.expectedAccounts.length,
@@ -337,10 +363,63 @@ export async function inspectAccountHealth(
   );
 }
 
+/** Discover profiles and connected accounts using only read-only provider requests. */
+export async function discoverAccounts(
+  context: Context,
+  fetcher: Fetcher = fetch,
+): Promise<{ name: string }> {
+  const config = globalArgumentsSchema.parse(context.globalArgs);
+  context.logger.info("Discovering Zernio profiles and connected accounts");
+  const profiles = collection(
+    await getJson(fetcher, config, "profiles", context.signal),
+    "profiles",
+  )
+    .map((profile) => ({
+      id: stringValue(profile.id) ?? stringValue(profile.profileId),
+      name: stringValue(profile.name),
+    }))
+    .filter((profile): profile is { id: string; name: string | null } =>
+      profile.id !== null
+    );
+  const accounts = collection(
+    await getJson(fetcher, config, "accounts", context.signal),
+    "accounts",
+  )
+    .map((account) => {
+      const normalized = normalizeAccount(
+        account,
+        stringValue(account.profileId) ?? "unassigned",
+      );
+      return normalized && {
+        accountId: normalized.accountId,
+        platform: normalized.platform,
+        profileId: stringValue(account.profileId),
+        displayName: normalized.displayName,
+        username: normalized.username,
+        connected: normalized.connected,
+      };
+    }).filter((
+      account,
+    ): account is z.infer<typeof discoverySchema>["accounts"][number] =>
+      account !== null
+    );
+  return await context.writeResource(
+    "discovery",
+    "zernio-discovery",
+    discoverySchema.parse({
+      apiVersion: "2026-09-04",
+      provider: "zernio",
+      observedAt: new Date().toISOString(),
+      profiles,
+      accounts,
+    }),
+  );
+}
+
 /** Read-only Zernio Swamp model; no provider mutation methods are defined. */
 export const model = {
   type: "@mgreten/zernio",
-  version: "2026.09.04.3",
+  version: "2026.09.04.4",
   globalArguments: globalArgumentsSchema,
   upgrades: [
     {
@@ -351,6 +430,12 @@ export const model = {
     {
       toVersion: "2026.09.04.3",
       description: "Documentation-only release with no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.04.4",
+      description:
+        "Allow read-only discovery before an allowlist is configured",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -369,12 +454,22 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 100,
     },
+    discovery: {
+      description: "Redacted Zernio profile and account discovery receipt",
+      schema: discoverySchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
   },
   checks: {
     "zernio-vault-configuration": {
       description: "Require an explicitly vault-backed Zernio API key",
       labels: ["policy"],
-      appliesTo: ["inspectAccounts", "inspectAccountHealth"],
+      appliesTo: [
+        "inspectAccounts",
+        "inspectAccountHealth",
+        "discoverAccounts",
+      ],
       execute: (context: Context) => {
         const config = globalArgumentsSchema.parse(context.globalArgs);
         return config.credentialSource === "vault" && config.apiKey
@@ -384,6 +479,14 @@ export const model = {
     },
   },
   methods: {
+    discoverAccounts: {
+      description:
+        "Discover profiles and connected accounts without provider writes",
+      arguments: inspectAccountsArgumentsSchema,
+      execute: async (_args: Record<string, never>, context: Context) => ({
+        dataHandles: [await discoverAccounts(context)],
+      }),
+    },
     inspectAccounts: {
       description:
         "Read and verify the configured Facebook and Instagram accounts without external writes",

@@ -1,7 +1,8 @@
 # Zernio Swamp Extension
 
 `@mgreten/zernio` is a deliberately read-only Zernio API boundary.
-`inspectAccounts` verifies one configured profile and its allowlisted account
+`discoverAccounts` lists connected Zernio profiles and account IDs without an
+existing allowlist. `inspectAccounts` verifies one configured profile and its allowlisted account
 IDs using `GET /v1/profiles` and `GET /v1/accounts?profileId=…`, while
 `inspectAccountHealth` reads the corresponding health summary.
 
@@ -30,6 +31,17 @@ globalArguments:
     - { platform: instagram, accountId: "zernio-instagram-account-id" }
 methods: {}
 ```
+
+For initial mapping only, omit `profileId` and `expectedAccounts`, then run:
+
+```bash
+swamp model method run my-zernio-read discoverAccounts
+```
+
+Copy the returned non-secret profile and account IDs into the model configuration
+before using either inspection method. Discovery only issues `GET /v1/profiles`
+and `GET /v1/accounts`; it cannot publish, connect accounts, or alter provider
+state.
 
 Run either read-only method after the model has been created:
 
