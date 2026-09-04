@@ -340,12 +340,17 @@ export async function inspectAccountHealth(
 /** Read-only Zernio Swamp model; no provider mutation methods are defined. */
 export const model = {
   type: "@mgreten/zernio",
-  version: "2026.09.04.2",
+  version: "2026.09.04.3",
   globalArguments: globalArgumentsSchema,
   upgrades: [
     {
       toVersion: "2026.09.04.2",
       description: "Broaden the account allowlist without changing its fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.04.3",
+      description: "Documentation-only release with no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

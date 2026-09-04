@@ -15,14 +15,14 @@ the API key are never written to a Swamp resource or log.
 Configure a model instance with a vault expression for `apiKey`, the Zernio
 profile ID, and every connected-account ID it may inspect. The allowlist may
 cover up to 100 account/platform pairs. Keep campaign approvals, content, and
-any eventual provider mutation in Moment Savor workflows rather than this
+any eventual provider mutation in your application workflows rather than this
 generic extension.
 
 ```yaml
 type: "@mgreten/zernio"
-name: moment-savor-zernio-read
+name: my-zernio-read
 globalArguments:
-  apiKey: "${vault.moment-savor-marketing-write-secrets.zernio_social_read_api_key}"
+  apiKey: "${vault.my-secrets.zernio_read_api_key}"
   credentialSource: vault
   profileId: "zernio-profile-id"
   expectedAccounts:
@@ -34,8 +34,8 @@ methods: {}
 Run either read-only method after the model has been created:
 
 ```bash
-swamp model method run moment-savor-zernio-read inspectAccounts
-swamp model method run moment-savor-zernio-read inspectAccountHealth
+swamp model method run my-zernio-read inspectAccounts
+swamp model method run my-zernio-read inspectAccountHealth
 ```
 
 `inspectAccounts` makes only GET requests—one to `/v1/profiles` and one or more
