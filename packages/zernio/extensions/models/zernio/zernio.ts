@@ -113,6 +113,11 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function identifier(value: unknown): string | null {
+  return stringValue(value) ??
+    (isRecord(value) ? stringValue(value._id) : null);
+}
+
 function hasMorePages(payload: unknown): boolean {
   if (!isRecord(payload)) return false;
   if (payload.hasMore === true) return true;
@@ -152,14 +157,15 @@ function normalizeAccount(
   profileId: string,
 ): z.infer<typeof accountSchema> | null {
   const platform = raw.platform;
-  const accountId = stringValue(raw.accountId) ?? stringValue(raw.id);
+  const accountId = stringValue(raw.accountId) ?? stringValue(raw.id) ??
+    stringValue(raw._id);
   if (typeof platform !== "string" || !platform.trim() || !accountId) {
     return null;
   }
   return {
     platform,
     accountId,
-    profileId: stringValue(raw.profileId) ?? profileId,
+    profileId: identifier(raw.profileId) ?? profileId,
     displayName: stringValue(raw.displayName) ?? stringValue(raw.name),
     username: stringValue(raw.username),
     connected: raw.connected !== false && raw.isActive !== false &&
@@ -374,7 +380,8 @@ export async function discoverAccounts(
     "profiles",
   )
     .map((profile) => ({
-      id: stringValue(profile.id) ?? stringValue(profile.profileId),
+      id: stringValue(profile.id) ?? stringValue(profile._id) ??
+        stringValue(profile.profileId),
       name: stringValue(profile.name),
     }))
     .filter((profile): profile is { id: string; name: string | null } =>
@@ -387,12 +394,12 @@ export async function discoverAccounts(
     .map((account) => {
       const normalized = normalizeAccount(
         account,
-        stringValue(account.profileId) ?? "unassigned",
+        identifier(account.profileId) ?? "unassigned",
       );
       return normalized && {
         accountId: normalized.accountId,
         platform: normalized.platform,
-        profileId: stringValue(account.profileId),
+        profileId: identifier(account.profileId),
         displayName: normalized.displayName,
         username: normalized.username,
         connected: normalized.connected,
@@ -418,7 +425,7 @@ export async function discoverAccounts(
 /** Read-only Zernio Swamp model; no provider mutation methods are defined. */
 export const model = {
   type: "@mgreten/zernio",
-  version: "2026.09.04.5",
+  version: "2026.09.04.6",
   globalArguments: globalArgumentsSchema,
   upgrades: [
     {
@@ -440,6 +447,11 @@ export const model = {
     {
       toVersion: "2026.09.04.5",
       description: "Accept resolved global configuration at method validation",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.04.6",
+      description: "Recognize Zernio _id response fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
