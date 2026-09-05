@@ -1,14 +1,15 @@
 manifestVersion: 1
 name: "@mgreten/zernio"
-version: "2026.09.04.7"
+version: "2026.09.05.1"
 description: >-
-  Read-only, vault-backed Zernio account inspection for verifying connected
-  social account mappings without publishing, messaging, webhooks, or ads.
+  Vault-backed Zernio account verification plus approval-bound, schedule-only
+  Facebook and Instagram publishing.
 repository: "https://github.com/meagerfindings/swamp-zernio"
 paths:
   base: manifest
 models:
   - zernio.ts
+  - zernio_publisher.ts
 additionalFiles:
   - README.md
   - LICENSE
