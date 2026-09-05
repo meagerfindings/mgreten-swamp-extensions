@@ -219,7 +219,8 @@ export async function inspectAccounts(
   );
   if (
     !profiles.some((profile) =>
-      (stringValue(profile.id) ?? stringValue(profile.profileId)) ===
+      (stringValue(profile.id) ?? stringValue(profile._id) ??
+        stringValue(profile.profileId)) ===
         config.profileId
     )
   ) {
@@ -425,7 +426,7 @@ export async function discoverAccounts(
 /** Read-only Zernio Swamp model; no provider mutation methods are defined. */
 export const model = {
   type: "@mgreten/zernio",
-  version: "2026.09.04.6",
+  version: "2026.09.04.7",
   globalArguments: globalArgumentsSchema,
   upgrades: [
     {
@@ -452,6 +453,11 @@ export const model = {
     {
       toVersion: "2026.09.04.6",
       description: "Recognize Zernio _id response fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.04.7",
+      description: "Recognize profile _id during allowlisted inspection",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
