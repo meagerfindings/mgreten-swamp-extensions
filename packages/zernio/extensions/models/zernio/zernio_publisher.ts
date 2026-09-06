@@ -126,9 +126,20 @@ export async function scheduleApprovedPost(
   );
 }
 
+/** Schedule-only Zernio publishing model; cannot publish immediately and rejects mangled caption text. */
 export const model = {
   type: "@mgreten/zernio-publisher",
   version: "2026.09.06.1",
+  upgrades: [
+    {
+      toVersion: "2026.09.06.1",
+      description:
+        "Reject literal escape sequences in captions; no schema changes",
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ): Record<string, unknown> => old,
+    },
+  ],
   globalArguments: configSchema,
   resources: {
     scheduledPost: {
