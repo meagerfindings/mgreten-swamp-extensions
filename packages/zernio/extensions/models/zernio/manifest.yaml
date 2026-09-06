@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/zernio"
-version: "2026.09.05.1"
+version: "2026.09.06.1"
 description: >-
   Vault-backed Zernio account verification plus approval-bound, schedule-only
   Facebook and Instagram publishing.

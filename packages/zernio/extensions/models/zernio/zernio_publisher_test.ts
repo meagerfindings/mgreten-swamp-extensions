@@ -71,3 +71,66 @@ Deno.test("scheduleApprovedPost rejects a target outside its allowlist before an
     "outside the configured allowlist",
   );
 });
+
+Deno.test("scheduleApprovedPost accepts real newlines and Unicode characters in content", async () => {
+  const ctx = context();
+  await scheduleApprovedPost(
+    {
+      ...config,
+      ...args,
+      content: "Moment Savor\n\n“The ordinary days are the ones we miss.”",
+    },
+    ctx.value,
+    async (_input, init) => {
+      return new Response(
+        JSON.stringify({ post: { _id: "post-newlines", status: "scheduled" } }),
+        { status: 201 },
+      );
+    },
+  );
+  assertEquals(ctx.writes[0].zernioPostId, "post-newlines");
+});
+
+Deno.test("scheduleApprovedPost rejects literal escape sequences in content before any request", async () => {
+  const ctx = context();
+  let requested = false;
+  await assertRejects(
+    () =>
+      scheduleApprovedPost({
+        ...config,
+        ...args,
+        content: "Moment Savor\\n\\nThe ordinary days",
+      }, ctx.value, async () => {
+        requested = true;
+        return new Response("{}", { status: 201 });
+      }),
+    Error,
+    "literal escape sequence",
+  );
+  assertEquals(requested, false);
+  assertEquals(ctx.writes.length, 0);
+});
+
+Deno.test("scheduleApprovedPost rejects literal unicode escapes in media alt text before any request", async () => {
+  const ctx = context();
+  let requested = false;
+  await assertRejects(
+    () =>
+      scheduleApprovedPost({
+        ...config,
+        ...args,
+        mediaItems: [{
+          type: "image" as const,
+          url: "https://example.test/image.png",
+          altText: "Moment Savor - \\u201cThe ordinary days\\u201d",
+        }],
+      }, ctx.value, async () => {
+        requested = true;
+        return new Response("{}", { status: 201 });
+      }),
+    Error,
+    "mediaItems[0].altText",
+  );
+  assertEquals(requested, false);
+  assertEquals(ctx.writes.length, 0);
+});

@@ -34,6 +34,24 @@ const receiptSchema = z.strictObject({
   scheduledFor: z.string(),
   observedAt: z.iso.datetime(),
 });
+
+/**
+ * Literal `\n` / `\r` / `\t` / `\uXXXX` sequences in caption text are almost
+ * always shell or JSON double-encoding artifacts (the value was escaped one
+ * extra time between the caller and this model). Zernio stores such sequences
+ * verbatim and publishes them literally, so reject them before scheduling.
+ */
+const mangledEscapePattern = /\\[nrt]|\\u[0-9a-fA-F]{4}/;
+
+export function rejectMangledEscapes(value: string, field: string): void {
+  if (mangledEscapePattern.test(value)) {
+    throw new Error(
+      `${field} contains a literal escape sequence (for example \\n or \\u201c) instead of a real ` +
+        "newline or character. The caption would publish with visible backslash artifacts. " +
+        "Pass the text with real newlines and characters - prefer --input-file (YAML) or JSON input - and schedule again.",
+    );
+  }
+}
 type Context = {
   globalArgs: z.infer<typeof configSchema>;
   logger: { info(message: string): void };
@@ -52,6 +70,12 @@ export async function scheduleApprovedPost(
   fetcher: typeof fetch = fetch,
 ) {
   const input = argumentsSchema.parse({ ...context.globalArgs, ...args });
+  rejectMangledEscapes(input.content, "content");
+  input.mediaItems.forEach((item, index) => {
+    if (item.altText !== undefined) {
+      rejectMangledEscapes(item.altText, `mediaItems[${index}].altText`);
+    }
+  });
   const allowed = new Set(
     input.allowedAccounts.map((a) => `${a.platform}:${a.accountId}`),
   );
@@ -104,7 +128,7 @@ export async function scheduleApprovedPost(
 
 export const model = {
   type: "@mgreten/zernio-publisher",
-  version: "2026.09.05.1",
+  version: "2026.09.06.1",
   globalArguments: configSchema,
   resources: {
     scheduledPost: {
