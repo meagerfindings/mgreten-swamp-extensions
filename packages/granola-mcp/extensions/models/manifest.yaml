@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/granola-mcp"
+version: "2026.09.10.1"
+description: >
+  Retrieves and normalizes Granola meetings through an MCP-capable CLI agent without a Granola API key.
+
+repository: https://github.com/meagerfindings/swamp-granola-mcp
+
+models:
+  - granola_mcp.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+dependencies:
+  - "@mgreten/cli-agent"
+
+platforms: []
