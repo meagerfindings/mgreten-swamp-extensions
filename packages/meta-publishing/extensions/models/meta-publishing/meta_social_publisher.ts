@@ -54,7 +54,7 @@ const socialRightsSchema = z.strictObject({
   expiresAt: z.iso.datetime({ offset: true }),
 });
 
-const packetSchema = z.strictObject({
+export const packetSchema = z.strictObject({
   manifest: marketingCampaignManifestSchema,
   campaignPacketDigest: marketingDigestSchema,
   landingPageDigest: marketingDigestSchema,
@@ -122,7 +122,7 @@ const packetSchema = z.strictObject({
   }
 });
 
-const approvalSchema = z.strictObject({
+export const approvalSchema = z.strictObject({
   approved: z.literal(true),
   actor: z.literal("founder"),
   approvalId: marketingCampaignIdSchema,
