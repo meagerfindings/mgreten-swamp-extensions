@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/weekly-decision-queue"
-version: "2026.08.23.1"
+license: MIT
+version: "2026.10.14.1"
 description: "Build a bounded, deterministic, recommendation-only weekly decision queue from supplied dossiers and a bottleneck ranking."
 repository: https://github.com/meagerfindings/swamp-weekly-decision-queue
 
