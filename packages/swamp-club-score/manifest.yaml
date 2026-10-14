@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/swamp-club-score"
-version: "2026.07.31.1"
+version: "2026.10.14.1"
 description: |
   Fetch and normalize a Swamp Club profile snapshot for a user such as
   `mgreten`, including lifetime and rolling-24-hour scores and leaderboard
@@ -10,6 +10,7 @@ description: |
   The model is intentionally read-only: it does not mutate the profile or
   require lab issue workflows. It is designed to be polled and then surfaced
   as a Home Assistant sensor or other dashboard entity.
+license: AGPL-3.0-or-later
 
 repository: "https://github.com/meagerfindings/swamp-club-score"
 paths:
