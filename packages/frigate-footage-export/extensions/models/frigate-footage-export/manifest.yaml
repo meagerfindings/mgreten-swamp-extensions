@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: '@mgreten/frigate-footage-export'
+version: 2026.10.14.1
+description: >
+  Generic, dry-run-first Frigate event metadata, recording inspection, and
+  server-side footage export model with explicit naming and multi-camera
+  support.
+license: MIT
+visibility: public
+repository: 'https://github.com/meagerfindings/swamp-frigate-footage-export'
+paths:
+  base: manifest
+models:
+  - model.ts
+workflows: []
+vaults: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE.md
+dependencies: []
