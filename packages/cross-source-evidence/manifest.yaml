@@ -1,8 +1,9 @@
 manifestVersion: 1
 name: "@mgreten/cross-source-evidence"
-version: "2026.08.23.1"
+version: 2026.10.14.1
 description: "Validates bounded, provenance-preserving cross-source evidence clusters and recommendation-only outputs."
 repository: "https://github.com/meagerfindings/swamp-cross-source-evidence"
+license: MIT
 models:
   - cross_source_evidence.ts
 workflows: []
