@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/road-trip-risk-watch"
-version: "2026.07.16.1"
+version: "2026.10.14.1"
 description: >
   Native route-risk watcher that polls official NWS forecast and alert data for
   checkpointed trips, computes a stable fingerprint, and emits digest output
@@ -9,6 +9,7 @@ description: >
   origin snapshot file is present at liveOriginStatePath, it resolves the first
   checkpoint from that live geocoded location on each run.
 repository: https://github.com/meagerfindings/swamp-road-trip-risk-watch
+license: MIT
 
 paths:
   base: manifest
