@@ -169,10 +169,17 @@ export async function runCommand(
       if (grouped) Deno.kill(-child.pid, "SIGTERM");
       else child.kill("SIGTERM");
     } catch { /* already exited */ }
-    await Promise.race([
-      child.status,
-      new Promise((resolve) => setTimeout(resolve, 250)),
-    ]);
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        child.status,
+        new Promise<void>((resolve) => {
+          graceTimer = setTimeout(resolve, 250);
+        }),
+      ]);
+    } finally {
+      clearTimeout(graceTimer);
+    }
     try {
       if (grouped) Deno.kill(-child.pid, "SIGKILL");
       else child.kill("SIGKILL");
