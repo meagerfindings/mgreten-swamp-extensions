@@ -11,6 +11,7 @@ import {
 const assert = (value: unknown, message: string) => {
   if (!value) throw new Error(message);
 };
+
 const base = {
   requestId: "candidate-0001",
   description: "replacement client",
