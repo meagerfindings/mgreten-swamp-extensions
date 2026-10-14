@@ -1,8 +1,9 @@
 manifestVersion: 1
 name: "@mgreten/hermes-interest-signals"
-version: "2026.07.19.1"
+version: "2026.10.14.1"
 description: "Aggregates caller-supplied, user-authorized context observations into transparent interest signals for downstream curation."
 repository: https://github.com/meagerfindings/hermes-interest--signals
+license: MIT
 
 paths:
   base: manifest
