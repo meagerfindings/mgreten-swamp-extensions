@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/unifi"
-version: "2026.07.27.1"
+version: "2026.10.14.1"
 description: >
   Manage a Ubiquiti UniFi Dream Machine (UDM / UDM Pro / UDM SE) via the
   legacy Network API: firewall groups, firewall rules, clients, PoE device
@@ -11,6 +11,7 @@ description: >
   wired client's resolved switch port.
 
 repository: https://github.com/meagerfindings/swamp-unifi
+license: MIT
 
 models:
   - client.ts
