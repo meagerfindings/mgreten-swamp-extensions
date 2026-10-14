@@ -70,7 +70,7 @@ const GlobalArgsSchema: z.ZodObject<{
 // ---------------------------------------------------------------------------
 
 /** Status level for a single resource. */
-const StatusSchema: z.ZodEnum<["ok", "warning", "critical"]> = z.enum([
+const StatusSchema = z.enum([
   "ok",
   "warning",
   "critical",
