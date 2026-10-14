@@ -1,8 +1,9 @@
 manifestVersion: 1
 name: "@mgreten/extension-radar"
-version: "2026.07.18.1"
+version: "2026.10.14.1"
 description: "Ranks Swamp registry search exports into transparent, preference-driven discovery reports for recurring technical briefs and extension research."
 repository: https://github.com/meagerfindings/swamp-extension-radar
+license: MIT
 
 paths:
   base: manifest

@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { rankExtension, renderReport } from "./model.ts";
+import { rankExtension, renderReport } from "./extension_radar.ts";
 
 const settings = {
   interests: ["homelab", "docker", "monitoring"],
@@ -16,6 +16,7 @@ Deno.test("ranks a fresh, verified homelab extension", () => {
     repository: "https://example.com/docker-health",
     repositoryVerified: true,
     createdAt: "2026-07-16T12:00:00.000Z",
+    platforms: [],
     labels: ["homelab", "docker", "monitoring"],
     contentTypes: ["models"],
   }, settings, now);
@@ -28,6 +29,7 @@ Deno.test("excludes configured cloud-provider noise", () => {
     name: "@example/aws-monitor",
     description: "AWS monitoring for homelab-like operations.",
     createdAt: "2026-07-17T12:00:00.000Z",
+    platforms: [],
     labels: ["homelab"],
     contentTypes: ["models"],
   }, settings, now);
@@ -39,6 +41,7 @@ Deno.test("reports caveats for older candidates without a source", () => {
     name: "@example/old-monitor",
     description: "Monitor.",
     createdAt: "2026-05-01T12:00:00.000Z",
+    platforms: [],
     labels: ["homelab"],
     contentTypes: [],
   }, settings, now);

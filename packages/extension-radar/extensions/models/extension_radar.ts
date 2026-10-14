@@ -8,6 +8,7 @@
  * @module
  */
 import { z } from "npm:zod@4";
+import type { ModelDefinition } from "jsr:@systeminit/swamp-testing@0.20260604.20";
 
 const ExtensionSchema = z.object({
   name: z.string().min(1),
@@ -21,6 +22,11 @@ const ExtensionSchema = z.object({
   platforms: z.array(z.string()).default([]),
   labels: z.array(z.string()).default([]),
   contentTypes: z.array(z.string()).default([]),
+});
+
+const AnalyzeArgsSchema = z.object({
+  extensions: z.array(ExtensionSchema).min(1),
+  asOf: z.string().datetime().optional(),
 });
 
 const GlobalArgsSchema = z.object({
@@ -218,11 +224,8 @@ export const model = {
     analyze: {
       description:
         "Rank a normalized Swamp registry search export using transparent preferences",
-      arguments: z.object({
-        extensions: z.array(ExtensionSchema).min(1),
-        asOf: z.string().datetime().optional(),
-      }),
-      execute: async (args, context) => {
+      arguments: AnalyzeArgsSchema,
+      execute: async (args: z.infer<typeof AnalyzeArgsSchema>, context) => {
         const settings = GlobalArgsSchema.parse(context.globalArgs);
         context.logger.info("Ranking {count} extension entries", {
           count: args.extensions.length,
@@ -262,4 +265,4 @@ export const model = {
       },
     },
   },
-};
+} satisfies ModelDefinition<typeof GlobalArgsSchema>;
