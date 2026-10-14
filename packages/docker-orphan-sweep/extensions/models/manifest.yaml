@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/docker-orphan-sweep"
-version: "2026.07.16.1"
+version: "2026.10.14.1"
+license: MIT
 description: >
   Find and remove orphaned Docker Compose containers whose git worktree
   directory no longer exists. Cross-references live compose projects against
