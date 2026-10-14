@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/public-draft-check"
-version: "2026.07.24.1"
+version: "2026.10.14.1"
+license: MIT
 description: "Deterministic disclosure checks for candidate public drafts, producing non-echoing blocker and review findings for agent and human review."
 repository: "https://github.com/meagerfindings/swamp-public-draft-check"
 models:
