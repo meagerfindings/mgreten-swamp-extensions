@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/read-only-investigation"
-version: 2026.08.23.1
+license: MIT
+version: 2026.10.14.1
 description: >
   Creates deterministic, bounded authorization plans for read-only
   investigations without executing queries, invoking providers, or mutating
