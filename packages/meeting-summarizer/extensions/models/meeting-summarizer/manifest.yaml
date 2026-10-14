@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/meeting-summarizer"
-version: "2026.07.16.1"
+version: "2026.10.14.1"
 description: >-
   Chunk a Whisper transcript and summarize it into a Granola-style meeting note
   via a local Ollama LLM. Handles long recordings with greedy segment-boundary
@@ -8,6 +8,7 @@ description: >-
   Also provides combine_notes (merge handwritten + analysis) and write_note
   (write markdown to disk) for full pipeline workflows.
 repository: "https://github.com/meagerfindings/swamp-meeting-transcriber"
+license: MIT
 paths:
   base: manifest
 models:
