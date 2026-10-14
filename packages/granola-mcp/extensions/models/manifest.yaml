@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/granola-mcp"
-version: "2026.09.10.1"
+version: "2026.10.14.1"
+license: MIT
 description: >
   Retrieves and normalizes Granola meetings through an MCP-capable CLI agent without a Granola API key.
 
