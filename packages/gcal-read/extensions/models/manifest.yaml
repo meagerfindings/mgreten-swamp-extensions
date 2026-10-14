@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/gcal-read"
-version: "2026.07.20.6"
+version: "2026.10.14.1"
+license: MIT
 description: >
   Read-only Google Calendar reader. Refreshes an OAuth2 access token from a
   configured refresh token and lists a single day's events (default: today)
