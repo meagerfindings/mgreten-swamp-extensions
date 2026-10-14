@@ -63,7 +63,7 @@ const ColumnListSchema = z.object({
 const RecordsSchema = z.object({
   tableId: z.string(),
   records: z.array(
-    z.object({ id: z.number(), fields: z.record(z.unknown()) }),
+    z.object({ id: z.number(), fields: z.record(z.string(), z.unknown()) }),
   ),
   count: z.number(),
   timestamp: z.string(),
@@ -288,7 +288,7 @@ const GetColumnsArgs = z.object({
 const GetRecordsArgs = z.object({
   tableId: z.string(),
   filter: z
-    .record(z.array(z.unknown()))
+    .record(z.string(), z.array(z.unknown()))
     .optional()
     .describe(
       "Grist filter: keys are column IDs, values are arrays of allowed values",
@@ -299,7 +299,7 @@ const GetRecordsArgs = z.object({
 const AddRecordsArgs = z.object({
   tableId: z.string(),
   records: z
-    .array(z.record(z.unknown()))
+    .array(z.record(z.string(), z.unknown()))
     .describe("Array of field objects to insert"),
   dryRun: z.boolean().default(false),
 });
@@ -307,7 +307,7 @@ const AddRecordsArgs = z.object({
 const UpdateRecordsArgs = z.object({
   tableId: z.string(),
   records: z.array(
-    z.object({ id: z.number(), fields: z.record(z.unknown()) }),
+    z.object({ id: z.number(), fields: z.record(z.string(), z.unknown()) }),
   ),
   dryRun: z.boolean().default(false),
 });
