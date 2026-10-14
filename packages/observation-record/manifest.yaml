@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/observation-record"
-version: 2026.08.23.1
+license: MIT
+version: 2026.10.14.1
 description: "Retain a single source-evidence observation as a recommendation-only, non-authorizing record."
 repository: "https://github.com/meagerfindings/swamp-observation-record"
 models:
