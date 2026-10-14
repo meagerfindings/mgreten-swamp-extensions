@@ -1,10 +1,11 @@
 manifestVersion: 1
 name: "@mgreten/agent-system-review"
-version: "2026.08.23.1"
+version: 2026.10.14.1
 description: >
   Deterministically ranks bounded, caller-supplied agent-system evidence into
   recommendation-only proposals that always require separate human approval.
 repository: "https://github.com/meagerfindings/swamp-agent-system-review"
+license: MIT
 models:
   - agent_system_review.ts
 additionalFiles:
