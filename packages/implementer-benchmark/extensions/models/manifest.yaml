@@ -1,10 +1,11 @@
 manifestVersion: 1
 name: "@mgreten/implementer-benchmark"
-version: "2026.08.19.2"
+version: "2026.10.14.1"
 description: >
   Runs five deterministic, bounded synthetic JavaScript tasks to compare coding
   implementers with isolated hidden verification and durable evidence.
 repository: https://github.com/meagerfindings/swamp-implementer-benchmark
+license: MIT
 models:
   - implementer_benchmark.ts
 additionalFiles:
