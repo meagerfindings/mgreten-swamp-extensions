@@ -50,6 +50,20 @@ const GlobalArgsSchema = z.object({
     .describe("Job IDs whose recent output is injected as context."),
 });
 
+type MethodContext = {
+  globalArgs: z.infer<typeof GlobalArgsSchema>;
+  logger: {
+    info: (message: string, props?: Record<string, unknown>) => void;
+    error: (message: string, props?: Record<string, unknown>) => void;
+    warning: (message: string, props?: Record<string, unknown>) => void;
+  };
+  writeResource: (
+    spec: string,
+    name: string,
+    data: Record<string, unknown>,
+  ) => Promise<{ name: string }>;
+};
+
 /** Resource schema for a built cron job specification. */
 const CronSpecSchema = z.object({
   /** Unique job ID. */
@@ -187,7 +201,7 @@ export const model = {
       description:
         "Build a Hermes cron job specification from global arguments. Throws if the schedule is invalid. Encodes all Hermes rules: 5-field schedule, integer repeat, pinned model/provider, self-contained prompt.",
       arguments: z.object({}),
-      execute: async (_args: Record<string, never>, context) => {
+      execute: async (_args: Record<string, never>, context: MethodContext) => {
         const { schedule } = context.globalArgs;
 
         context.logger.info("Building cron spec for schedule {schedule}", {
@@ -237,7 +251,10 @@ export const model = {
             "The cron schedule expression to validate, e.g. '0 23 * * *'",
           ),
       }),
-      execute: async (args: { expression: string }, context) => {
+      execute: async (
+        args: { expression: string },
+        context: MethodContext,
+      ) => {
         context.logger.info("Validating cron expression {expression}", {
           expression: args.expression,
         });
