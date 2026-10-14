@@ -1,11 +1,12 @@
 manifestVersion: 1
 name: "@mgreten/browser-test-evidence"
-version: 2026.08.28.1
+version: 2026.10.14.1
 description: >
   Normalize Playwright JSON reports into strict, versioned browser evidence and
   deterministically verify execution, provenance, coverage, and factory-bound
   immutable verdicts.
 repository: "https://github.com/meagerfindings/swamp-browser-test-evidence"
+license: MIT
 models:
   - browser_test_evidence.ts
 workflows: []
