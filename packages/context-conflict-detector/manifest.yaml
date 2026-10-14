@@ -1,8 +1,9 @@
 manifestVersion: 1
 name: "@mgreten/context-conflict-detector"
-version: 2026.08.23.1
+version: 2026.10.14.1
 description: "Deterministically reports caller-declared registry conflicts without resolving, executing, or calling providers."
 repository: "https://github.com/meagerfindings/swamp-context-conflict-detector"
+license: MIT
 paths:
   base: manifest
 models:
