@@ -1,10 +1,11 @@
 manifestVersion: 1
 name: "@mgreten/daily-operational-digest"
-version: 2026.08.23.1
+version: 2026.10.14.1
 description: >
   A neutral, deterministic, side-effect-free operational digest built only from
   normalized, fresh, redacted evidence supplied by the caller.
 repository: "https://github.com/meagerfindings/swamp-daily-operational-digest"
+license: MIT
 models:
   - operational_digest.ts
 workflows: []
