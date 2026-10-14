@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/obsidian-vault-fs"
-version: "2026.07.16.1"
+version: "2026.10.14.1"
+license: MIT
 description: >
   Headless filesystem-first Obsidian vault model for Swamp automation.
   Reads, writes, appends, searches, lists, stats, and edits scalar frontmatter
