@@ -38,6 +38,7 @@ const StoredEventSchema = z.object({
   category: z.string(),
   severity: z.enum(["info", "minor", "moderate", "major", "extreme"]),
   headline: z.string(),
+  description: z.string().max(700).nullable().default(null),
   anchorLabels: z.array(z.string().regex(SAFE_ANCHOR_LABEL)),
   distanceBucket: z.string().nullable(),
   source: z.enum(SOURCE_NAMES),
@@ -53,6 +54,7 @@ const StoredChangeSchema = z.object({
     category: z.string(),
     severity: z.enum(["info", "minor", "moderate", "major", "extreme"]),
     headline: z.string(),
+    description: z.string().max(700).nullable().default(null),
     anchorLabels: z.array(z.string().regex(SAFE_ANCHOR_LABEL)),
     distanceBucket: z.string().nullable(),
   }).strict(),
@@ -75,6 +77,7 @@ export type NormalizedSafetyEvent = {
   severity: Severity;
   status: "active";
   headline: string;
+  description?: string | null;
   effectiveAt: string | null;
   expiresAt: string | null;
   anchorLabels: string[];
@@ -143,14 +146,40 @@ async function hash(value: unknown): Promise<string> {
     (byte) => byte.toString(16).padStart(2, "0"),
   ).join("");
 }
-function redactHeadline(value: string): string {
+function redactHeadline(value: string, maxLength = 240): string {
   return value
     .replace(/https?:\/\/\S+/gi, "[link]")
     .replace(
       /[-+]?\d{1,2}\.\d{3,}\s*,\s*[-+]?\d{1,3}\.\d{3,}/g,
       "[coordinates]",
     )
-    .replace(/\s+/g, " ").trim().slice(0, 240) || "Official safety event";
+    .replace(/\s+/g, " ").trim().slice(0, maxLength) ||
+    "Official safety event";
+}
+function summarizeNwsDescription(description: unknown): string | null {
+  const normalized = text(description).replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  const section = (name: string): string => {
+    const match = normalized.match(
+      new RegExp(
+        `${name}\\s*\\.\\.\\.\\s*(.*?)(?=\\s+[A-Z][A-Z ]{2,}\\s*\\.\\.\\.|$)`,
+        "i",
+      ),
+    );
+    return match?.[1]?.trim() ?? "";
+  };
+  const parts = [
+    section("WHAT"),
+    section("WHERE"),
+    section("WHEN"),
+    section("IMPACTS"),
+    section("HEALTH INFORMATION"),
+  ].filter((part, index, all) =>
+    Boolean(part) &&
+    all.findIndex((other) => other.toLowerCase() === part.toLowerCase()) ===
+      index
+  );
+  return redactHeadline(parts.length ? parts.join("; ") : normalized, 700);
 }
 /** Convert uncontrolled provider text into a location-free display category. */
 export function safeDisplayHeadline(
@@ -289,6 +318,9 @@ async function contentKeyFor(event: NormalizedSafetyEvent): Promise<string> {
     category: event.category,
     severity: event.severity,
     headline: redactHeadline(event.headline),
+    description: event.description
+      ? redactHeadline(event.description, 700)
+      : null,
     effectiveAt: event.effectiveAt,
     expiresAt: event.expiresAt,
     anchorLabels: [...event.anchorLabels].sort(),
@@ -301,6 +333,9 @@ function safeEvent(event: NormalizedSafetyEvent) {
     category: event.category,
     severity: event.severity,
     headline: safeDisplayHeadline(event.source, event.category, event.headline),
+    description: event.source === "nws" && event.description
+      ? redactHeadline(event.description, 700)
+      : null,
     anchorLabels: [...new Set(event.anchorLabels)].sort(),
     distanceBucket: event.distanceBucket,
   };
@@ -369,6 +404,9 @@ export async function reconcileEvents(
           event.category,
           event.headline,
         ),
+        description: event.source === "nws" && event.description
+          ? redactHeadline(event.description, 700)
+          : null,
         anchorLabels: [...new Set(event.anchorLabels)].sort(),
         distanceBucket: event.distanceBucket,
         source: event.source,
@@ -395,6 +433,9 @@ export async function reconcileEvents(
         event.category,
         event.headline,
       ),
+      description: event.source === "nws" && event.description
+        ? redactHeadline(event.description, 700)
+        : null,
       anchorLabels: [...new Set(event.anchorLabels)].sort(),
       distanceBucket: event.distanceBucket,
       missingAuthoritativePolls: 0,
@@ -421,6 +462,7 @@ export async function reconcileEvents(
         severity: stored.severity,
         status: "active",
         headline: stored.headline,
+        description: stored.description,
         effectiveAt: null,
         expiresAt: null,
         anchorLabels: stored.anchorLabels,
@@ -437,7 +479,7 @@ export function renderDigest(changes: WatchChange[]): string {
     [
       "# Local safety watch",
       "",
-      ...changes.map((change) =>
+      ...changes.flatMap((change) => [
         `- **${change.action.toUpperCase()}** — ${
           safeDisplayHeadline(
             change.event.source,
@@ -450,8 +492,11 @@ export function renderDigest(changes: WatchChange[]): string {
             : ""
         }${
           change.event.distanceBucket ? ` (${change.event.distanceBucket})` : ""
-        }; ${change.event.source}`
-      ),
+        }; ${change.event.source}`,
+        ...(change.event.source === "nws" && change.event.description
+          ? [`  - ${redactHeadline(change.event.description, 700)}`]
+          : []),
+      ]),
     ].join("\n")
   }\n`;
 }
@@ -490,13 +535,13 @@ async function collectNws(
   userAgent: string,
 ): Promise<NormalizedSafetyEvent[]> {
   const output: NormalizedSafetyEvent[] = [];
-  for (const checkpoint of checkpoints.slice(0, 5)) {
+  for (const checkpoint of checkpoints) {
     const document = await fetchJson(
       `https://api.weather.gov/alerts/active?point=${checkpoint.lat},${checkpoint.lon}`,
       userAgent,
     );
     const features = isRecord(document) && Array.isArray(document.features)
-      ? document.features.slice(0, 100)
+      ? document.features
       : null;
     if (!features) throw new Error("invalid-nws-response");
     for (const feature of features) {
@@ -506,14 +551,18 @@ async function collectNws(
       if (!properties) continue;
       const headline = text(properties.headline) || text(properties.event) ||
         "Official weather alert";
+      const description = summarizeNwsDescription(properties.description);
       output.push({
         source: "nws",
         sourceEventId: optionalText(properties.id),
         sourceRevision: optionalText(properties.sent),
-        category: categoryFromText(`${text(properties.event)} ${headline}`),
+        category: categoryFromText(
+          `${text(properties.event)} ${headline} ${description ?? ""}`,
+        ),
         severity: severityFromNws(text(properties.severity)),
         status: "active",
         headline,
+        description,
         effectiveAt: optionalText(properties.effective),
         expiresAt: optionalText(properties.expires),
         anchorLabels: [checkpoint.label],
@@ -546,7 +595,7 @@ async function collectCotrip(
     !isRecord(document.data) || !isRecord(document.data.dashboardQuery) ||
     !Array.isArray(document.data.dashboardQuery.collections)
   ) throw new Error("invalid-cotrip-response");
-  return document.data.dashboardQuery.collections.slice(0, 200).flatMap(
+  return document.data.dashboardQuery.collections.flatMap(
     (item): NormalizedSafetyEvent[] => {
       if (!isRecord(item)) return [];
       const features = Array.isArray(item.features)
@@ -593,7 +642,7 @@ async function collectInciweb(
     ? document.incidents
     : null;
   if (!records) throw new Error("invalid-inciweb-response");
-  return records.slice(0, 500).flatMap((item): NormalizedSafetyEvent[] => {
+  return records.flatMap((item): NormalizedSafetyEvent[] => {
     if (
       !isRecord(item) || item.field_active === false ||
       typeof item.lat_deg !== "number" || typeof item.long_deg !== "number"
@@ -659,8 +708,13 @@ function sourceDue(
 /** Swamp model for generic, private-runtime local safety monitoring. */
 export const model = {
   type: "@mgreten/local-safety-watch",
-  version: "2026.07.24.2",
+  version: "2026.09.23.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [{
+    toVersion: "2026.09.23.1",
+    description: "Include sanitized NWS alert descriptions in safety digests",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
   resources: {
     summary: {
       description: "Redacted material local-safety changes",

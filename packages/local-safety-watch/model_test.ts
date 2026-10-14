@@ -72,6 +72,27 @@ Deno.test("renderDigest omits coordinates and exact distance", () => {
   assertEquals(digest.includes("1.337"), false);
 });
 
+Deno.test("renderDigest includes a sanitized NWS description", () => {
+  const digest = renderDigest([{
+    action: "new",
+    event: {
+      ...ACTIVE_CLOSURE,
+      source: "nws",
+      sourceEventId: "nws-description-alert",
+      category: "weather",
+      description:
+        "Heavy snow expected at 40.1448, -104.8876 from 9 PM through noon tomorrow.",
+    },
+  }]);
+
+  assertStringIncludes(
+    digest,
+    "Heavy snow expected at [coordinates] from 9 PM through noon tomorrow.",
+  );
+  assertEquals(digest.includes("40.1448"), false);
+  assertEquals(digest.includes("-104.8876"), false);
+});
+
 Deno.test("mergeEvents combines one official event that applies to multiple anchors", async () => {
   const merged = await mergeEvents([
     ACTIVE_CLOSURE,

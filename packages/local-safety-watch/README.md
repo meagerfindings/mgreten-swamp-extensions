@@ -45,6 +45,7 @@ Private deployment boundary
 - InciWeb is throttled to a longer interval because wildfire feed data changes less frequently.
 - A provider failure never clears an active event.
 - An event must be absent from two successful authoritative polls before it clears.
+- NWS digests include a sanitized summary of the official alert description.
 
 ## Scope
 
