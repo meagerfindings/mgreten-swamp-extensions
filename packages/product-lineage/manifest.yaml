@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/product-lineage"
-version: "2026.08.23.1"
+license: MIT
+version: "2026.10.14.1"
 description: >
   Validates and persists an immutable, ordered product-delivery lineage from
   source signal through post-release measurement without creating or inferring
