@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/software-factory-run-audit"
-version: "2026.07.20.1"
+version: "2026.10.14.1"
 description: >
   Deterministic run reconstruction and invariant-violation audit of a
   @swamp/software-factory work item — stale SHAs across the artifact lineage,
@@ -10,6 +10,7 @@ description: >
   issue-tracker (Linear) correlation joins are pluggable, not required.
 
 repository: https://github.com/meagerfindings/swamp-software-factory-run-audit
+license: MIT
 
 models: []
 workflows: []
