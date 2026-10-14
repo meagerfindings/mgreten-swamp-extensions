@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/railway-read"
-version: "2026.08.21.1"
+version: "2026.10.14.1"
+license: MIT
 description: >
   Retain bounded, typed Railway deployment status and source-commit evidence using query-only GraphQL operations.
 

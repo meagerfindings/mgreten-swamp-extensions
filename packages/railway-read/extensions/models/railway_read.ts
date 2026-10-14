@@ -5,7 +5,7 @@
  */
 import { z } from "npm:zod@4";
 
-/** Published model version. */
+/** Published model version, retained as an importable constant. */
 export const RAILWAY_READ_MODEL_VERSION = "2026.08.21.1" as const;
 
 const serviceSchema = z.strictObject({
@@ -297,7 +297,7 @@ export async function collectDeploymentSnapshot(
 /** Query-only Railway deployment model. */
 export const model = {
   type: "@mgreten/railway-read",
-  version: RAILWAY_READ_MODEL_VERSION,
+  version: "2026.08.21.1",
   globalArguments: globalArgumentsSchema,
   resources: {
     deploymentSnapshot: {
