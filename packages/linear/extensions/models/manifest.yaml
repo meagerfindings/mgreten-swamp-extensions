@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/linear"
-version: "2026.08.25.1"
+version: "2026.10.14.1"
 description: >
   Linear project management integration for swamp — issue CRUD with
   fail-closed verified deletion,
@@ -10,6 +10,7 @@ description: >
   team/project/state listing via the official @linear/sdk.
 
 repository: https://github.com/meagerfindings/swamp-linear
+license: MIT
 
 models:
   - linear.ts
