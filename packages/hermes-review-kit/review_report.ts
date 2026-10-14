@@ -34,6 +34,26 @@ const ReviewSummarySchema = z.object({
 });
 
 type ReviewSummary = z.infer<typeof ReviewSummarySchema>;
+type ReportContext = {
+  stepExecutions: Array<{
+    modelType: string;
+    stepName: string;
+    modelId: string;
+    dataHandles: Array<{
+      specName: string;
+      name: string;
+      version: number;
+    }>;
+  }>;
+  dataRepository: {
+    getContent: (
+      modelType: string,
+      modelId: string,
+      name: string,
+      version: number,
+    ) => Promise<Uint8Array | null>;
+  };
+};
 
 function bullets(items: string[]): string {
   return items.length ? items.map((item) => `- ${item}`).join("\n") : "- None";
@@ -69,7 +89,7 @@ export const report = {
     "Summarize nightly Hermes review collection into reusable actions, publishable ideas, and approval questions.",
   scope: "workflow",
   labels: ["hermes", "review", "daily", "publishability"],
-  execute: async (context) => {
+  execute: async (context: ReportContext) => {
     const collectorStep = context.stepExecutions.find((step) =>
       step.modelType === "@mgreten/hermes-review-collector" ||
       step.stepName === "collect"

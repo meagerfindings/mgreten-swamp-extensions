@@ -49,6 +49,18 @@ const ReviewSummarySchema = z.object({
 
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 type ReviewSummary = z.infer<typeof ReviewSummarySchema>;
+type MethodContext = {
+  globalArgs: GlobalArgs;
+  logger: {
+    info: (message: string, props?: Record<string, unknown>) => void;
+    warning: (message: string, props?: Record<string, unknown>) => void;
+  };
+  writeResource: (
+    spec: string,
+    name: string,
+    data: ReviewSummary,
+  ) => Promise<{ name: string }>;
+};
 
 type SessionFile = {
   session_id?: string;
@@ -212,7 +224,7 @@ export const model = {
       description:
         "Collect recent Hermes sessions and nearby repo changes into one summary",
       arguments: z.object({}),
-      execute: async (_args, context) => {
+      execute: async (_args: Record<string, never>, context: MethodContext) => {
         const cfg = context.globalArgs as GlobalArgs;
         const now = new Date();
         const windowEnd = now;
