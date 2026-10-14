@@ -1,11 +1,9 @@
 /**
- * Deterministic trip-packing planner and explicitly confirmed Todoist project creator.
- * Preview is entirely local and read-only; createProject calls Todoist REST API v2 only
- * after an exact confirmation match and persists the resulting remote identifiers.
+ * Deterministic trip-packing planner with an explicit Todoist confirmation gate.
+ * Preview is local and read-only; project creation requires exact confirmation.
  *
  * @module
  */
-
 import { z } from "npm:zod@4";
 
 const TODOIST_API = "https://api.todoist.com/rest/v2";
@@ -20,15 +18,14 @@ const CATEGORY_ORDER = [
   "vehicle",
   "beforeLeavingHouse",
 ] as const;
-
-/** Stable category identifiers used in plans and Todoist section names. */
+/** Stable category identifiers used in plans and Todoist sections. */
 export const PackingCategorySchema = z.enum(CATEGORY_ORDER);
-/** A compact caller-supplied item to append to one category. */
+/** A caller-supplied item assigned to one packing category. */
 export const CustomItemSchema = z.object({
   category: PackingCategorySchema,
   item: z.string().trim().min(1).max(200),
 });
-/** Shared compact trip input that drives both preview and creation. */
+/** Validated trip input shared by deterministic preview and creation. */
 export const TripInputSchema = z.object({
   projectName: z.string().trim().min(1).max(120),
   days: z.number().int().min(1).max(60),
@@ -41,9 +38,12 @@ export const TripInputSchema = z.object({
   includesKids: z.boolean().default(false),
   includeWorkGear: z.boolean().default(false),
   international: z.boolean().default(false),
+  homeOccupied: z.boolean().default(false).describe(
+    "Whether someone remains at home; omits house-shutdown tasks when true.",
+  ),
   customItems: z.array(CustomItemSchema).max(100).default([]),
 });
-/** Model-level configuration; configure apiToken with a vault expression, never plaintext. */
+/** Model-level configuration; provide the API token through a vault. */
 export const GlobalArgsSchema = z.object({
   apiToken: z.string().min(1).meta({ sensitive: true }).describe(
     "Todoist API token; configure as ${{ vault.get(my-vault, TODOIST_API_TOKEN) }}.",
@@ -55,7 +55,7 @@ export const PlanCategorySchema = z.object({
   title: z.string(),
   items: z.array(z.string()),
 });
-/** Deterministic output of planning compact trip inputs. */
+/** Deterministic output of planning validated trip inputs. */
 export const PlanSchema = z.object({
   projectName: z.string(),
   days: z.number().int(),
@@ -70,7 +70,7 @@ const TodoistEntitySchema = z.object({
   section_id: z.string().nullable().optional(),
   url: z.string().url().optional(),
 });
-/** Persisted result of a preview or confirmed Todoist creation. */
+/** Persisted result of a preview or confirmed Todoist project operation. */
 export const ProjectResourceSchema = z.object({
   status: z.enum(["preview", "created", "existing"]),
   marker: z.string(),
@@ -88,11 +88,27 @@ export const ProjectResourceSchema = z.object({
   ),
   plan: PlanSchema,
 });
+type Category = z.infer<typeof PackingCategorySchema>;
+type TripInput = z.infer<typeof TripInputSchema>;
+type TodoistEntity = z.infer<typeof TodoistEntitySchema>;
+type ReconciledProject = {
+  project: TodoistEntity;
+  sections: TodoistEntity[];
+  tasks: TodoistEntity[];
+};
+interface ModelContext {
+  globalArgs: z.infer<typeof GlobalArgsSchema>;
+  methodArgs?: unknown;
+  logger: { info: (message: string, values: Record<string, unknown>) => void };
+  writeResource: (
+    resource: string,
+    name: string,
+    value: unknown,
+  ) => Promise<Record<string, unknown>>;
+}
 
-/** Convert a category key to a user-facing Todoist section title. */
-export function categoryTitle(
-  key: z.infer<typeof PackingCategorySchema>,
-): string {
+/** Convert a category identifier to its user-facing Todoist section title. */
+export function categoryTitle(key: Category): string {
   return {
     clothing: "Clothing",
     documentsSafety: "Documents & safety",
@@ -105,7 +121,7 @@ export function categoryTitle(
     beforeLeavingHouse: "Before leaving / house",
   }[key];
 }
-/** Create a stable FNV-1a hash without timestamps, randomness, or secret material. */
+/** Create a stable FNV-1a hash without timestamps or secret material. */
 export function fnv1a(value: string): string {
   let hash = 0x811c9dc5;
   for (const character of value) {
@@ -114,39 +130,57 @@ export function fnv1a(value: string): string {
   }
   return hash.toString(16).padStart(8, "0");
 }
-/** Generate an opaque deterministic marker from normalized non-secret plan inputs. */
-export function markerFor(input: z.infer<typeof TripInputSchema>): string {
+/** Generate an opaque deterministic marker from normalized trip inputs. */
+export function markerFor(input: TripInput): string {
   const normalized = {
-    projectName: input.projectName,
-    days: input.days,
-    travelMode: input.travelMode,
-    lodging: input.lodging,
+    ...input,
     activities: [...input.activities].sort(),
-    travelers: input.travelers,
-    includesKids: input.includesKids,
-    includeWorkGear: input.includeWorkGear,
-    international: input.international,
     customItems: [...input.customItems].map((item) => ({
       category: item.category,
       item: item.item,
-    })).sort((left, right) =>
-      `${left.category}:${left.item}`.localeCompare(
-        `${right.category}:${right.item}`,
-      )
+    })).sort((a, b) =>
+      `${a.category}:${a.item}`.localeCompare(`${b.category}:${b.item}`)
     ),
   };
-  return `[[swamp-trip-packing:v1:${fnv1a(JSON.stringify(normalized))}]]`;
+  return `[[swamp-trip-packing:v2:${fnv1a(JSON.stringify(normalized))}]]`;
+}
+function quantityLabel(
+  count: number,
+  singular: string,
+  plural = `${singular}s`,
+): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+function clothingItems(input: TripInput): string[] {
+  const shirts = `${input.days} ${
+    input.activities.includes("work") ? "work/casual" : "casual"
+  } shirts${input.days > 1 ? ` (wear 1; pack ${input.days - 1})` : ""}`;
+  const underwear = `${
+    quantityLabel(input.days + 1, "pair", "pairs")
+  } underwear (${input.days} day${input.days === 1 ? "" : "s"} + 1 spare)`;
+  const socks = `${
+    quantityLabel(input.days + 1, "pair", "pairs")
+  } socks (${input.days} day${input.days === 1 ? "" : "s"} + 1 spare)`;
+  const pantsCount = Math.max(1, Math.ceil(input.days / 3));
+  const pants = `${quantityLabel(pantsCount, "pair", "pairs")} ${
+    input.activities.includes("work") ? "work/casual" : "casual"
+  } pants${pantsCount > 1 ? " (wear 1; pack 1)" : ""}`;
+  const items = [
+    shirts,
+    underwear,
+    socks,
+    pants,
+    "1 sleep outfit",
+    "1 weather-appropriate layer",
+  ];
+  if (input.days >= 4) items.push("Laundry bag");
+  return items;
 }
 /** Build the deterministic packing plan without network or clock access. */
 export function buildPlan(rawInput: unknown): z.infer<typeof PlanSchema> {
   const input = TripInputSchema.parse(rawInput);
-  const items: Record<z.infer<typeof PackingCategorySchema>, string[]> = {
-    clothing: [
-      "Casual outfits",
-      "Sleepwear",
-      "Socks and underwear",
-      "Weather-appropriate layer",
-    ],
+  const items: Record<Category, string[]> = {
+    clothing: clothingItems(input),
     documentsSafety: [
       "Wallet and ID",
       "Health insurance card",
@@ -158,13 +192,10 @@ export function buildPlan(rawInput: unknown): z.infer<typeof PlanSchema> {
     kids: [],
     toiletries: ["Toothbrush and toothpaste", "Deodorant", "Medications"],
     vehicle: [],
-    beforeLeavingHouse: [
-      "Lock doors and windows",
-      "Set lights/thermostat",
-      "Take out trash",
-    ],
+    beforeLeavingHouse: input.homeOccupied
+      ? []
+      : ["Lock doors and windows", "Set lights/thermostat", "Take out trash"],
   };
-  if (input.days >= 4) items.clothing.push("Laundry bag");
   if (input.activities.includes("dress")) {
     items.clothing.push("Dress outfit and shoes");
   }
@@ -200,8 +231,8 @@ export function buildPlan(rawInput: unknown): z.infer<typeof PlanSchema> {
       "Fuel/charge check",
       "Vehicle documents",
       "Emergency kit",
+      "Load vehicle",
     );
-    items.beforeLeavingHouse.push("Load vehicle");
   }
   if (input.lodging === "camping") {
     items.food.push("Cooler and ice", "Camp meals");
@@ -229,7 +260,6 @@ function sectionUrl(id: string): string {
 function taskUrl(id: string): string {
   return `https://app.todoist.com/app/task/${id}`;
 }
-/** Issue one Todoist REST API v2 request and validate errors before parsing a response. */
 async function todoistRequest(
   token: string,
   path: string,
@@ -253,26 +283,6 @@ async function todoistRequest(
   }
   return text.length === 0 ? null : JSON.parse(text);
 }
-type TodoistEntity = z.infer<typeof TodoistEntitySchema>;
-type ReconciledProject = {
-  project: TodoistEntity;
-  sections: TodoistEntity[];
-  tasks: TodoistEntity[];
-};
-type TripInput = z.infer<typeof TripInputSchema>;
-type CreateProjectInput = TripInput & { confirmation: string };
-interface ModelContext {
-  globalArgs: z.infer<typeof GlobalArgsSchema>;
-  methodArgs?: unknown;
-  logger: { info: (message: string, values: Record<string, unknown>) => void };
-  writeResource: (
-    resource: string,
-    name: string,
-    value: unknown,
-  ) => Promise<Record<string, unknown>>;
-}
-
-/** Locate an existing project only by its stable, non-task marker section. */
 async function findExistingProject(
   token: string,
   plan: z.infer<typeof PlanSchema>,
@@ -303,8 +313,6 @@ async function findExistingProject(
   }
   return null;
 }
-
-/** Create only the missing user-facing sections and planned tasks in a marked project. */
 async function reconcileProject(
   token: string,
   plan: z.infer<typeof PlanSchema>,
@@ -388,11 +396,10 @@ function resourceValue(
     plan,
   };
 }
-
-/** Model definition for local preview and explicitly-confirmed Todoist project creation. */
+/** Model definition for local preview and explicitly-confirmed project creation. */
 export const model = {
   type: "@mgreten/trip-packing",
-  version: "2026.07.22.1",
+  version: "2026.07.23.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     tripProject: {
@@ -445,10 +452,6 @@ export const model = {
             plan,
           },
         );
-        context.logger.info(
-          "Persisted read-only trip packing preview for {projectName}",
-          { projectName: plan.projectName },
-        );
         return { dataHandles: [handle] };
       },
     },
@@ -456,61 +459,50 @@ export const model = {
       description:
         "Create or reconcile a marked Todoist project, sections, and tasks only after exact confirmation.",
       arguments: TripInputSchema.extend({ confirmation: z.string().max(120) }),
-      execute: async (args: CreateProjectInput, context: ModelContext) => {
+      execute: async (
+        args: TripInput & { confirmation: string },
+        context: ModelContext,
+      ) => {
         const input = TripInputSchema.parse(args);
-        const confirmation = z.string().max(120).parse(
-          (args as { confirmation: unknown }).confirmation,
-        );
-        if (confirmation !== input.projectName) {
+        if (args.confirmation !== input.projectName) {
           throw new Error(
             "confirmation must exactly equal projectName before Todoist mutation",
           );
         }
         const plan = buildPlan(input);
-        const token = context.globalArgs.apiToken;
-        context.logger.info(
-          "Checking Todoist for an existing marked trip project for {projectName}",
-          { projectName: plan.projectName },
+        const existing = await findExistingProject(
+          context.globalArgs.apiToken,
+          plan,
         );
-        const existing = await findExistingProject(token, plan);
-        if (existing) {
-          const reconciled = await reconcileProject(token, plan, existing);
-          const handle = await context.writeResource(
-            "tripProject",
-            `project-${fnv1a(plan.marker)}`,
-            resourceValue("existing", plan, reconciled),
-          );
-          context.logger.info(
-            "Reconciled existing marked Todoist project for {projectName}",
-            { projectName: plan.projectName },
-          );
-          return { dataHandles: [handle] };
-        }
-        const project = TodoistEntitySchema.parse(
-          await todoistRequest(token, "/projects", {
-            method: "POST",
-            body: JSON.stringify({ name: input.projectName }),
-          }),
-        );
-        const markerSection = TodoistEntitySchema.parse(
-          await todoistRequest(token, "/sections", {
-            method: "POST",
-            body: JSON.stringify({ project_id: project.id, name: plan.marker }),
-          }),
-        );
-        const reconciled = await reconcileProject(token, plan, {
-          project,
-          sections: [markerSection],
-          tasks: [],
-        });
+        const reconciled = existing
+          ? await reconcileProject(context.globalArgs.apiToken, plan, existing)
+          : await (async () => {
+            const project = TodoistEntitySchema.parse(
+              await todoistRequest(context.globalArgs.apiToken, "/projects", {
+                method: "POST",
+                body: JSON.stringify({ name: input.projectName }),
+              }),
+            );
+            const marker = TodoistEntitySchema.parse(
+              await todoistRequest(context.globalArgs.apiToken, "/sections", {
+                method: "POST",
+                body: JSON.stringify({
+                  project_id: project.id,
+                  name: plan.marker,
+                }),
+              }),
+            );
+            return await reconcileProject(context.globalArgs.apiToken, plan, {
+              project,
+              sections: [marker],
+              tasks: [],
+            });
+          })();
         const handle = await context.writeResource(
           "tripProject",
           `project-${fnv1a(plan.marker)}`,
-          resourceValue("created", plan, reconciled),
+          resourceValue(existing ? "existing" : "created", plan, reconciled),
         );
-        context.logger.info("Created Todoist trip project for {projectName}", {
-          projectName: plan.projectName,
-        });
         return { dataHandles: [handle] };
       },
     },
