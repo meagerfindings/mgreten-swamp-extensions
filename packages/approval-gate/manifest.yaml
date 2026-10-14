@@ -1,11 +1,12 @@
 manifestVersion: 1
 name: "@mgreten/approval-gate"
-version: 2026.08.23.1
+version: 2026.10.14.1
 description: >
   Deterministic, domain-neutral approval diagnostics for retained evidence.
   It recommends whether supplied requirements are satisfied and never executes,
   approves, invokes providers, or causes side effects.
 repository: "https://github.com/meagerfindings/swamp-approval-gate"
+license: MIT
 models:
   - approval_gate.ts
 workflows: []
