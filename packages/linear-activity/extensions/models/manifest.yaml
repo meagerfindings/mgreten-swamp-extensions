@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/linear-activity"
-version: "2026.07.16.1"
+version: "2026.10.14.1"
 description: >
   Gather a Linear user's daily activity — issues completed, moved to review,
   created, comments authored, and in-flight assignments. Read-only, scoped
@@ -8,6 +8,7 @@ description: >
   standup summaries.
 
 repository: https://github.com/meagerfindings/swamp-linear-activity
+license: MIT
 
 models:
   - linear_activity.ts
