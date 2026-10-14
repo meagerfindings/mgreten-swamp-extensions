@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/read-only-trial"
-version: 2026.08.24.1
+license: MIT
+version: 2026.10.14.1
 description: >
   Generic deterministic evaluator for caller-supplied read-only trial evidence.
   It has no operational bindings and persists only its own evaluation record.
