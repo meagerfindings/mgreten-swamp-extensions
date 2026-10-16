@@ -1,0 +1,26 @@
+manifestVersion: 1
+name: "@mgreten/markdown-blog"
+version: "2026.10.15.1"
+description: "Deterministic Markdown-to-HTML previews, hash-checked local post writes, and byte-for-byte verification. Bring your own template and deployment."
+visibility: public
+repository: "https://github.com/meagerfindings/swamp-markdown-blog"
+paths:
+  base: manifest
+models:
+  - markdown_blog.ts
+workflows:
+  - workflow-9803c8c0-0c56-4f88-958a-ff734501d842.yaml
+binaries:
+  - assets/renderer.py
+additionalFiles:
+  - README.md
+  - LICENSE
+  - requirements.txt
+  - templates/page.html.txt
+  - examples/post.md
+platforms:
+  - linux-x86_64
+labels:
+  - markdown
+  - blog
+  - static-site
