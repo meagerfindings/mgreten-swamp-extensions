@@ -282,7 +282,14 @@ async function atomicWrite(
 /** Local post renderer. No network, Git, image generation, or deployment actions. */
 export const model = {
   type: "@mgreten/markdown-blog",
-  version: "2026.10.15.1",
+  version: "2026.10.15.2",
+  upgrades: [
+    {
+      toVersion: "2026.10.15.2",
+      description: "License and documentation update; no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   globalArguments: GlobalArgs,
   resources: {
     preview: {

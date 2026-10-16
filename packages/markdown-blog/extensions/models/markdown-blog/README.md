@@ -7,6 +7,11 @@ before handing it to your deployment workflow.
 write-and-verify workflow. It is not a hosting service or an AI writer. There
 are no added JavaScript packages beyond Swamp's existing Zod schema dependency.
 
+For the story behind the package, read
+[I Wanted to Write, Not Manage a Website](https://matgreten.dev/posts/i-replaced-jekyll-with-a-publishing-workflow/).
+That article describes my site's full publishing workflow; this package covers
+local rendering, writing, and verification, not deployment.
+
 ## Requirements
 
 - Swamp with `context.extensionFile()` and manifest `binaries` support;
@@ -191,5 +196,9 @@ Tests use disposable directories and real Python parsing, not production posts:
 ~/.swamp/deno/deno test -A extensions/models/markdown-blog/markdown_blog_test.ts
 ```
 
-MIT licensed. This first package is maintained in the `mgreten` collective; it
-contains no deployment credentials or company configuration.
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Mat Greten.
+
+This package is maintained in the `mgreten` collective; it contains no deployment
+credentials or company configuration.
