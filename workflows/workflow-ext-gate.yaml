@@ -1,0 +1,93 @@
+id: a4a5dd69-3b19-44a1-a830-81659dc369a7
+name: ext-gate
+description: >-
+  Publish gate for every package in catalog.yaml: catalog/manifest consistency,
+  deterministic tests, content-hash CalVer decision, full-history privacy scan,
+  and `swamp extension push --dry-run`. Read-only; never publishes. Each step
+  records a result resource and fails if any package fails it. Steps run in
+  order and every step runs even after an earlier failure, so one run reports
+  everything; the run fails if any step failed.
+tags:
+  domain: extension-catalog
+inputs:
+  type: object
+  properties:
+    today:
+      type: string
+      description: Gate date YYYY-MM-DD (CalVer day for any release decision).
+  required:
+    - today
+jobs:
+  - name: gate
+    description: Run all gate steps over the catalog.
+    steps:
+      - name: consistency
+        description: Catalog and manifest agree; scope, dependencies, repository URL, recorded hash.
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: consistency
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: tests
+        description: Deterministic package tests with the frozen root lockfile.
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: tests
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: consistency
+            condition:
+              type: completed
+        weight: 0
+        allowFailure: false
+      - name: version
+        description: Content-hash CalVer decision against the registry's latest.
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: version
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: tests
+            condition:
+              type: completed
+        weight: 0
+        allowFailure: false
+      - name: privacy
+        description: Full-history privacy scan per package (redacted hits).
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: privacy
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: version
+            condition:
+              type: completed
+        weight: 0
+        allowFailure: false
+      - name: dry-run
+        description: swamp extension push --dry-run per package. Never pushes.
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: dry-run
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: privacy
+            condition:
+              type: completed
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

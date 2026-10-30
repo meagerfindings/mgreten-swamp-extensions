@@ -1,0 +1,8 @@
+type: '@mgreten/ext-gate'
+typeVersion: 2026.10.30.1
+id: ee7d41d7-59e2-41c0-84f6-ac69c33e908c
+name: ext-gate
+version: 1
+tags: {}
+globalArguments: {}
+methods: {}

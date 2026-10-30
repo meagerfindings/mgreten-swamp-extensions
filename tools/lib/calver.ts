@@ -70,15 +70,16 @@ export interface VersionDecision {
 export function decideVersion(i: VersionInput): VersionDecision {
   const behind = i.registryLatest !== null &&
     compareCalVer(i.currentVersion, i.registryLatest) < 0;
+  // Every release from this repo lands above the registry, so a source behind
+  // the registry means the registry holds content this repo does not have.
+  if (behind) {
+    return {
+      action: "drift",
+      version: i.currentVersion,
+      reason: `source ${i.currentVersion} is behind registry ${i.registryLatest}; reconcile the true source before releasing`,
+    };
+  }
   if (i.recordedHash === null) {
-    if (behind) {
-      return {
-        action: "drift",
-        version: i.currentVersion,
-        reason:
-          `no recorded hash and source ${i.currentVersion} is behind registry ${i.registryLatest}; reconcile the true source before releasing`,
-      };
-    }
     return {
       action: "baseline",
       version: i.currentVersion,

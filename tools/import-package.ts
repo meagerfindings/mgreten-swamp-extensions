@@ -2,6 +2,7 @@
  * Import one package's history into packages/<short>/ of this monorepo.
  *
  *   deno run -A tools/import-package.ts <short> [--state-dir /tmp/ext-import]
+ *       [--mailmap <file outside this repo>]
  *
  * Steps, all deterministic for a pinned source ref:
  *  1. Fetch the pinned ref from the source URL into a cache repo under the
@@ -62,7 +63,7 @@ async function exists(p: string): Promise<boolean> {
   return await Deno.stat(p).then(() => true, () => false);
 }
 
-export async function importPackage(short: string, stateDir: string): Promise<number> {
+export async function importPackage(short: string, stateDir: string, mailmap: string | null = null): Promise<number> {
   const sources = parse(await Deno.readTextFile(`${root}/tools/sources.yaml`)) as { packages: Source[] };
   const src = sources.packages.find((p) => p.short === short);
   if (!src) throw new Error(`no entry for ${short} in tools/sources.yaml`);
@@ -99,6 +100,14 @@ export async function importPackage(short: string, stateDir: string): Promise<nu
   const filterArgs = ["git", "filter-repo", "--force", "--quiet", "--refs", "refs/heads/import"];
   for (const p of src.paths) filterArgs.push("--path", p.from);
   for (const p of src.paths) filterArgs.push("--path-rename", `${p.from}:${pkgDir}/${p.to}`);
+  // Optional identity rewrite. The mailmap must live outside this public repo
+  // because it names the identities being replaced; only its hash is recorded.
+  let mailmapHash: string | null = null;
+  if (mailmap) {
+    filterArgs.push("--mailmap", mailmap);
+    const d = await crypto.subtle.digest("SHA-256", await Deno.readFile(mailmap));
+    mailmapHash = "sha256:" + [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+  }
   await run(filterArgs, { cwd: staging });
   const head = (await run(["git", "-C", staging, "rev-parse", "--verify", "-q", "refs/heads/import"], { allowFail: true })).trim();
   if (!head) throw new Error(`${short}: filtered history is empty; check paths in tools/sources.yaml`);
@@ -167,20 +176,21 @@ export async function importPackage(short: string, stateDir: string): Promise<nu
   const msg = `import(${short}): ${src.name} with history\n\n` +
     `Filtered from ${src.source} at ${src.ref} (${scan.commits} commits).\n` +
     `Privacy scan clean over full history (rules ${rules.rulesVersion}).\n\n` +
-    `Imported-Package: ${short}\nImported-From: ${src.source}\nImported-Ref: ${src.ref}\nPrivacy-Rules: ${rules.rulesVersion}\n`;
+    `Imported-Package: ${short}\nImported-From: ${src.source}\nImported-Ref: ${src.ref}\nPrivacy-Rules: ${rules.rulesVersion}\n` +
+    (mailmapHash ? `Identity-Rewrite: mailmap ${mailmapHash}\n` : "");
   await run(["git", "-C", root, "commit", "-q", "-m", msg]);
   console.log(`${short}: imported ${scan.commits} commits, clean, catalog version ${m.version}`);
   return 0;
 }
 
 if (import.meta.main) {
-  const short = Deno.args.find((a) => !a.startsWith("--") && Deno.args[Deno.args.indexOf(a) - 1] !== "--state-dir");
+  const short = Deno.args.find((a, i) => !a.startsWith("--") && !["--state-dir", "--mailmap"].includes(Deno.args[i - 1]));
   if (!short) {
     console.error("usage: import-package.ts <short> [--state-dir dir]");
     Deno.exit(2);
   }
   try {
-    Deno.exit(await importPackage(short, argValue("--state-dir", "/tmp/ext-import")));
+    Deno.exit(await importPackage(short, argValue("--state-dir", "/tmp/ext-import"), argValue("--mailmap", "") || null));
   } catch (e) {
     console.error(`import error: ${(e as Error).message}`);
     Deno.exit(2);

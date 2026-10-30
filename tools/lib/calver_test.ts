@@ -39,8 +39,9 @@ Deno.test("decideVersion: changed hash releases above manifest and registry", ()
   const d = decideVersion({
     ...base,
     recordedHash: "sha256:old",
-    currentVersion: "2026.10.30.1",
-    registryLatest: "2026.10.30.2",
+    // Manifest ahead of the registry (an unpublished local bump): go above both.
+    currentVersion: "2026.10.30.2",
+    registryLatest: "2026.10.30.1",
   });
   assertEquals([d.action, d.version], ["release", "2026.10.30.3"]);
 });
@@ -57,6 +58,9 @@ Deno.test("decideVersion: no recorded hash is a baseline, or drift when behind r
     currentVersion: "2026.08.26.1",
   });
   assertEquals([drift.action, drift.version], ["drift", "2026.08.26.1"]);
+  // A changed hash must not release over newer registry content either.
+  const changedButBehind = decideVersion({ ...base, recordedHash: "sha256:old", currentVersion: "2026.08.26.1" });
+  assertEquals(changedButBehind.action, "drift");
 });
 
 const enc = (s: string) => new TextEncoder().encode(s);

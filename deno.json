@@ -6,7 +6,7 @@
   "tasks": {
     "import": "deno run -A tools/import-package.ts",
     "scan": "deno run -A tools/privacy-scan.ts",
-    "test:tools": "deno test -A tools/ extensions/"
-  },
-  "exclude": ["packages/"]
+    "gate": "deno run -A tools/gate.ts",
+    "test:tools": "deno test -A tools/"
+  }
 }
