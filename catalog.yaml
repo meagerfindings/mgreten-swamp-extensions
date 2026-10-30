@@ -3,6 +3,16 @@
 # do not hand-edit version or contentHash.
 schemaVersion: 1
 visibility: public
-scope: "@mgreten"
+scope: '@mgreten'
 publish: registry
-packages: []
+packages:
+  - name: '@mgreten/canva'
+    path: packages/canva
+    manifest: packages/canva/extensions/models/canva/manifest.yaml
+    version: 2026.10.03.1
+    contentHash: 'sha256:c182bdc15aa1eed3c4fc823a3c2e9a4755d3b14332f4d7fed320725ebde578c2'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/moment-savor.git'
+      ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
