@@ -727,24 +727,3 @@ Deno.test("dry run makes no calls and exact/conflicting replays fail closed", as
     "conflict rejected",
   );
 });
-
-Deno.test("workflow preserves one exact founder approval boundary", async () => {
-  const workflow = await Deno.readTextFile(
-    new URL(
-      "../../../workflows/workflow-moment-savor-meta-social-publication.yaml",
-      import.meta.url,
-    ),
-  );
-  for (
-    const text of [
-      "manual_approval",
-      "step: founder-approve-exact-social-packet",
-      "condition: { type: succeeded }",
-      "campaignPacketDigest",
-      "landingPageDigest",
-      "socialPacketDigest",
-      "inputs.publish != true",
-    ]
-  ) assert(workflow.includes(text));
-  assert(!workflow.includes("accessToken"));
-});

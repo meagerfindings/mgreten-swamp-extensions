@@ -9,8 +9,8 @@ packages:
   - name: '@mgreten/canva'
     path: packages/canva
     manifest: packages/canva/extensions/models/canva/manifest.yaml
-    version: 2026.10.03.1
-    contentHash: 'sha256:c182bdc15aa1eed3c4fc823a3c2e9a4755d3b14332f4d7fed320725ebde578c2'
+    version: 2026.10.30.1
+    contentHash: 'sha256:2c60e426b16c72e33c126918b10ae70adf6fbc63ef16008c2622f45bab2ecfe3'
     tests: deterministic
     dependsOn: []
     source:
@@ -39,8 +39,8 @@ packages:
   - name: '@mgreten/meta-publishing'
     path: packages/meta-publishing
     manifest: packages/meta-publishing/extensions/models/meta-publishing/manifest.yaml
-    version: 2026.08.26.1
-    contentHash: 'sha256:06a9dead3b77ee7d0a4c9aba25c9548cc55e9930453129c4779632d08e77eedb'
+    version: 2026.10.30.1
+    contentHash: 'sha256:5c105edf492f74971068dd65c1bc1e566092f6064ed1b82c7f21e6c9a187f21a'
     tests: deterministic
     dependsOn: []
     source:

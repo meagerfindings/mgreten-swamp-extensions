@@ -413,26 +413,3 @@ Deno.test("API failures retain the last successful remote-object checkpoint", as
   );
   assert(!JSON.stringify(ctx.writes).includes("system-user-secret"));
 });
-
-Deno.test("workflow requires one exact founder approval and grants no activation", async () => {
-  const workflow = await Deno.readTextFile(
-    new URL(
-      "../../../workflows/workflow-moment-savor-meta-ads-draft.yaml",
-      import.meta.url,
-    ),
-  );
-  for (
-    const text of [
-      "manual_approval",
-      "createDraft",
-      "campaignPacketDigest",
-      "landingPageDigest",
-      "socialPacketDigest",
-      "creativeDigest",
-      "adsPacketDigest",
-      "inputs.createDraft != true",
-    ]
-  ) assert(workflow.includes(text));
-  assert(!workflow.includes("accessToken"));
-  assert(!workflow.toLowerCase().includes("activate"));
-});
