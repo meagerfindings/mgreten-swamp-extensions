@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/granola-mcp"
+version: "2026.10.14.1"
+license: MIT
+description: >
+  Retrieves and normalizes Granola meetings directly through MCP using an existing local Amp OAuth login.
+
+repository: https://github.com/meagerfindings/swamp-granola-mcp
+
+models:
+  - granola_mcp.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+dependencies: []
+
+platforms: []
