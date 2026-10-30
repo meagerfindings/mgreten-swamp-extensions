@@ -1,12 +1,9 @@
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import {
-  buildDetailsPrompt,
-  buildListPrompt,
-  buildRetrievalPrompt,
+  createModel,
   escapeMarkdownInline,
   extractMeetingIds,
   GlobalArgsSchema,
-  GRANOLA_TOOLS,
   matchesExistingFile,
   MeetingDetailsResponseSchema,
   MeetingListResponseSchema,
@@ -26,50 +23,23 @@ const detail = (meetingId: string) => ({
   privateNotes: "Private",
   summary: "Summary",
 });
-const raw = (meetingId: string) => ({
-  ...detail(meetingId),
-  transcript: "Ada: Hello",
-});
+const meeting = (id: string, title = "A &amp; B", body = "") =>
+  `<meeting id="${id}" title="${title}" meeting_at="2026-10-27T00:45:00Z"><known_participants>Ada (ada@example.com), Bo (bo@example.com)</known_participants>${body}</meeting>`;
+const envelope = (
+  meetings: string[],
+  pagination = '<pagination has_more="false" />',
+) =>
+  `<meetings_data count="${meetings.length}">${
+    meetings.join("\n")
+  }</meetings_data>\n${pagination}`;
 
-function context(
-  responses: unknown[],
-  overrides: Record<string, unknown> = {},
-) {
-  const calls: Array<Record<string, unknown>> = [];
+function context() {
   const writes: Array<{ spec: string; data: Record<string, unknown> }> = [];
-  let index = 0;
   return {
-    calls,
     writes,
     value: {
-      globalArgs: GlobalArgsSchema.parse(overrides),
+      globalArgs: GlobalArgsSchema.parse({}),
       logger: { info: () => {} },
-      runModel: (options: Record<string, unknown>) => {
-        calls.push(options);
-        const current = index++;
-        if (responses[current] instanceof Error) {
-          return Promise.resolve({
-            ok: false,
-            error: { message: (responses[current] as Error).message },
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          resources: [{ specName: "transcript", name: `wrong-${current}` }, {
-            specName: "invocation",
-            name: `right-${current}`,
-          }],
-        });
-      },
-      readModelData: (_model: string, spec: string) =>
-        Promise.resolve(
-          spec === "invocation"
-            ? responses.map((response, i) => ({
-              name: `right-${i}`,
-              attributes: { success: true, parsedResponse: response },
-            }))
-            : [],
-        ),
       writeResource: (
         spec: string,
         name: string,
@@ -82,7 +52,7 @@ function context(
   };
 }
 
-Deno.test("extract IDs, strict dates/times, uniqueness, and markdown escaping", () => {
+Deno.test("strict meeting contracts and safe note paths preserve identity", () => {
   assertEquals(extractMeetingIds([`x-${A}.md`, `copy-${A.toUpperCase()}.md`]), [
     A,
   ]);
@@ -97,196 +67,209 @@ Deno.test("extract IDs, strict dates/times, uniqueness, and markdown escaping", 
     })
   );
   assertEquals(escapeMarkdownInline("a|[b]\nc"), "a\\|\\[b\\] c");
-  const note = normalizeMeeting(raw(A));
-  assertEquals(note.dailyLink.includes("|Weekly \\| \\[Sync\\]]]"), true);
-  assertEquals(note.dailyLink.startsWith("- 09:30 - [[Granola/"), true);
-  assertEquals(note.markdown.startsWith("# Weekly \\| \\[Sync\\]"), true);
+  const note = normalizeMeeting({ ...detail(A), transcript: "Ada: Hello" });
+  assertEquals(note.suggestedFile, `Granola/2026-08-07 Weekly Sync ${A}.md`);
+  assertEquals(
+    note.dailyLink,
+    `- 09:30 - [[Granola/2026-08-07 Weekly Sync ${A}|Weekly \\| \\[Sync\\]]]`,
+  );
 });
 
 Deno.test("legacy date-title filenames suppress migration duplicates", () => {
-  const meeting = {
+  const item = {
     meetingId: A,
     title: "Mat / Matt",
     date: "2026-08-06",
     attendees: [],
   };
   assertEquals(
-    matchesExistingFile(meeting, [
+    matchesExistingFile(item, [
       "Granola/2026-08-06 Mat _ Matt-2026-08-06_10-09-54.md",
     ]),
     true,
   );
   assertEquals(
-    matchesExistingFile(meeting, ["Granola/2026-08-05 Mat _ Matt.md"]),
+    matchesExistingFile(item, ["Granola/2026-08-05 Mat _ Matt.md"]),
     false,
   );
 });
 
-Deno.test("list prompt uses exact tool and Granola snake_case arguments", () => {
-  const prompt = buildListPrompt({
+Deno.test("direct sync follows both paginations, preserves Markdown, Denver dates and explicit absence", async () => {
+  const summary =
+    "# Enhanced\n\n- Preserve <literal> &amp; markup\n- Keep **detail**, not a synopsis.";
+  const direct = createModel(() =>
+    Promise.resolve({
+      close: () => Promise.resolve(),
+      call: (tool, args) => {
+        if (tool === "list_meetings") {
+          // A's UUID already exists, B is new on page two, C has no recording.
+          return Promise.resolve(
+            args.cursor === "second"
+              ? envelope([
+                meeting(B),
+                meeting(C),
+                meeting("423e4567-e89b-42d3-a456-426614174003"),
+              ])
+              : envelope(
+                [meeting(A)],
+                '<pagination has_more="true" next_cursor="second" />',
+              ),
+          );
+        }
+        if (tool === "get_meetings") {
+          return Promise.resolve(envelope([
+            meeting(
+              B,
+              "A &amp; B",
+              `<private_notes status="provided">Keep <literal> & markup</private_notes><summary format="markdown">\n${summary}\n</summary>`,
+            ),
+            meeting(
+              C,
+              "Empty",
+              '<private_notes status="empty" /><summary>123</summary>',
+            ),
+          ]));
+        }
+        if (args.meeting_id === C) {
+          return Promise.resolve(
+            JSON.stringify({
+              id: C,
+              transcript: null,
+              transcript_unavailable: { reason: "no_transcript" },
+            }),
+          );
+        }
+        return Promise.resolve(JSON.stringify(
+          args.offset === 12
+            ? {
+              id: B,
+              transcript: "Bo: Goodbye.",
+              truncated: false,
+              offset: 12,
+              total_chars: 24,
+            }
+            : {
+              id: B,
+              transcript: "Ada: Hello.\n",
+              truncated: true,
+              offset: 0,
+              next_offset: 12,
+              total_chars: 24,
+            },
+        ));
+      },
+    })
+  );
+  const mock = context();
+  await direct.methods.syncMeetings.execute({
     timeRange: "this_week",
-    workspaceOnly: true,
-    involvement: { capturedByMe: true, listedAsParticipant: false },
-  });
+    existingFiles: [`Granola/${A}.md`],
+    maxMeetings: 2,
+  }, mock.value);
+  const notes = mock.writes[0].data.notes as Array<Record<string, unknown>>;
+  assertEquals(notes.map((note) => note.meetingId), [B, C]);
+  assertEquals(notes[0].date, "2026-10-26");
+  assertEquals(notes[0].time, "18:45");
+  assertEquals(notes[0].summary, summary);
+  assertEquals(notes[0].privateNotes, "Keep <literal> & markup");
+  assertEquals(notes[1].summary, "123");
+  assertEquals(notes[1].privateNotes, "No private notes provided.");
+  assertEquals(notes[0].participants, [
+    "Ada (ada@example.com)",
+    "Bo (bo@example.com)",
+  ]);
+  assertEquals(notes[0].transcript, "Ada: Hello.\nBo: Goodbye.");
   assertEquals(
-    prompt.includes("mcp__granola__list_meetings exactly once"),
-    true,
+    notes[1].transcript,
+    "No transcript is stored for this meeting.",
   );
-  assertEquals(
-    prompt.includes(
-      '{"time_range":"this_week","workspace_only":true,"involvement":{"captured_by_me":true,"listed_as_participant":false}}',
-    ),
-    true,
-  );
+  assertEquals(notes[0].suggestedFile, `Granola/2026-10-26 A & B ${B}.md`);
 });
 
-Deno.test("detail prompts preserve Enhanced notes as summary", () => {
-  for (const prompt of [buildDetailsPrompt([A]), buildRetrievalPrompt([A])]) {
-    assertEquals(
-      prompt.includes("complete user-visible Enhanced note to summary"),
-      true,
+Deno.test("existing UUIDs and legacy names produce no new notes on replay", async () => {
+  const direct = createModel(() =>
+    Promise.resolve({
+      close: () => Promise.resolve(),
+      call: () =>
+        Promise.resolve(envelope([meeting(A), meeting(B, "Mat / Matt")])),
+    })
+  );
+  const mock = context();
+  await direct.methods.syncMeetings.execute({
+    timeRange: "this_week",
+    existingFiles: [
+      `Granola/${A.toUpperCase()}.md`,
+      "Granola/2026-10-26 Mat _ Matt.md",
+    ],
+    maxMeetings: 10,
+  }, mock.value);
+  assertEquals(mock.writes.map((write) => write.data), [{ notes: [] }]);
+});
+
+Deno.test("failed, malformed and incomplete remote lists never publish empty success", async () => {
+  for (
+    const response of [
+      new Error("HTTP 503"),
+      '{"error":"unavailable"}',
+      '<meetings_data count="1"></meetings_data><pagination has_more="false" />',
+      envelope([], '<pagination has_more="true" />'),
+    ]
+  ) {
+    const direct = createModel(() =>
+      Promise.resolve({
+        close: () => Promise.resolve(),
+        call: () =>
+          response instanceof Error
+            ? Promise.reject(response)
+            : Promise.resolve(response),
+      })
     );
-    assertEquals(prompt.includes("preserving its Markdown"), true);
-    assertEquals(
-      prompt.includes("do not replace it with a generated synopsis"),
-      true,
+    const mock = context();
+    await assertRejects(() =>
+      direct.methods.listMeetings.execute(
+        { timeRange: "this_week" },
+        mock.value,
+      )
     );
-    assertEquals(
-      prompt.includes("Map only explicitly private user notes to privateNotes"),
-      true,
-    );
+    assertEquals(mock.writes, []);
   }
 });
 
-Deno.test("execute success forwards exact Amp controls, low default, timeouts, and chooses invocation handle", async () => {
-  const mock = context([{ meetings: [detail(A)] }], {
-    wallTimeoutMs: 45_000,
-    idleTimeoutMs: 12_000,
-  });
-  await model.methods.getMeetings.execute(
-    { meetingIds: [A] },
-    mock.value as never,
+Deno.test("wrong detail IDs and non-advancing transcripts publish nothing", async () => {
+  const direct = createModel(() =>
+    Promise.resolve({
+      close: () => Promise.resolve(),
+      call: (tool) =>
+        Promise.resolve(
+          tool === "get_meetings" ? envelope([meeting(B)]) : JSON.stringify({
+            id: A,
+            transcript: "Ada",
+            offset: 0,
+            truncated: true,
+            next_offset: 0,
+          }),
+        ),
+    })
   );
-  const call = mock.calls[0] as {
-    definition: string;
-    method: string;
-    arguments: Record<string, unknown>;
-  };
-  assertEquals(call.definition, "cli-agent");
-  assertEquals(call.method, "invokeAndParse");
-  assertEquals(call.arguments.provider, "amp");
-  assertEquals(call.arguments.model, "low");
-  assertEquals(call.arguments.toolAllowlist, [...GRANOLA_TOOLS]);
-  assertEquals(call.arguments.toolProfile, "readonly");
-  assertEquals(call.arguments.sandboxMode, "off");
-  assertEquals(call.arguments.sandboxNetwork, "allow");
-  assertEquals(call.arguments.wallTimeoutMs, 45_000);
-  assertEquals(call.arguments.idleTimeoutMs, 12_000);
-  assertEquals(mock.writes.length, 1);
-});
-
-Deno.test("child failure and malformed response produce zero writes", async () => {
-  const failed = context([new Error("child failed")]);
+  const mock = context();
   await assertRejects(
-    () =>
-      model.methods.listMeetings.execute(
-        { timeRange: "this_week" },
-        failed.value as never,
-      ),
-    Error,
-    "child failed",
-  );
-  assertEquals(failed.writes.length, 0);
-  const malformed = context([{
-    meetings: [{ meetingId: A, title: "", date: "not-date" }],
-  }]);
-  await assertRejects(() =>
-    model.methods.listMeetings.execute(
-      { timeRange: "this_week" },
-      malformed.value as never,
-    )
-  );
-  assertEquals(malformed.writes.length, 0);
-  const envelope = context([{ error: "private failure" }]);
-  await assertRejects(
-    () =>
-      model.methods.listMeetings.execute(
-        { timeRange: "this_week" },
-        envelope.value as never,
-      ),
-    Error,
-    "error envelope",
-  );
-  assertEquals(envelope.writes.length, 0);
-});
-
-Deno.test("sync makes no retrieval call when all listed IDs exist", async () => {
-  const mock = context([{
-    meetings: [{ meetingId: A, title: "Existing", attendees: [] }],
-  }]);
-  await model.methods.syncMeetings.execute({
-    timeRange: "last_30_days",
-    existingFiles: [`Granola/${A}.md`],
-    maxMeetings: 10,
-  }, mock.value as never);
-  assertEquals(mock.calls.length, 1);
-  assertEquals(mock.writes[0].data, { notes: [] });
-});
-
-Deno.test("sync deterministically bounds selection and enforces exact returned set", async () => {
-  const listed = {
-    meetings: [A, B, C].map((meetingId) => ({
-      meetingId,
-      title: meetingId,
-      attendees: [],
-    })),
-  };
-  const mock = context([listed, { meetings: [raw(B), raw(A)] }]);
-  await model.methods.syncMeetings.execute({
-    timeRange: "last_30_days",
-    existingFiles: [],
-    maxMeetings: 2,
-  }, mock.value as never);
-  assertEquals(mock.calls.length, 2);
-  const secondPrompt = (mock.calls[1] as { arguments: { prompt: string } })
-    .arguments.prompt;
-  assertEquals(secondPrompt.includes(JSON.stringify([A, B])), true);
-  assertEquals(secondPrompt.includes(C), false);
-  assertEquals(mock.writes[0].data.notes instanceof Array, true);
-
-  const missing = context([listed, { meetings: [raw(A)] }]);
-  await assertRejects(
-    () =>
-      model.methods.syncMeetings.execute({
-        timeRange: "last_30_days",
-        existingFiles: [],
-        maxMeetings: 2,
-      }, missing.value as never),
+    () => direct.methods.getMeetings.execute({ meetingIds: [A] }, mock.value),
     Error,
     "exactly match",
   );
-  assertEquals(missing.writes.length, 0);
-  const unexpected = context([listed, { meetings: [raw(A), raw(C)] }]);
   await assertRejects(
-    () =>
-      model.methods.syncMeetings.execute({
-        timeRange: "last_30_days",
-        existingFiles: [],
-        maxMeetings: 2,
-      }, unexpected.value as never),
+    () => direct.methods.getTranscript.execute({ meetingId: A }, mock.value),
     Error,
-    "exactly match",
+    "did not advance",
   );
-  assertEquals(unexpected.writes.length, 0);
+  assertEquals(mock.writes, []);
 });
 
-Deno.test("argument bounds reject duplicates, over-ten sync, and invalid timeouts", async () => {
-  const mock = context([]);
-  await assertRejects(() =>
-    model.methods.getMeetings.execute(
-      { meetingIds: [A, A.toUpperCase()] },
-      mock.value as never,
-    )
+Deno.test("argument bounds reject duplicates, over-ten sync, and invalid timeouts", () => {
+  assertThrows(() =>
+    model.methods.getMeetings.arguments.parse({
+      meetingIds: [A, A.toUpperCase()],
+    })
   );
   assertThrows(() =>
     model.methods.syncMeetings.arguments.parse({
@@ -296,16 +279,11 @@ Deno.test("argument bounds reject duplicates, over-ten sync, and invalid timeout
   );
   assertThrows(() => GlobalArgsSchema.parse({ wallTimeoutMs: 999 }));
   assertThrows(() => GlobalArgsSchema.parse({ idleTimeoutMs: 3_600_001 }));
-});
-
-Deno.test("method schemas strip Swamp's merged global arguments", () => {
-  const merged = {
-    ...GlobalArgsSchema.parse({ cwd: "/tmp/repo" }),
-    timeRange: "this_week",
-    involvement: { capturedByMe: true, listedAsParticipant: true },
-  };
-  assertEquals(model.methods.listMeetings.arguments.parse(merged), {
-    timeRange: "this_week",
-    involvement: { capturedByMe: true, listedAsParticipant: true },
-  });
+  assertEquals(
+    model.methods.listMeetings.arguments.parse({
+      ...GlobalArgsSchema.parse({}),
+      timeRange: "this_week",
+    }),
+    { timeRange: "this_week" },
+  );
 });

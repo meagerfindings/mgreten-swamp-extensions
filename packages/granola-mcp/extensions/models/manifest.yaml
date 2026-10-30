@@ -3,7 +3,7 @@ name: "@mgreten/granola-mcp"
 version: "2026.10.14.1"
 license: MIT
 description: >
-  Retrieves and normalizes Granola meetings through an MCP-capable CLI agent without a Granola API key.
+  Retrieves and normalizes Granola meetings directly through MCP using an existing local Amp OAuth login.
 
 repository: https://github.com/meagerfindings/swamp-granola-mcp
 
@@ -14,7 +14,6 @@ additionalFiles:
   - README.md
   - LICENSE.txt
 
-dependencies:
-  - "@mgreten/cli-agent"
+dependencies: []
 
 platforms: []

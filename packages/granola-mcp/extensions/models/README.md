@@ -1,6 +1,10 @@
 # @mgreten/granola-mcp
 
-`@mgreten/granola-mcp` is a read-only swamp data source for Granola meeting notes. This initial release supports **Amp only** and delegates retrieval to an existing `@mgreten/cli-agent` model whose Amp CLI already has access to Granola through MCP OAuth. No Granola API key is required. The extension returns validated resources and normalized Markdown strings, paths, and daily-note links; it never creates or edits Obsidian files.
+`@mgreten/granola-mcp` is a read-only swamp data source for Granola meeting
+notes. It calls Granola's MCP endpoint directly using the local user's existing
+Amp OAuth login, without an agent turn or a Granola API key. The extension
+returns validated resources and normalized Markdown strings, paths, and
+daily-note links; it never creates or edits Obsidian files.
 
 ## Installation
 
@@ -8,21 +12,27 @@
 swamp extension pull @mgreten/granola-mcp
 ```
 
-This extension depends on `@mgreten/cli-agent` **2026.08.07.1 or newer**, the first version with Amp `model: "low"` support and an exact `toolAllowlist` invocation argument. Swamp's manifest dependency schema records extension names rather than version constraints, so verify the installed cli-agent version separately.
+The local Amp CLI must already have a working OAuth login for `granola` at
+`https://mcp.granola.ai/mcp`. Check it with `amp mcp doctor granola`.
 
 ## Setup
 
-Create the model in the same swamp repository as a compatible cli-agent instance. Amp is fixed as the provider and the default agent model is `low`.
+Create the model on the machine with that Amp login.
 
 ```sh
-swamp model create granola --type @mgreten/granola-mcp --global-args '{"cliAgentModel":"cli-agent","agentModel":"low"}'
+swamp model create @mgreten/granola-mcp granola
 ```
 
-Amp must already be authenticated and configured with the Granola MCP server. Every delegated invocation uses `readonly`, sandboxing off, network access allowed, and exactly these tools—no account lookup or other MCP tools are exposed:
+The reader loads only Granola's access-token entry from Amp's local secret
+storage into memory. Near expiry it asks `amp mcp doctor granola` to refresh
+under Amp's own OAuth lock; it never rotates refresh tokens itself or copies
+credentials into Swamp data. This relies on Amp's local secret-storage format. A
+format change fails the method rather than falling back to an empty meeting
+list. Only these read tools are called:
 
-- `mcp__granola__list_meetings`
-- `mcp__granola__get_meetings`
-- `mcp__granola__get_meeting_transcript`
+- `list_meetings`
+- `get_meetings`
+- `get_meeting_transcript`
 
 ## Usage
 
@@ -35,44 +45,63 @@ swamp model method run granola syncMeetings --input '{"timeRange":"last_30_days"
 
 ## Global Arguments
 
-| Argument | Type | Default | Description |
-| --- | --- | --- | --- |
-| `cliAgentModel` | string | `cli-agent` | Existing `@mgreten/cli-agent` instance. |
-| `agentModel` | string | `low` | Amp model override. |
-| `cwd` | string | provider default | Optional working directory for the CLI. |
-| `wallTimeoutMs` | integer, `1000..3600000` | `600000` | Maximum total invocation time. |
-| `idleTimeoutMs` | integer, `1000..3600000` | `120000` | Maximum time without output. |
+| Argument                                       | Type                     | Default           | Description                                           |
+| ---------------------------------------------- | ------------------------ | ----------------- | ----------------------------------------------------- |
+| `ampPath`                                      | string                   | `amp`             | Amp executable used only for OAuth refresh.           |
+| `timeZone`                                     | string                   | `America/Denver`  | Calendar date and time used in notes and daily links. |
+| `cwd`                                          | string                   | current directory | Optional working directory for OAuth refresh.         |
+| `wallTimeoutMs`                                | integer, `1000..3600000` | `600000`          | Timeout for each MCP request and OAuth refresh.       |
+| `cliAgentModel`, `agentModel`, `idleTimeoutMs` | legacy                   | unchanged         | Accepted for existing definitions; no longer used.    |
 
 ## Method: listMeetings
 
 Lists meeting metadata. Results are retained for seven days.
 
-| Argument | Type | Default |
-| --- | --- | --- |
-| `timeRange` | `this_week`, `last_week`, `last_30_days` | `last_30_days` |
-| `workspaceOnly` | `true` | omitted |
-| `involvement.capturedByMe` | boolean | omitted |
-| `involvement.listedAsParticipant` | boolean | omitted |
+| Argument                          | Type                                     | Default        |
+| --------------------------------- | ---------------------------------------- | -------------- |
+| `timeRange`                       | `this_week`, `last_week`, `last_30_days` | `last_30_days` |
+| `workspaceOnly`                   | `true`                                   | omitted        |
+| `involvement.capturedByMe`        | boolean                                  | omitted        |
+| `involvement.listedAsParticipant` | boolean                                  | omitted        |
 
 ## Method: getMeetings
 
-Retrieves private notes, summaries, participants, and timestamps—but not transcripts—for one to ten unique UUIDs. Pass `meetingIds:string[]`. Results are retained for 30 days.
+Retrieves private notes, summaries, participants, and timestamps—but not
+transcripts—for one to ten unique UUIDs. Pass `meetingIds:string[]`. Results are
+retained for 30 days.
 
 ## Method: getTranscript
 
-Retrieves one meeting and its complete verbatim transcript. Pass `meetingId:string`. Results are retained for 30 days.
+Retrieves one meeting and its complete verbatim transcript. Pass
+`meetingId:string`. Results are retained for 30 days.
 
 ## Method: syncMeetings
 
-Accepts the list filters, `existingFiles:string[]`, and optional `maxMeetings` (default 10, hard maximum 10). Stage one lists metadata. Extension code then extracts UUIDs from `existingFiles`, subtracts those IDs, and deterministically selects the first `maxMeetings` missing meetings. When none are missing, no retrieval invocation occurs. Otherwise stage two makes one child invocation that performs one batched `get_meetings` call and exactly one transcript call per selected ID. Missing, duplicate, excluded, or unexpected IDs are rejected before any resource is written. The resulting note records include `meetingId`, `title`, `date`, `time`, `participants`, `privateNotes`, `summary`, `transcript`, `markdown`, `suggestedFile`, and `dailyLink`. Results are retained for 30 days.
+Accepts the list filters, `existingFiles:string[]`, and optional `maxMeetings`
+(default 10, hard maximum 10). It follows list pagination, excludes existing
+UUIDs and legacy date/title filenames, then selects at most `maxMeetings`
+missing meetings. It batches details and follows each transcript's `next_offset`
+until complete. Explicit `no_transcript` responses are represented as absence,
+not a retryable failure. Missing, duplicate, excluded, or unexpected IDs are
+rejected before any resource is written. The resulting note records include
+`meetingId`, `title`, `date`, `time`, `participants`, `privateNotes`, `summary`,
+`transcript`, `markdown`, `suggestedFile`, and `dailyLink`. Results are retained
+for 30 days.
 
 ## How It Works
 
-Every public method calls `cli-agent.invokeAndParse` through swamp's `context.runModel`. It reads the resulting invocation with `context.readModelData`, validates separate strict metadata, detail, and transcript schemas with pinned Zod 4, and only then writes a model resource. Agent calls are read-only and do not expose filesystem write tools. `syncMeetings` produces Markdown as data so a separate consumer can decide whether and where to write it.
+Each method opens a read-only MCP client, validates metadata, details, and
+transcripts with Zod, and only then writes a model resource. Enhanced-note
+Markdown is preserved, not summarized by an LLM. The connection closes on
+success or failure. `syncMeetings` produces Markdown as data so a separate
+consumer can decide whether and where to write it.
 
 ## Privacy and retention
 
-Meeting notes and transcripts are private data. This extension intentionally avoids logging meeting content and does not duplicate child transcripts into logs. The normalized sync resource necessarily contains the selected content. Both cli-agent and Granola retain private meeting output according to their own retention policies, and Amp may retain the execute threads used for these invocations. Review all three systems' retention and access settings before use.
+Meeting notes and transcripts are private data. This extension avoids logging
+content or credentials. The normalized sync resource necessarily contains the
+selected content and follows Swamp's configured retention; Granola retains its
+source content. No Amp execute threads are created.
 
 ## License
 
