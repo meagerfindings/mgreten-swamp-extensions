@@ -30,7 +30,7 @@ export interface GateEnv {
   deno: string;
 }
 
-const PUBLIC_REPOSITORY = "https://github.com/meagerfindings/swamp-extensions";
+const PUBLIC_REPOSITORY = "https://github.com/meagerfindings/mgreten-swamp-extensions";
 const FORBIDDEN_DEP_SCOPES = ["@companycam/", "@matg/"];
 
 async function exec(args: string[], cwd: string, env: Record<string, string> = {}) {

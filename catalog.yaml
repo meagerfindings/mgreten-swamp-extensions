@@ -9,8 +9,8 @@ packages:
   - name: '@mgreten/canva'
     path: packages/canva
     manifest: packages/canva/extensions/models/canva/manifest.yaml
-    version: 2026.10.30.1
-    contentHash: 'sha256:2c60e426b16c72e33c126918b10ae70adf6fbc63ef16008c2622f45bab2ecfe3'
+    version: 2026.10.30.2
+    contentHash: 'sha256:342ac64771543b8d648d86d35173afb928e685d78e959256d137fae0197224bc'
     tests: deterministic
     dependsOn: []
     source:
@@ -19,8 +19,8 @@ packages:
   - name: '@mgreten/granola-mcp'
     path: packages/granola-mcp
     manifest: packages/granola-mcp/extensions/models/manifest.yaml
-    version: 2026.10.30.1
-    contentHash: 'sha256:2374159aa8d07b8db792c4dc94f3b29944156b9af916cd8ef69ae16785037b8f'
+    version: 2026.10.30.2
+    contentHash: 'sha256:70de03d6cf0795a9e3e1f15b702937d3ea9bc0f102f0318f60eb773708e2a1c7'
     tests: deterministic
     dependsOn: []
     source:
@@ -29,8 +29,8 @@ packages:
   - name: '@mgreten/macos-say-tts'
     path: packages/macos-say-tts
     manifest: packages/macos-say-tts/extensions/models/manifest.yaml
-    version: 2026.10.30.1
-    contentHash: 'sha256:b2f5bd36f9e0fda16cb107c0f8a13c089cd3eb1ca1c835d8eb94c40d5dc234bc'
+    version: 2026.10.30.2
+    contentHash: 'sha256:7501270851b5bb1e620c7b15548da8dce45541a9569a007566a4463bf3df6799'
     tests: deterministic
     dependsOn: []
     source:
@@ -39,8 +39,8 @@ packages:
   - name: '@mgreten/meta-publishing'
     path: packages/meta-publishing
     manifest: packages/meta-publishing/extensions/models/meta-publishing/manifest.yaml
-    version: 2026.10.30.1
-    contentHash: 'sha256:5c105edf492f74971068dd65c1bc1e566092f6064ed1b82c7f21e6c9a187f21a'
+    version: 2026.10.30.2
+    contentHash: 'sha256:ccc51e336e14ba77838f462109683c2c60b6dad1a217074fc31889a324fa7486'
     tests: deterministic
     dependsOn: []
     source:
@@ -49,8 +49,8 @@ packages:
   - name: '@mgreten/ntfy-notify'
     path: packages/ntfy-notify
     manifest: packages/ntfy-notify/extensions/models/manifest.yaml
-    version: 2026.10.30.1
-    contentHash: 'sha256:bac2f14b9c7788f817ce60d6fa114559fc01155bb6d98b9b8571009747637a21'
+    version: 2026.10.30.2
+    contentHash: 'sha256:f06b53eedf4d04bda1981988b19d587984d138d3da648e2936b4c565e3927efa'
     tests: deterministic
     dependsOn: []
     source:

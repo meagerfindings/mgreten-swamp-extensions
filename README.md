@@ -1,6 +1,6 @@
 # swamp-extensions (@mgreten, public)
 
-Pilot monorepo for Mat's public `@mgreten` swamp extensions. Local only; no remote yet.
+Pilot monorepo for Mat's public `@mgreten` swamp extensions. Source: https://github.com/meagerfindings/mgreten-swamp-extensions
 
 ```text
 catalog.yaml                 # schemaVersion 1, visibility public, scope @mgreten: what may publish
