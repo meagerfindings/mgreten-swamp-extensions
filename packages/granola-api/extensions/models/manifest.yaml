@@ -5,6 +5,11 @@ license: MIT
 description: >
   Read Granola notes and paginated transcripts through the official REST API using a vault-backed personal API key.
 repository: https://github.com/meagerfindings/swamp-granola-api
+visibility: public
+labels:
+  - granola
+  - meeting-notes
+  - productivity
 models:
   - granola_api.ts
 additionalFiles:

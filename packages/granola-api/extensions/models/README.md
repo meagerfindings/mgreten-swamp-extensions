@@ -7,6 +7,29 @@ an AI model. The extension returns data only; it never writes Obsidian files.
 
 The implementation and manifest are under `extensions/models/`.
 
+## Install and run
+
+In an initialized Swamp repository, install the published extension and store a
+personal Granola API key using the vault's hidden prompt:
+
+```sh
+swamp extension pull @mgreten/granola-api@2026.10.29.1
+swamp vault create local_encryption granola-api
+swamp vault put granola-api GRANOLA_API_KEY
+swamp model create @mgreten/granola-api granola-api \
+  --global-arg 'apiKey=${{ vault.get("granola-api", "GRANOLA_API_KEY") }}'
+swamp model method run granola-api syncApiMeetings \
+  --input '{"createdAfter":"2026-10-01T00:00:00Z","existingFiles":[],"maxMeetings":1}'
+```
+
+Choose your own creation cutoff. `existingFiles: []` requests up to one new note
+in this example; a consumer should pass its existing export paths on subsequent
+runs to skip those meeting UUIDs. The method stores private `syncedNotes` data
+in Swamp, not files in a notes app. Treat those artifacts and any exports as
+private; do not paste their raw contents into public logs or issues. Never put a
+real API key into the command line, an example, or version control. If you
+already have a vault, reference it instead of creating another.
+
 ## Configuration
 
 Create a definition of type `@mgreten/granola-api` with these global arguments:
@@ -30,15 +53,17 @@ Arguments:
   date-title filenames suppress already-exported meetings.
 - `maxMeetings`: maximum new meetings (1–10, default 10).
 
-Output: `syncedNotes` with a `notes` array. Each record has the meeting UUID,
-title, local date/time, participants, private notes, enhanced summary,
-transcript, Markdown, a suggested `Granola/<date> <title> <uuid>.md` path, and
-daily link. Preserves Markdown rather than using a model to summarize it. List
-and transcript cursors are followed to completion; repeated cursors and identity
-mismatches fail without writing partial data. Transcripts use speaker names or
-anonymous labels. 429 responses retry with a bounded Retry-After wait. Responses
-and key values are never logged; outputs contain meeting content and should be
-treated as private. Data lifetime is 30 days, with up to 20 retained artifacts.
+Output: `syncedNotes` with a `notes` array and `truncated` flag, which is true
+when another missing meeting remains beyond `maxMeetings`. Each record has the
+meeting UUID, title, local date/time, participants, private notes, enhanced
+summary, transcript, Markdown, a suggested `Granola/<date> <title> <uuid>.md`
+path, and daily link. Preserves Markdown rather than using a model to summarize
+it. List and transcript cursors are followed to completion; repeated cursors and
+identity mismatches fail without writing partial data. Transcripts use speaker
+names or anonymous labels. 429 responses retry with a bounded Retry-After wait.
+Responses and key values are never logged; outputs contain meeting content and
+should be treated as private. Data lifetime is 30 days, with up to 20 retained
+artifacts.
 
 ## Granola API limitations
 

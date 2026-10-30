@@ -103,6 +103,7 @@ Deno.test("REST preserves identity, both paginations, Denver dates, private-note
   }, ctx.value);
   const notes = ctx.writes[0].notes as Array<Record<string, string>>;
   assertEquals(notes.map((n) => n.meetingId), UUIDS.slice(1));
+  assertEquals(ctx.writes[0].truncated, false);
   assertEquals(notes[0].date, "2026-10-26");
   assertEquals(notes[0].time, "18:45");
   assertEquals(notes[0].summary, "## Enhanced\n\n**Keep** <literal> & markup");
@@ -127,7 +128,33 @@ Deno.test("REST preserves identity, both paginations, Denver dates, private-note
     existingFiles: UUIDS.map((id) => `Granola/existing ${id}.md`),
   }, replay.value);
   assertEquals(replay.writes[0].notes, []);
+  assertEquals(replay.writes[0].truncated, false);
   assertEquals(transcriptCalls, callsBefore);
+
+  const capped = context();
+  await rest.methods.syncApiMeetings.execute({
+    ...ARGS,
+    existingFiles: [`Granola/existing ${UUIDS[0]}.md`],
+    maxMeetings: 1,
+  }, capped.value);
+  assertEquals(
+    (capped.writes[0].notes as Array<Record<string, string>>).map((n) =>
+      n.meetingId
+    ),
+    [UUIDS[1]],
+  );
+  assertEquals(capped.writes[0].truncated, true);
+
+  const exact = context();
+  await rest.methods.syncApiMeetings.execute({
+    ...ARGS,
+    existingFiles: [
+      `Granola/existing ${UUIDS[0]}.md`,
+      `Granola/existing ${UUIDS[2]}.md`,
+    ],
+    maxMeetings: 1,
+  }, exact.value);
+  assertEquals(exact.writes[0].truncated, false);
 });
 
 Deno.test("REST fails closed on unauthorized, malformed, ambiguous identity and incomplete transcript results", async () => {

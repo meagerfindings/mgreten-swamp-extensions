@@ -38,7 +38,10 @@ const NoteRecordSchema = RawMeetingSchema.extend({
   suggestedFile: Text,
   dailyLink: Text,
 }).strict();
-const SyncedNotesSchema = z.object({ notes: z.array(NoteRecordSchema) })
+const SyncedNotesSchema = z.object({
+  notes: z.array(NoteRecordSchema),
+  truncated: z.boolean(),
+})
   .strict();
 
 /** Extract and case-insensitively deduplicate existing meeting UUIDs. */
@@ -258,8 +261,8 @@ async function readNotes(
   const excluded = new Set(extractMeetingIds(args.existingFiles));
   const identities = new Set<string>();
   const notes: z.infer<typeof NoteRecordSchema>[] = [];
+  let truncated = false;
   for (const id of candidates) {
-    if (notes.length === args.maxMeetings) break;
     const note = ApiNote.parse(await get(`/v1/notes/${id}`));
     if (note.id.toLowerCase() !== id.toLowerCase()) {
       throw new Error("Granola API returned the wrong note ID");
@@ -287,6 +290,10 @@ async function readNotes(
       excluded.has(meetingId) ||
       matchesExistingFile(metadata, args.existingFiles)
     ) continue;
+    if (notes.length === args.maxMeetings) {
+      truncated = true;
+      break;
+    }
     const lines: string[] = [];
     const transcriptCursors = new Set<string>();
     cursor = undefined;
@@ -325,7 +332,7 @@ async function readNotes(
         : "No transcript is stored for this meeting.",
     }));
   }
-  return notes;
+  return { notes, truncated };
 }
 
 /** Build the REST-only model with an injectable HTTP client for offline tests. */
@@ -354,7 +361,7 @@ export function createModel(request: typeof fetch = fetch) {
           context.logger.info("granola_api_sync_started", {
             method: "syncApiMeetings",
           });
-          const notes = await readNotes(
+          const result = await readNotes(
             SyncArgsSchema.parse(args),
             GlobalArgsSchema.parse(context.globalArgs),
             request,
@@ -362,10 +369,11 @@ export function createModel(request: typeof fetch = fetch) {
           const handle = await context.writeResource(
             "syncedNotes",
             `api-synced-notes-${crypto.randomUUID()}`,
-            SyncedNotesSchema.parse({ notes }),
+            SyncedNotesSchema.parse(result),
           );
           context.logger.info("granola_api_sync_completed", {
-            meetingCount: notes.length,
+            meetingCount: result.notes.length,
+            truncated: result.truncated,
           });
           return { dataHandles: [handle] };
         },
