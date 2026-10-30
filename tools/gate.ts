@@ -11,7 +11,7 @@
  */
 import { decideVersion, type VersionDecision } from "./lib/calver.ts";
 import { type Catalog, hashPackage, readCatalog, readManifestFields } from "./lib/catalog.ts";
-import { applyAllowlist, type AllowEntry, type RuleSet, scanHistory } from "./privacy-scan.ts";
+import { applyAllowlist, type AllowEntry, type Hit, type RuleSet, scanHistory, scanText } from "./privacy-scan.ts";
 
 export type Step = "consistency" | "tests" | "version" | "privacy" | "dry-run";
 export const STEPS: Step[] = ["consistency", "tests", "version", "privacy", "dry-run"];
@@ -133,6 +133,21 @@ async function privacy(env: GateEnv, c: Catalog): Promise<PackageResult[]> {
       data: { hits: hits.map(({ rule, category, path, commit, line, fingerprint }) => ({ rule, category, path, commit, line, fingerprint })) },
     });
   }
+  // Path-limited history skips this repo's own commits (scaffold, merges),
+  // so check every commit's identity and message here as well.
+  const shas = (await exec(["git", "rev-list", "--all"], env.root)).stdout.split("\n").filter(Boolean);
+  const meta: Hit[] = [];
+  for (const c of shas) {
+    const header = (await exec(["git", "log", "-1", "--format=%an <%ae>%n%cn <%ce>%n%B", c], env.root)).stdout;
+    meta.push(...await scanText(rules, "metadata", header, { path: "(commit header/message)", commit: c.slice(0, 12) }));
+  }
+  const metaHits = applyAllowlist(meta, allow);
+  res.push({
+    name: "(repo commits)",
+    ok: metaHits.length === 0,
+    detail: metaHits.length ? `${metaHits.length} commit metadata hits` : `clean (${shas.length} commits)`,
+    data: { hits: metaHits.map(({ rule, category, commit, fingerprint }) => ({ rule, category, commit, fingerprint })) },
+  });
   return res;
 }
 
