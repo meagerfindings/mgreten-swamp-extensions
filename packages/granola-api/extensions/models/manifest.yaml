@@ -1,0 +1,14 @@
+manifestVersion: 1
+name: "@mgreten/granola-api"
+version: "2026.10.29.1"
+license: MIT
+description: >
+  Read Granola notes and paginated transcripts through the official REST API using a vault-backed personal API key.
+repository: https://github.com/meagerfindings/swamp-granola-api
+models:
+  - granola_api.ts
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+dependencies: []
+platforms: []
