@@ -13,7 +13,7 @@ In an initialized Swamp repository, install the published extension and store a
 personal Granola API key using the vault's hidden prompt:
 
 ```sh
-swamp extension pull @mgreten/granola-api@2026.10.29.1
+swamp extension pull @mgreten/granola-api
 swamp vault create local_encryption granola-api
 swamp vault put granola-api GRANOLA_API_KEY
 swamp model create @mgreten/granola-api granola-api \
