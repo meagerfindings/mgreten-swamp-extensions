@@ -36,3 +36,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/moment-savor.git'
       ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
+  - name: '@mgreten/ntfy-notify'
+    path: packages/ntfy-notify
+    manifest: packages/ntfy-notify/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:c65d5fec7b3e419a6f7c6966f869d8dc5385bd9d6120f5b9650ffe144398a688'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-ntfy-notify.git'
+      ref: 82346aaafde9670d161c2d59838e44991dafa3ce

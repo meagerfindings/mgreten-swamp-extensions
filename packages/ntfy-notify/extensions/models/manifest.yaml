@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/ntfy-notify"
+version: "2026.10.14.1"
+description: >
+  Send push notifications via ntfy.sh (self-hosted or public), directly or
+  through the generic notification-outbox transport contract. Supports title,
+  message, priority, optional emoji tags, and actions.
+
+repository: https://github.com/meagerfindings/swamp-ntfy-notify
+license: MIT
+
+models:
+  - ntfy_notify.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []
