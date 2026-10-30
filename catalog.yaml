@@ -16,3 +16,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/moment-savor.git'
       ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
+  - name: '@mgreten/meta-publishing'
+    path: packages/meta-publishing
+    manifest: packages/meta-publishing/extensions/models/meta-publishing/manifest.yaml
+    version: 2026.08.26.1
+    contentHash: 'sha256:06a9dead3b77ee7d0a4c9aba25c9548cc55e9930453129c4779632d08e77eedb'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/moment-savor.git'
+      ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
