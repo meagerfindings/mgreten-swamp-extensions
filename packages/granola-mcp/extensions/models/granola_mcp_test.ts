@@ -187,13 +187,15 @@ Deno.test("direct sync follows both paginations, preserves Markdown, Denver date
 });
 
 Deno.test("existing UUIDs and legacy names produce no new notes on replay", async () => {
-  const direct = createModel(() =>
-    Promise.resolve({
+  let startupFailures = 2;
+  const direct = createModel(() => {
+    if (startupFailures-- > 0) return Promise.reject(new Error("HTTP 503"));
+    return Promise.resolve({
       close: () => Promise.resolve(),
       call: () =>
         Promise.resolve(envelope([meeting(A), meeting(B, "Mat / Matt")])),
-    })
-  );
+    });
+  });
   const mock = context();
   await direct.methods.syncMeetings.execute({
     timeRange: "this_week",

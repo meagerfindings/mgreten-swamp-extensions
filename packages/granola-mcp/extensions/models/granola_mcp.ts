@@ -540,7 +540,18 @@ export function createModel(
     task: (call: CallGranola, g: GlobalArgs) => Promise<T>,
   ): Promise<T> {
     const g = GlobalArgsSchema.parse(context.globalArgs);
-    const connection = await connect(g);
+    // Retry startup only: never replay retrieval after a connection succeeds.
+    let connection: Connection | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        connection = await connect(g);
+        break;
+      } catch (error) {
+        if (attempt === 2) throw error;
+        await delay(1_000 * (attempt + 1));
+      }
+    }
+    if (!connection) throw new Error("Granola MCP connection did not start");
     try {
       return await task(connection.call, g);
     } finally {
