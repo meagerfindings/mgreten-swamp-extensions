@@ -1,0 +1,8 @@
+# Public @mgreten catalog: the single source of truth for what this repo
+# may publish. Entries are written by tools/import-package.ts and the gate;
+# do not hand-edit version or contentHash.
+schemaVersion: 1
+visibility: public
+scope: "@mgreten"
+publish: registry
+packages: []

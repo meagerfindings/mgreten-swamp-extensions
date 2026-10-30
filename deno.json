@@ -1,0 +1,12 @@
+{
+  "imports": {
+    "@std/yaml": "jsr:@std/yaml@1.0.5",
+    "@std/assert": "jsr:@std/assert@1.0.13"
+  },
+  "tasks": {
+    "import": "deno run -A tools/import-package.ts",
+    "scan": "deno run -A tools/privacy-scan.ts",
+    "test:tools": "deno test -A tools/ extensions/"
+  },
+  "exclude": ["packages/"]
+}

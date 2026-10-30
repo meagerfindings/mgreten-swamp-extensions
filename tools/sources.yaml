@@ -1,0 +1,70 @@
+# Import sources for tools/import-package.ts. Each entry pins a source commit
+# and the exact paths that make up the package. The importer filters that
+# history in a temporary clone, rewrites `from` to packages/<short>/<to>, and
+# never touches the source checkout. Package layout inside packages/<short>/
+# preserves the source's layout relative to its extensions root, so manifests
+# resolve unchanged with `--extensions-dir packages/<short>`.
+schemaVersion: 1
+packages:
+  - name: "@mgreten/granola-mcp"
+    short: granola-mcp
+    source: git@github.com:meagerfindings/swamp-granola-mcp.git
+    ref: 5bc94d2dc63b1dbc6daaec5b32b1d65c98f9519a
+    manifest: extensions/models/manifest.yaml
+    paths:
+      - { from: extensions/models/, to: extensions/models/ }
+  - name: "@mgreten/canva"
+    short: canva
+    source: git@github.com:meagerfindings/moment-savor.git
+    ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
+    manifest: extensions/models/canva/manifest.yaml
+    paths:
+      - { from: extensions/models/canva/, to: extensions/models/canva/ }
+  - name: "@mgreten/e2e-tests"
+    short: e2e-tests
+    source: git@github.com:meagerfindings/moment-savor.git
+    ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
+    # The published manifest (2026.06.07.1) was deleted from the source in
+    # 39baaba8 as "accidental"; HEAD has no manifest for this package.
+    manifest: extensions/models/e2e-tests/manifest.yaml
+    paths:
+      - { from: extensions/models/e2e_tests.ts, to: extensions/models/e2e_tests.ts }
+      - { from: extensions/models/e2e_tests_test.ts, to: extensions/models/e2e_tests_test.ts }
+  - name: "@mgreten/meta-publishing"
+    short: meta-publishing
+    source: git@github.com:meagerfindings/moment-savor.git
+    ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
+    manifest: extensions/models/meta-publishing/manifest.yaml
+    paths:
+      - { from: extensions/models/meta-publishing/, to: extensions/models/meta-publishing/ }
+  - name: "@mgreten/hermes-env"
+    short: hermes-env
+    source: git@github.com:meagerfindings/homelab-docker-configs.git
+    ref: 336fc2898630cf8423700050a197d916ecb0da1e
+    manifest: manifest.yaml
+    paths:
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: README.md, to: README.md }
+      - { from: LICENSE.txt, to: LICENSE.txt }
+      - { from: extensions/models/hermes_env.ts, to: extensions/models/hermes_env.ts }
+  - name: "@mgreten/reolink"
+    short: reolink
+    source: git@github.com:meagerfindings/homelab-docker-configs.git
+    ref: 336fc2898630cf8423700050a197d916ecb0da1e
+    manifest: extensions/models/reolink/manifest.yaml
+    paths:
+      - { from: extensions/models/reolink/, to: extensions/models/reolink/ }
+  - name: "@mgreten/ntfy-notify"
+    short: ntfy-notify
+    source: git@github.com:meagerfindings/swamp-ntfy-notify.git
+    ref: 82346aaafde9670d161c2d59838e44991dafa3ce
+    manifest: extensions/models/manifest.yaml
+    paths:
+      - { from: extensions/models/, to: extensions/models/ }
+  - name: "@mgreten/macos-say-tts"
+    short: macos-say-tts
+    source: git@github.com:meagerfindings/swamp-macos-say-tts.git
+    ref: ce3a11055691cd5690d24351e74871ed172554ec
+    manifest: extensions/models/manifest.yaml
+    paths:
+      - { from: extensions/models/, to: extensions/models/ }

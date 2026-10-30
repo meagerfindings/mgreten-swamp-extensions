@@ -1,0 +1,33 @@
+{
+  "rulesVersion": "2026.10.30.1",
+  "notes": "Pinned denylist for the public catalog. Scanned over every blob, path, and commit header in a package's full history. Matched values are never printed; hits carry a sha256 fingerprint instead. Placeholder values matching valueExclude are ignored for secret rules.",
+  "valueExclude": "(?i)(example|placeholder|xxxx|your[-_]|redacted|fake|dummy|changeme|<[^>]+>|\\$\\{|\\$\\{\\{|test[-_]?(token|key|secret))",
+  "rules": [
+    { "id": "aws-access-key-id", "category": "secret", "scopes": ["content"], "pattern": "\\b(AKIA|ASIA)[0-9A-Z]{16}\\b" },
+    { "id": "github-token", "category": "secret", "scopes": ["content", "metadata"], "pattern": "\\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})" },
+    { "id": "slack-token", "category": "secret", "scopes": ["content", "metadata"], "pattern": "\\bxox[abposr]-[A-Za-z0-9-]{10,}" },
+    { "id": "openai-anthropic-key", "category": "secret", "scopes": ["content", "metadata"], "pattern": "\\bsk-(proj-|ant-)?[A-Za-z0-9_-]{32,}" },
+    { "id": "private-key-block", "category": "secret", "scopes": ["content"], "pattern": "-----BEGIN [A-Z ]*PRIVATE KEY-----" },
+    { "id": "google-api-key", "category": "secret", "scopes": ["content"], "pattern": "\\bAIza[0-9A-Za-z_-]{35}\\b" },
+    { "id": "stripe-live-key", "category": "secret", "scopes": ["content"], "pattern": "\\b[rs]k_live_[0-9A-Za-z]{20,}" },
+    { "id": "jwt", "category": "secret", "scopes": ["content"], "pattern": "\\beyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}" },
+    { "id": "url-credentials", "category": "secret", "scopes": ["content"], "pattern": "\\b[a-z][a-z0-9+.-]*://[^/\\s:@'\"]+:[^/\\s@'\"]{6,}@", "excludeValues": true },
+    { "id": "generic-secret-assignment", "category": "secret", "scopes": ["content"], "flags": "i", "pattern": "\\b(api[_-]?key|secret|token|passw(or)?d|client[_-]?secret|auth[_-]?key)[\"']?\\s*[:=]\\s*[\"'][A-Za-z0-9+/_\\-=.]{20,}[\"']", "excludeValues": true },
+
+    { "id": "companycam", "category": "companycam", "scopes": ["content", "path", "metadata"], "flags": "i", "pattern": "company[\\s_-]?cam" },
+    { "id": "cocam", "category": "companycam", "scopes": ["content", "path", "metadata"], "flags": "i", "pattern": "\\bcocam(\\b|[-_])" },
+    { "id": "frink", "category": "companycam", "scopes": ["content", "path", "metadata"], "flags": "i", "pattern": "\\bfrink\\b" },
+    { "id": "blinc", "category": "companycam", "scopes": ["content", "path", "metadata"], "flags": "i", "pattern": "\\bblinc\\b" },
+
+    { "id": "tailnet-host", "category": "private-host", "scopes": ["content", "path", "metadata"], "flags": "i", "pattern": "\\b[a-z0-9-]+\\.ts\\.net\\b|\\btail001dd\\b" },
+    { "id": "homelab-hostname", "category": "private-host", "scopes": ["content", "path", "metadata"], "flags": "i", "pattern": "\\broccinante\\b" },
+    { "id": "lan-hostname", "category": "private-host", "scopes": ["content"], "flags": "i", "pattern": "\\b[a-z0-9-]+\\.(lan|home\\.arpa|internal|local)\\b" },
+    { "id": "rfc1918-ip", "category": "private-host", "scopes": ["content", "metadata"], "pattern": "(?<![\\d.])(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3})(?![\\d.])" },
+    { "id": "tailscale-cgnat-ip", "category": "private-host", "scopes": ["content", "metadata"], "pattern": "(?<![\\d.])100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\.\\d{1,3}\\.\\d{1,3}(?![\\d.])" },
+
+    { "id": "granola-path", "category": "granola", "scopes": ["path"], "flags": "i", "pattern": "(^|/)granola/|transcripts?[^/]*\\.(md|txt|json|vtt|srt)$" },
+    { "id": "granola-speaker-turns", "category": "granola", "scopes": ["content"], "flags": "im", "pattern": "^[\\s>*-]*(me|them|you|speaker [a-z0-9]+)\\s*:\\s+\\S", "minMatches": 3 },
+    { "id": "granola-transcript-json", "category": "granola", "scopes": ["content"], "pattern": "\"source\"\\s*:\\s*\"(microphone|system)\"", "minMatches": 2 },
+    { "id": "granola-notes-body", "category": "granola", "scopes": ["content"], "pattern": "\"notes_(markdown|plain)\"\\s*:\\s*\"[^\"]{200,}\"" }
+  ]
+}
