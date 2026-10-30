@@ -35,6 +35,13 @@ Deno.test("decideVersion: unchanged hash keeps the version", () => {
   assertEquals([d.action, d.version], ["unchanged", "2026.10.14.1"]);
 });
 
+Deno.test("decideVersion: an applied bump not yet in the registry is pending, not unchanged", () => {
+  const d = decideVersion({ ...base, recordedHash: "sha256:new", currentVersion: "2026.10.30.1" });
+  assertEquals([d.action, d.version], ["pending", "2026.10.30.1"]);
+  // Never published at all.
+  assertEquals(decideVersion({ ...base, recordedHash: "sha256:new", registryLatest: null }).action, "pending");
+});
+
 Deno.test("decideVersion: changed hash releases above manifest and registry", () => {
   const d = decideVersion({
     ...base,

@@ -19,8 +19,8 @@ packages:
   - name: '@mgreten/granola-mcp'
     path: packages/granola-mcp
     manifest: packages/granola-mcp/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:3ca76745ce210c7032b10fa1458c870ad533f60a977173c78e1965a94e376e12'
+    version: 2026.10.30.1
+    contentHash: 'sha256:2374159aa8d07b8db792c4dc94f3b29944156b9af916cd8ef69ae16785037b8f'
     tests: deterministic
     dependsOn: []
     source:
@@ -29,8 +29,8 @@ packages:
   - name: '@mgreten/macos-say-tts'
     path: packages/macos-say-tts
     manifest: packages/macos-say-tts/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:d52b5ebf30918a24f31c7ca3bf303d77b5f3173fa5bd3027f1b31cc35f17b511'
+    version: 2026.10.30.1
+    contentHash: 'sha256:b2f5bd36f9e0fda16cb107c0f8a13c089cd3eb1ca1c835d8eb94c40d5dc234bc'
     tests: deterministic
     dependsOn: []
     source:
@@ -49,8 +49,8 @@ packages:
   - name: '@mgreten/ntfy-notify'
     path: packages/ntfy-notify
     manifest: packages/ntfy-notify/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:c65d5fec7b3e419a6f7c6966f869d8dc5385bd9d6120f5b9650ffe144398a688'
+    version: 2026.10.30.1
+    contentHash: 'sha256:bac2f14b9c7788f817ce60d6fa114559fc01155bb6d98b9b8571009747637a21'
     tests: deterministic
     dependsOn: []
     source:

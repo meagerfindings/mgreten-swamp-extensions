@@ -87,7 +87,7 @@ async function tests(env: GateEnv, c: Catalog): Promise<PackageResult[]> {
   return res;
 }
 
-async function registryLatest(env: GateEnv, name: string): Promise<string | null> {
+export async function registryLatest(env: GateEnv, name: string): Promise<string | null> {
   const r = await exec([env.swamp, "extension", "info", name, "--json"], env.root, swampEnv);
   if (r.code !== 0) return null;
   try {
@@ -111,8 +111,9 @@ async function version(env: GateEnv, c: Catalog): Promise<PackageResult[]> {
     });
     res.push({
       name: p.name,
-      ok: d.action !== "drift",
-      detail: `${d.action}: ${d.reason}`,
+      // "release" means content changed but the bump is not applied yet.
+      ok: d.action === "unchanged" || d.action === "pending" || d.action === "baseline",
+      detail: d.action === "release" ? `release ${d.version} needed: run deno task apply-versions --today ${env.today}` : `${d.action}: ${d.reason}`,
       data: { action: d.action, version: d.version, currentVersion: p.version, registryLatest: latest, contentHash: hash },
     });
   }

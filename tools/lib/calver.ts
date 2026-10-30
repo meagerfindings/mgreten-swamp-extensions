@@ -48,7 +48,7 @@ export function nextCalVer(today: string, floor: Array<string | null>): string {
   return `${todayDay}.1`;
 }
 
-export type VersionAction = "unchanged" | "baseline" | "release" | "drift";
+export type VersionAction = "unchanged" | "pending" | "baseline" | "release" | "drift";
 
 export interface VersionInput {
   contentHash: string;
@@ -87,6 +87,14 @@ export function decideVersion(i: VersionInput): VersionDecision {
     };
   }
   if (i.recordedHash === i.contentHash) {
+    const ahead = i.registryLatest === null || compareCalVer(i.currentVersion, i.registryLatest) > 0;
+    if (ahead) {
+      return {
+        action: "pending",
+        version: i.currentVersion,
+        reason: `version ${i.currentVersion} is assigned but not in the registry (latest ${i.registryLatest ?? "none"}); ready to publish`,
+      };
+    }
     return {
       action: "unchanged",
       version: i.currentVersion,

@@ -4,7 +4,7 @@ version: 2026.10.03.1
 description: >
   Canva REST OAuth, local PNG/JPEG uploads with durable intents and resumable
   jobs, and folder organization. Brand-independent; no design publishing.
-repository: "https://github.com/meagerfindings/moment-savor"
+repository: "https://github.com/meagerfindings/swamp-extensions"
 paths:
   base: manifest
 models:
