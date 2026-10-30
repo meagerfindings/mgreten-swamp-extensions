@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: "@mgreten/macos-say-tts"
+version: "2026.10.14.1"
+description: >
+  Speak text aloud on macOS using the built-in `say` voice synthesizer. One
+  focused method: synthesize text to audio and play it through the speakers,
+  with optional voice and speech-rate control. Zero external dependencies —
+  uses only the native macOS `say` and `afplay` binaries.
+
+repository: https://github.com/meagerfindings/swamp-macos-say-tts
+license: MIT
+
+models:
+  - macos_say_tts.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms:
+  - darwin-x86_64
+  - darwin-aarch64

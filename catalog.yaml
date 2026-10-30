@@ -26,6 +26,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-granola-mcp.git'
       ref: 5bc94d2dc63b1dbc6daaec5b32b1d65c98f9519a
+  - name: '@mgreten/macos-say-tts'
+    path: packages/macos-say-tts
+    manifest: packages/macos-say-tts/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:d52b5ebf30918a24f31c7ca3bf303d77b5f3173fa5bd3027f1b31cc35f17b511'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-macos-say-tts.git'
+      ref: ce3a11055691cd5690d24351e74871ed172554ec
   - name: '@mgreten/meta-publishing'
     path: packages/meta-publishing
     manifest: packages/meta-publishing/extensions/models/meta-publishing/manifest.yaml
