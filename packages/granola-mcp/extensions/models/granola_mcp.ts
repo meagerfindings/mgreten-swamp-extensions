@@ -1,7 +1,7 @@
 import { z } from "npm:zod@4";
-import { Client } from "npm:@modelcontextprotocol/sdk@1.17.5/client/index.js";
-import { StreamableHTTPClientTransport } from "npm:@modelcontextprotocol/sdk@1.17.5/client/streamableHttp.js";
-import { XMLParser } from "npm:fast-xml-parser@4.5.3";
+import { Client } from "npm:@modelcontextprotocol/sdk@1.32.2/client/index.js";
+import { StreamableHTTPClientTransport } from "npm:@modelcontextprotocol/sdk@1.32.2/client/streamableHttp.js";
+import { XMLParser } from "npm:fast-xml-parser@4.5.7";
 import { setTimeout as delay } from "node:timers/promises";
 
 /** Read Granola directly over MCP; Amp owns the existing OAuth login/refresh. */
@@ -600,7 +600,7 @@ export function createModel(
       listMeetings: {
         description: "List Granola meeting metadata directly through MCP",
         arguments: ListFiltersSchema,
-        execute: async (
+        execute: (
           args: z.infer<typeof ListFiltersSchema>,
           context: MethodContext,
         ) =>
@@ -626,7 +626,7 @@ export function createModel(
         description:
           "Retrieve details without transcripts for one to ten Granola meetings",
         arguments: z.object({ meetingIds: UniqueMeetingIdsSchema }),
-        execute: async (
+        execute: (
           args: { meetingIds: string[] },
           context: MethodContext,
         ) =>
@@ -648,7 +648,7 @@ export function createModel(
       getTranscript: {
         description: "Retrieve one complete Granola transcript",
         arguments: z.object({ meetingId: MeetingId }),
-        execute: async (args: { meetingId: string }, context: MethodContext) =>
+        execute: (args: { meetingId: string }, context: MethodContext) =>
           usingConnection(context, async (call) => {
             logStart(context, "getTranscript", 1);
             const response = {
@@ -671,7 +671,7 @@ export function createModel(
         description:
           "List, select at most ten missing IDs, then retrieve complete notes directly through MCP",
         arguments: SyncArgsSchema,
-        execute: async (
+        execute: (
           args: z.infer<typeof SyncArgsSchema>,
           context: MethodContext,
         ) =>
