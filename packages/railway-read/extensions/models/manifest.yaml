@@ -1,0 +1,17 @@
+manifestVersion: 1
+name: "@mgreten/railway-read"
+version: "2026.10.14.1"
+license: MIT
+description: >
+  Retain bounded, typed Railway deployment status and source-commit evidence using query-only GraphQL operations.
+
+repository: https://github.com/meagerfindings/swamp-railway-read
+
+models:
+  - railway_read.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []

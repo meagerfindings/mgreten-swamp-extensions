@@ -190,3 +190,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-pimoroni-explorer.git'
       ref: b1800071f5aa160ce856c637c1d394bfabc7b4b4
+  - name: '@mgreten/railway-read'
+    path: packages/railway-read
+    manifest: packages/railway-read/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:122c2ceeeebcd1b6386c6453844b6e7ca442f6beaf9adae3a31ebf439c985314'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-railway-read.git'
+      ref: 5d4ee42cbafb67c72d853ad78cec2d1656579bc0
