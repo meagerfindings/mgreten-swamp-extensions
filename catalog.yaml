@@ -270,3 +270,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-task-skill-router.git'
       ref: 79220ce52938c04487e616c955ce1129a8dcc933
+  - name: '@mgreten/test-evidence-validator'
+    path: packages/test-evidence-validator
+    manifest: packages/test-evidence-validator/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:b9f3ba9fcecf56957a1ecce9a5651e77abf05ae9f76e0bd04b4a9004371f8e74'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-test-evidence-validator.git'
+      ref: 462d24ac7dbc7cb8d7f723d6b4eec6945b4d45d7
