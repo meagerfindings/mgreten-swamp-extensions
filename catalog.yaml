@@ -88,6 +88,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-github-pr-feed.git'
       ref: 984aacdc19da215c32f9173015c3f781e8ce42f3
+  - name: '@mgreten/granola-api'
+    path: packages/granola-api
+    manifest: packages/granola-api/extensions/models/manifest.yaml
+    version: 2026.10.29.2
+    contentHash: 'sha256:e5b28b02bd60e030a275964a90936bfe3d2418ea9c4a724199602a647cfdde4e'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-granola-api.git'
+      ref: 9dd7af19086145a87fa85dabacf282dc309e8bda
   - name: '@mgreten/granola-mcp'
     path: packages/granola-mcp
     manifest: packages/granola-mcp/extensions/models/manifest.yaml
