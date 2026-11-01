@@ -6,6 +6,16 @@ visibility: public
 scope: '@mgreten'
 publish: registry
 packages:
+  - name: '@mgreten/agent-browser-batch'
+    path: packages/agent-browser-batch
+    manifest: packages/agent-browser-batch/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:724940d3c2a62e654bff0d21a7805827b03ca5b72b3cabbb2f4b30e34a30d7bf'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-agent-browser-batch.git'
+      ref: a8f460c952ad17462677de0af23b5a93a7c6429c
   - name: '@mgreten/canva'
     path: packages/canva
     manifest: packages/canva/extensions/models/canva/manifest.yaml
