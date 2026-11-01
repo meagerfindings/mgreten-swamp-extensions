@@ -1,0 +1,586 @@
+/**
+ * Track files in GitHub repositories and materialize them on the local
+ * filesystem, deduplicated on the upstream Git blob SHA.
+ *
+ * A single `sync` call fans out across any number of targets — each a
+ * `{repo, ref, srcPath, destPath}` tuple — fetching the current blob via the
+ * `gh` CLI, comparing its SHA against the last recorded sync, and rewriting the
+ * destination file only when the upstream content has changed (or the
+ * destination is missing). This makes it a composable primitive for keeping a
+ * local copy of someone else's file (a shared skill, a snapshot, a config)
+ * fresh without re-fetching or rewriting on every run.
+ *
+ * @module
+ */
+
+import { dirname, normalize } from "jsr:@std/path@1";
+import { z } from "npm:zod@4";
+
+// --- Schemas ---
+
+/**
+ * A single file to track: a path inside a GitHub repo, mirrored to a local
+ * destination. `label` is an optional human-friendly identifier echoed back in
+ * the sync record so callers can correlate results without re-deriving paths.
+ */
+const TargetSchema = z.object({
+  /** GitHub repository in `owner/repo` form. */
+  repo: z.string(),
+  /** Git ref (branch, tag, or commit SHA) to read the file at. */
+  ref: z.string().default("main"),
+  /** Path to the file inside the repository. */
+  srcPath: z.string(),
+  /** Absolute local filesystem path to write the file to. */
+  destPath: z.string(),
+  /** Optional caller-supplied label, echoed back in the sync record. */
+  label: z.string().optional(),
+});
+
+/** Validated global arguments for a github-file-track model instance. */
+const GlobalArgsSchema = z.object({
+  /**
+   * Default targets to sync when `sync` is called without an explicit list.
+   * Lets a model instance bake in its tracked files so a scheduler can call
+   * `sync` with no arguments.
+   */
+  targets: z.array(TargetSchema).default([]),
+});
+
+/**
+ * The persisted record of the last successful sync for one destination path.
+ * Keyed (as an instance name) by a slug of `destPath`, so the next run can
+ * compare the upstream SHA without re-reading the destination file.
+ */
+const SyncRecordSchema = z.object({
+  /** GitHub repository the file was tracked from. */
+  repo: z.string(),
+  /** Git ref the file was read at. */
+  ref: z.string(),
+  /** Source path inside the repository. */
+  srcPath: z.string(),
+  /** Local destination path the file was written to. */
+  destPath: z.string(),
+  /** Caller-supplied label, if any. */
+  label: z.string().default(""),
+  /** Upstream Git blob SHA of the tracked file at last fetch. */
+  blobSha: z.string(),
+  /** Whether this run wrote the destination file. */
+  changed: z.boolean(),
+  /** Why the file was (not) written: written | unchanged | created. */
+  reason: z.enum(["written", "unchanged", "created"]),
+  /** Size in bytes of the materialized file. */
+  bytes: z.number(),
+  /** ISO-8601 timestamp of this sync run. */
+  syncedAt: z.string(),
+});
+
+/**
+ * A target that could not be synced, recorded so the failure is inspectable
+ * after the fact rather than only existing as a log line.
+ */
+const SyncFailureSchema = z.object({
+  /** GitHub repository the file was to be tracked from. */
+  repo: z.string(),
+  /** Source path inside the repository. */
+  srcPath: z.string(),
+  /** Local destination path that was NOT updated. */
+  destPath: z.string(),
+  /** The error that prevented the sync. */
+  error: z.string(),
+});
+
+/** Aggregate summary across all targets in one `sync` invocation. */
+const SyncSummarySchema = z.object({
+  /** Total targets processed. */
+  total: z.number(),
+  /** Targets whose destination file was (re)written. */
+  changed: z.number(),
+  /** Targets skipped because the upstream SHA matched the last sync. */
+  unchanged: z.number(),
+  /**
+   * Targets whose fetch failed. Their destination files were left untouched,
+   * so any consumer reading them is reading stale content.
+   */
+  failed: z.number().default(0),
+  /** Detail for each failed target. */
+  failures: z.array(SyncFailureSchema).default([]),
+  /** Destination paths that were (re)written this run. */
+  changedPaths: z.array(z.string()),
+  /** ISO-8601 timestamp of this sync run. */
+  syncedAt: z.string(),
+});
+
+// --- Types ---
+
+type Target = z.infer<typeof TargetSchema>;
+type SyncRecord = z.infer<typeof SyncRecordSchema>;
+type SyncFailure = z.infer<typeof SyncFailureSchema>;
+type SyncSummary = z.infer<typeof SyncSummarySchema>;
+
+/** Outcome of one target: either a persisted record or a captured failure. */
+export type SyncOutcome =
+  | { ok: true; record: SyncRecord }
+  | { ok: false; failure: SyncFailure };
+
+interface CmdResult {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  code: number;
+}
+
+/** Shape of the GitHub `contents` API response for a single file. */
+interface GitHubContentsResponse {
+  sha: string;
+  content: string;
+  encoding: string;
+  type: string;
+}
+
+// --- Helpers ---
+
+/**
+ * Run a subprocess and capture its output. Never throws on a non-zero exit;
+ * callers inspect `success`/`code` so a failing `gh` call surfaces as a typed
+ * result rather than an exception mid-fan-out.
+ */
+async function runCmd(
+  cmd: string[],
+  opts?: { cwd?: string },
+): Promise<CmdResult> {
+  const command = new Deno.Command(cmd[0], {
+    args: cmd.slice(1),
+    stdout: "piped",
+    stderr: "piped",
+    cwd: opts?.cwd,
+  });
+  const output = await command.output();
+  return {
+    success: output.success,
+    stdout: new TextDecoder().decode(output.stdout),
+    stderr: new TextDecoder().decode(output.stderr),
+    code: output.code,
+  };
+}
+
+/**
+ * Turn a destination path into a stable, filesystem-safe instance name so each
+ * tracked file gets its own sync-record slot in the data store.
+ */
+export function destSlug(destPath: string): string {
+  return destPath.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Reject targets that would race on one destination or overwrite one another's
+ * sync record. Validation happens before fan-out, so invalid batches never
+ * invoke `gh` or touch the filesystem.
+ */
+function validateTargets(targets: Target[]): void {
+  const destinations = new Map<string, string>();
+  const slugs = new Map<string, string>();
+
+  for (const target of targets) {
+    const normalized = normalize(target.destPath);
+    const destinationKey = Deno.build.os === "linux"
+      ? normalized
+      : normalized.toLowerCase();
+    const priorDestination = destinations.get(destinationKey);
+    if (priorDestination !== undefined) {
+      throw new Error(
+        `duplicate destination paths normalize to ${normalized}: ` +
+          `${priorDestination}, ${target.destPath}`,
+      );
+    }
+    destinations.set(destinationKey, target.destPath);
+
+    const slug = destSlug(normalized);
+    if (!slug) {
+      throw new Error(
+        `destination path produces an empty sync-record name: ${target.destPath}`,
+      );
+    }
+    const priorSlugPath = slugs.get(slug);
+    if (priorSlugPath !== undefined) {
+      throw new Error(
+        `destination paths produce the same sync-record name ${slug}: ` +
+          `${priorSlugPath}, ${target.destPath}`,
+      );
+    }
+    slugs.set(slug, target.destPath);
+  }
+}
+
+/**
+ * Pure decision: should the destination be (re)written? The file is written
+ * when the upstream SHA differs from the prior record, OR when it matches but
+ * the destination file is missing on disk (so a deleted local copy is restored
+ * even though upstream is unchanged). Returns the `reason` for the record.
+ */
+export function decideSync(
+  priorSha: string | null,
+  upstreamSha: string,
+  destPresent: boolean,
+): { write: boolean; reason: "written" | "unchanged" | "created" } {
+  const shaMatches = priorSha !== null && priorSha === upstreamSha;
+  if (shaMatches && destPresent) {
+    return { write: false, reason: "unchanged" };
+  }
+  return { write: true, reason: destPresent ? "written" : "created" };
+}
+
+/**
+ * Pure aggregation: fold per-target outcomes into the run summary.
+ *
+ * Counts are derived from the outcomes themselves rather than from the number
+ * of records written, so a failed target can never be silently absorbed into
+ * the `unchanged` bucket. `total` always equals `changed + unchanged + failed`.
+ */
+export function buildSummary(
+  outcomes: SyncOutcome[],
+  syncedAt: string,
+): SyncSummary {
+  const changedPaths: string[] = [];
+  const failures: SyncFailure[] = [];
+  let changed = 0;
+  let unchanged = 0;
+
+  for (const outcome of outcomes) {
+    if (!outcome.ok) {
+      failures.push(outcome.failure);
+      continue;
+    }
+    if (outcome.record.changed) {
+      changed++;
+      changedPaths.push(outcome.record.destPath);
+    } else {
+      unchanged++;
+    }
+  }
+
+  return SyncSummarySchema.parse({
+    total: outcomes.length,
+    changed,
+    unchanged,
+    failed: failures.length,
+    failures,
+    changedPaths,
+    syncedAt,
+  });
+}
+
+/**
+ * Fetch a file's blob SHA and decoded text from GitHub via the `gh` CLI.
+ * Throws a descriptive error (carrying `gh`'s stderr) when the file cannot be
+ * read — missing path, bad ref, auth failure, or a file too large for the
+ * contents API. The caller's `Promise.allSettled` isolates the failure so other
+ * targets still sync; the run as a whole still fails afterwards.
+ */
+async function fetchFile(
+  target: Target,
+): Promise<{ sha: string; content: string }> {
+  const endpoint =
+    `repos/${target.repo}/contents/${target.srcPath}?ref=${target.ref}`;
+  const result = await runCmd(["gh", "api", endpoint]);
+  if (!result.success) {
+    throw new Error(
+      `gh api ${endpoint} failed (exit ${result.code}): ` +
+        `${result.stderr.trim() || "no stderr"}`,
+    );
+  }
+  let parsed: GitHubContentsResponse;
+  try {
+    parsed = JSON.parse(result.stdout) as GitHubContentsResponse;
+  } catch {
+    throw new Error(`gh api ${endpoint} returned non-JSON output`);
+  }
+  // The contents API returns encoding "none" for files over ~1 MB; those must
+  // be read via the blob API, which this model does not support.
+  if (parsed.type !== "file" || parsed.encoding !== "base64") {
+    throw new Error(
+      `${target.repo}:${target.srcPath} is not a base64 file ` +
+        `(type=${parsed.type}, encoding=${parsed.encoding}); ` +
+        `files over ~1 MB are not supported`,
+    );
+  }
+  // GitHub base64-encodes contents with embedded newlines; strip them first.
+  const decoded = new TextDecoder().decode(
+    base64ToBytes(parsed.content.replace(/\n/g, "")),
+  );
+  return { sha: parsed.sha, content: decoded };
+}
+
+/** Decode a base64 string to bytes without relying on `atob` charcode quirks. */
+export function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/** Whether a path exists on disk (file or directory). */
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await Deno.stat(path);
+    return true;
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Replace a destination atomically by writing a sibling temporary file and
+ * renaming it only after the complete content is on disk. A failed write or
+ * rename leaves the previous destination untouched and cleans up the temporary
+ * file best-effort.
+ */
+async function writeTextFileAtomically(
+  destPath: string,
+  content: string,
+): Promise<void> {
+  const dir = dirname(destPath);
+  await Deno.mkdir(dir, { recursive: true });
+
+  const tempPath = `${destPath}.tmp-${crypto.randomUUID()}`;
+  let committed = false;
+  let tempFile: Deno.FsFile | null = await Deno.open(tempPath, {
+    createNew: true,
+    write: true,
+    mode: 0o666,
+  });
+
+  try {
+    const bytes = new TextEncoder().encode(content);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const written = await tempFile.write(bytes.subarray(offset));
+      if (written === 0) {
+        throw new Error(`atomic write made no progress for ${destPath}`);
+      }
+      offset += written;
+    }
+    tempFile.close();
+    tempFile = null;
+    await Deno.rename(tempPath, destPath);
+    committed = true;
+  } finally {
+    if (tempFile !== null) {
+      try {
+        tempFile.close();
+      } catch {
+        // Preserve the write/rename error; cleanup below is best-effort.
+      }
+    }
+    if (!committed) {
+      await Deno.remove(tempPath).catch(() => {});
+    }
+  }
+}
+
+/**
+ * Sync one target: fetch upstream, compare against the prior record, and write
+ * the destination only when content changed or the file is missing. Returns the
+ * record to persist, or throws if the upstream file cannot be fetched.
+ */
+async function syncOne(
+  target: Target,
+  prior: SyncRecord | null,
+  syncedAt: string,
+): Promise<SyncRecord> {
+  const fetched = await fetchFile(target);
+  const destPresent = await pathExists(target.destPath);
+  const decision = decideSync(
+    prior?.blobSha ?? null,
+    fetched.sha,
+    destPresent,
+  );
+
+  const record = SyncRecordSchema.parse({
+    repo: target.repo,
+    ref: target.ref,
+    srcPath: target.srcPath,
+    destPath: target.destPath,
+    label: target.label ?? "",
+    blobSha: fetched.sha,
+    changed: decision.write,
+    reason: decision.reason,
+    bytes: new TextEncoder().encode(fetched.content).length,
+    syncedAt,
+  });
+
+  if (decision.write) {
+    await writeTextFileAtomically(target.destPath, fetched.content);
+  }
+
+  return record;
+}
+
+// --- Model ---
+
+/**
+ * The `@mgreten/github-file-track` model: a `sync` method that mirrors tracked
+ * GitHub files to local paths, deduplicated on the upstream blob SHA. Configure
+ * `globalArguments.targets` on an instance and call `sync` on a schedule.
+ */
+export const model = {
+  type: "@mgreten/github-file-track",
+  version: "2026.08.02.2",
+  globalArguments: GlobalArgsSchema,
+  resources: {
+    "syncRecord": {
+      description:
+        "Per-destination record of the last sync: upstream blob SHA, whether " +
+        "the file was rewritten, and byte size. One instance per destPath.",
+      schema: SyncRecordSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 5,
+    },
+    "syncSummary": {
+      description: "Aggregate counts across all targets in one sync run.",
+      schema: SyncSummarySchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+  },
+  methods: {
+    sync: {
+      description:
+        "Fetch each tracked file from GitHub and write it locally when the " +
+        "upstream blob SHA changed (or the destination is missing). Fans out " +
+        "across all targets in a single execution. Pass `targets` to override " +
+        "the instance default. Fails if any target could not be fetched.",
+      arguments: z.object({
+        /** Targets to sync; defaults to the instance's `globalArgs.targets`. */
+        targets: z.array(TargetSchema).optional(),
+      }),
+      execute: async (
+        args: { targets?: Target[] },
+        context: {
+          globalArgs: z.infer<typeof GlobalArgsSchema>;
+          writeResource: (
+            specName: string,
+            instanceName: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          readResource?: (
+            instanceName: string,
+          ) => Promise<Record<string, unknown> | null>;
+          logger: {
+            info: (msg: string, props?: Record<string, unknown>) => void;
+            warning: (msg: string, props?: Record<string, unknown>) => void;
+            error: (msg: string, props?: Record<string, unknown>) => void;
+          };
+        },
+      ): Promise<{ dataHandles: { name: string }[] }> => {
+        const targets = args.targets ?? context.globalArgs.targets;
+        if (targets.length === 0) {
+          throw new Error(
+            "no targets to sync — pass `targets` or set globalArgs.targets",
+          );
+        }
+        validateTargets(targets);
+
+        context.logger.info("github-file-track: syncing {count} target(s)", {
+          count: targets.length,
+        });
+
+        const syncedAt = new Date().toISOString();
+        const handles: { name: string }[] = [];
+        const outcomes: SyncOutcome[] = [];
+
+        // Fan out: process every target in one execution under one lock.
+        const results = await Promise.allSettled(
+          targets.map(async (target) => {
+            const slug = destSlug(normalize(target.destPath));
+            const priorRaw = context.readResource
+              ? await context.readResource(slug)
+              : null;
+            const prior = priorRaw
+              ? (SyncRecordSchema.parse(priorRaw) as SyncRecord)
+              : null;
+            const record = await syncOne(target, prior, syncedAt);
+            return { slug, record };
+          }),
+        );
+
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          const target = targets[i];
+          if (result.status === "rejected") {
+            // `error`, not `warning`: a target that did not sync leaves its
+            // destination file stale, which is a failure however the run ends.
+            //
+            // NB: this line is for severity correctness, not for visibility.
+            // Verified against swamp CLI 20260801: only `logger.info` is
+            // rendered in method/workflow output — `warning` and `error` are
+            // both swallowed. Observability therefore comes from the thrown
+            // error and the `failed`/`failures` fields below, never from a log
+            // line a caller might not see.
+            context.logger.error(
+              "github-file-track: FAILED {destPath}: {err}",
+              {
+                err: String(result.reason),
+                destPath: target.destPath,
+              },
+            );
+            outcomes.push({
+              ok: false,
+              failure: {
+                repo: target.repo,
+                srcPath: target.srcPath,
+                destPath: target.destPath,
+                error: String(result.reason),
+              },
+            });
+            continue;
+          }
+          const { slug, record } = result.value;
+          outcomes.push({ ok: true, record });
+          const handle = await context.writeResource(
+            "syncRecord",
+            slug,
+            record,
+          );
+          handles.push(handle);
+          context.logger.info(
+            "github-file-track: {reason} {destPath} ({bytes} bytes)",
+            {
+              reason: record.reason,
+              destPath: record.destPath,
+              bytes: record.bytes,
+            },
+          );
+        }
+
+        const summary = buildSummary(outcomes, syncedAt);
+
+        // Persist the summary BEFORE throwing, so the failure detail survives
+        // as inspectable data on a failed run rather than only in the logs.
+        const summaryHandle = await context.writeResource(
+          "syncSummary",
+          `summary-${syncedAt}`,
+          summary,
+        );
+        handles.push(summaryHandle);
+
+        if (summary.failed > 0) {
+          const detail = summary.failures
+            .map((f) => `${f.repo}:${f.srcPath} -> ${f.destPath}: ${f.error}`)
+            .join("; ");
+          throw new Error(
+            `github-file-track: ${summary.failed} of ${summary.total} ` +
+              `target(s) failed to sync; their destination files are stale. ` +
+              detail,
+          );
+        }
+
+        return { dataHandles: handles };
+      },
+    },
+  },
+};
