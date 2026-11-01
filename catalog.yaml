@@ -230,3 +230,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-slack-blocks.git'
       ref: fb1d4e1c08b9569f563802fbbba57191efd4a7c6
+  - name: '@mgreten/software-factory-flow-metrics'
+    path: packages/software-factory-flow-metrics
+    manifest: packages/software-factory-flow-metrics/extensions/manifest.yaml
+    version: 2026.10.14.2
+    contentHash: 'sha256:ffa703653f65e5540f8b7b79bea83e8e6917c3bb00c1ba3849064c12846c0e98'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-software-factory-flow-metrics.git'
+      ref: 13072ecf701064e063d4d2a2f5a025d5d8437ded
