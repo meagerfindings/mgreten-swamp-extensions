@@ -5,7 +5,7 @@ license: MIT
 description: >-
   Reconcile GitHub/Graphite PR stacks with Linear issue states — scan PRs for
   ticket references, compare states, and transition Linear issues to match.
-repository: 'https://github.com/meagerfindings/swamp-graphite-linear-sync'
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - graphite_linear_sync.ts
 workflows: []
