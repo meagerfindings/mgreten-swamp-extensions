@@ -7,7 +7,7 @@ description: >
   batch --json` so cookies and Chromium state persist across every step.
   Supports {{secret:NAME}} placeholders for credentials.
 
-repository: https://github.com/meagerfindings/swamp-agent-browser-batch
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - agent_browser_batch.ts
