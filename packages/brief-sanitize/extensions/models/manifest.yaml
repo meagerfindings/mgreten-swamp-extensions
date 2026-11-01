@@ -13,7 +13,7 @@ description: >
   safely quote it as data rather than instructions. Defense-in-depth against
   prompt injection: no LLM, no network, no secrets.
 
-repository: https://github.com/meagerfindings/swamp-brief-sanitize
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - brief_sanitize.ts
