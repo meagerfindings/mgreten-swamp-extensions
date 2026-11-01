@@ -15,7 +15,7 @@ description: >
   reported as unavailable rather than as zero. Rendered statically from recorded
   run data with no LLM involved.
 
-repository: https://github.com/meagerfindings/swamp-software-factory-flow-metrics
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models: []
