@@ -4,7 +4,7 @@ version: "2026.10.14.1"
 description: >
   Deterministically selects repository-local skills for a task and composes a bounded agent prompt from configurable path and stage rules.
 
-repository: https://github.com/meagerfindings/swamp-task-skill-router
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
