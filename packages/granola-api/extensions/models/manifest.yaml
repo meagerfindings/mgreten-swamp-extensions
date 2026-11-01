@@ -88,7 +88,7 @@ description: |
 
   Tests use synthetic fixtures and an injected HTTP client; no real key or network
   requests are needed. No registry publication is needed to use the local source.
-repository: https://github.com/meagerfindings/swamp-granola-api
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 visibility: public
 labels:
   - granola
