@@ -280,3 +280,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-test-evidence-validator.git'
       ref: 462d24ac7dbc7cb8d7f723d6b4eec6945b4d45d7
+  - name: '@mgreten/todoist'
+    path: packages/todoist
+    manifest: packages/todoist/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:7621d8056ac4a04a96d8e5292936b996f16a9fcdc41df3458b9b3ab953c29eb0'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-todoist.git'
+      ref: 3542f2d1069b6a1e0f6f01c4634f710d00c5a70a
