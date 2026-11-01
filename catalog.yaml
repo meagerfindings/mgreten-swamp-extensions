@@ -16,6 +16,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-agent-browser-batch.git'
       ref: a8f460c952ad17462677de0af23b5a93a7c6429c
+  - name: '@mgreten/agent-provider-catalog'
+    path: packages/agent-provider-catalog
+    manifest: packages/agent-provider-catalog/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:a7bd32e3db2cf92d518a3d212db684d984bb3e5f4980d6b0eda31be61945dd2d'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-agent-provider-catalog.git'
+      ref: d3bff92b9d9a957b03e6f6c7f866eafd9844df96
   - name: '@mgreten/canva'
     path: packages/canva
     manifest: packages/canva/extensions/models/canva/manifest.yaml
