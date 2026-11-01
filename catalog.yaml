@@ -220,3 +220,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-road-trip-risk-watch.git'
       ref: 071f6df0b1a499c4774489d395407bfdad238921
+  - name: '@mgreten/slack-blocks'
+    path: packages/slack-blocks
+    manifest: packages/slack-blocks/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:b7a8a8309f4768714c23b927a0a4bd585b1e0935bdb6ec9c3c379cc86dc5797a'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-slack-blocks.git'
+      ref: fb1d4e1c08b9569f563802fbbba57191efd4a7c6
