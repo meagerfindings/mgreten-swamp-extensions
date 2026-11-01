@@ -10,7 +10,7 @@ description: >-
   answers many questions over shared state; bounded concurrent requests judge
   independent files through @swamp/typesafe-ai and @webframp/typesafe-batch.
   See the bundled README for live matgreten.dev examples and end-to-end timings.
-repository: "https://github.com/meagerfindings/swamp-jev-agent-tools"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 models:
