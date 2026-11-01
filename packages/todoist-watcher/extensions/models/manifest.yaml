@@ -7,7 +7,7 @@ description: >
   windows, deduplicates work with TTL claims across machines, applies rate-limit
   backoff, and emits a structured dispatch list for a host executor.
 
-repository: https://github.com/meagerfindings/swamp-todoist-watcher
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
