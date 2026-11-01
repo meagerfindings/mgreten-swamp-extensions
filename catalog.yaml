@@ -250,3 +250,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-software-factory-run-audit.git'
       ref: f9b58fca5b7543606a0ce33aa1a5724d6875d654
+  - name: '@mgreten/stack-status'
+    path: packages/stack-status
+    manifest: packages/stack-status/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:643440373f7a5059874d21b714c75fcc76dd0d3fedf820aaa5d5edcddb7a573e'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-stack-status.git'
+      ref: 60fb11ab700927e90fbe4e5050e15bbbc6caf4d4
