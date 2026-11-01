@@ -128,6 +128,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-graphite-linear-sync.git'
       ref: e7f778409696b69d49ef3c0f36ae01d60cb034ba
+  - name: '@mgreten/graphite-stack'
+    path: packages/graphite-stack
+    manifest: packages/graphite-stack/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:14fb71dd8f8d326845096c4ad81b1cd10e9716f1aa2402116ed038a52298c34c'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-graphite-stack.git'
+      ref: 6d0f665e444775a6f0c67177b305bfbbac85c28d
   - name: '@mgreten/macos-say-tts'
     path: packages/macos-say-tts
     manifest: packages/macos-say-tts/extensions/models/manifest.yaml
