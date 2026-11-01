@@ -7,7 +7,7 @@ description: >
   linear plan, finalize one-commit units, cascade restacks, pin a composed head,
   and submit gated, idempotent, ordered draft PRs.
 
-repository: https://github.com/meagerfindings/swamp-graphite-stack
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - graphite_stack.ts
