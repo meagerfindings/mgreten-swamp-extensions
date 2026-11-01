@@ -58,6 +58,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-code-review-panel.git'
       ref: 3408aa5d5bd8f3c3a3ac39845e6cd00f50f07366
+  - name: '@mgreten/colorado-homeschool-attendance'
+    path: packages/colorado-homeschool-attendance
+    manifest: packages/colorado-homeschool-attendance/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:f17a1ad14185d64ad0cb6310bae70bb24c0979a38b83533e67ff4f0885ebbbf9'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-colorado-homeschool-attendance.git'
+      ref: 2a297f63aaae8c360d3b8f860a0f4837073092ae
   - name: '@mgreten/granola-mcp'
     path: packages/granola-mcp
     manifest: packages/granola-mcp/extensions/models/manifest.yaml
