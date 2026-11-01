@@ -8,7 +8,7 @@ description: >
   refresh call fetches all activity; downstream models consume the cached
   feedbackEvent artifacts without making additional API calls.
 
-repository: https://github.com/meagerfindings/swamp-github-pr-feed
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - github_pr_feed.ts
