@@ -108,6 +108,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-granola-mcp.git'
       ref: 5bc94d2dc63b1dbc6daaec5b32b1d65c98f9519a
+  - name: '@mgreten/graphite-draft-submit'
+    path: packages/graphite-draft-submit
+    manifest: packages/graphite-draft-submit/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:2fb9200b99e40dde95098d3ebec6d1b692646abad82613276a825b5d408aff53'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-graphite-draft-submit.git'
+      ref: a9f2acb2e43e1dd5e275416b991a7eb9007c607d
   - name: '@mgreten/macos-say-tts'
     path: packages/macos-say-tts
     manifest: packages/macos-say-tts/extensions/models/manifest.yaml
