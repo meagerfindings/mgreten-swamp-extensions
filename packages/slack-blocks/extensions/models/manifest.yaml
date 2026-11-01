@@ -8,7 +8,7 @@ description: >
   (uploads local files first, then posts a message referencing them), and
   verifyAuth (auth.test smoke check after token setup).
 
-repository: https://github.com/meagerfindings/swamp-slack-blocks
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
