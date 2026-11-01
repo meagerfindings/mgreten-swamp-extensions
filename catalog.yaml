@@ -290,3 +290,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-todoist.git'
       ref: 3542f2d1069b6a1e0f6f01c4634f710d00c5a70a
+  - name: '@mgreten/todoist-watcher'
+    path: packages/todoist-watcher
+    manifest: packages/todoist-watcher/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:66470bf4d37563afa21ed2b3d6a12d904fab23a94d165a67c7c659bea910f7ff'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-todoist-watcher.git'
+      ref: 1e5f5b2f18c646f17490959e7766dbe4c12f8c39
