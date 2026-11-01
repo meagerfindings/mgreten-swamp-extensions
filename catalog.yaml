@@ -78,6 +78,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-github-file-track.git'
       ref: 6f99a9fb50e1a2356bd65b68c3cb50c19a346942
+  - name: '@mgreten/github-pr-feed'
+    path: packages/github-pr-feed
+    manifest: packages/github-pr-feed/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:7a0c92e2d565cd488a569d9dd3ffaef9f2a9cef500a2ce15fe6b5f7d59085350'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-github-pr-feed.git'
+      ref: 984aacdc19da215c32f9173015c3f781e8ce42f3
   - name: '@mgreten/granola-mcp'
     path: packages/granola-mcp
     manifest: packages/granola-mcp/extensions/models/manifest.yaml
