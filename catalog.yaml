@@ -46,6 +46,18 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/moment-savor.git'
       ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
+  - name: '@mgreten/code-review-panel'
+    path: packages/code-review-panel
+    manifest: packages/code-review-panel/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:1f4246f68b3346e1a7edc8aa4d7fe901e54895d546289917fad2c90f9c9b5fc8'
+    tests: deterministic
+    dependsOn:
+      - '@mgreten/cli-agent'
+      - '@mgreten/agent-provider-catalog'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-code-review-panel.git'
+      ref: 3408aa5d5bd8f3c3a3ac39845e6cd00f50f07366
   - name: '@mgreten/granola-mcp'
     path: packages/granola-mcp
     manifest: packages/granola-mcp/extensions/models/manifest.yaml

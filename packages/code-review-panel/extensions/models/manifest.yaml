@@ -1,0 +1,24 @@
+manifestVersion: 1
+name: "@mgreten/code-review-panel"
+version: "2026.10.14.1"
+license: MIT
+description: >
+  Run a panel of independent reviewer personas over one body of code and return
+  unified, actionable findings — the transpose of rubric grading, built for
+  review-and-fix workflows.
+
+repository: https://github.com/meagerfindings/swamp-code-review-panel
+
+dependencies:
+  - "@mgreten/cli-agent"
+  - "@mgreten/agent-provider-catalog"
+
+models:
+  - code_review_panel.ts
+  - code_review_panel_branch.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []
