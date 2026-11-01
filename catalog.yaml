@@ -200,3 +200,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-railway-read.git'
       ref: 5d4ee42cbafb67c72d853ad78cec2d1656579bc0
+  - name: '@mgreten/release-adoption'
+    path: packages/release-adoption
+    manifest: packages/release-adoption/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:5787a7d97327982899161ce7e1a2684e92e9b97c2b0f3b222e8ae71882e8838e'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-release-adoption.git'
+      ref: 6e94b1a4851973d279b66a3ccac9b6138ae449fe
