@@ -240,3 +240,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-software-factory-flow-metrics.git'
       ref: 13072ecf701064e063d4d2a2f5a025d5d8437ded
+  - name: '@mgreten/software-factory-run-audit'
+    path: packages/software-factory-run-audit
+    manifest: packages/software-factory-run-audit/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:d3da814956e475b7a55ae8332761eaea3e21288ba1e401948a6433c4563fb73e'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-software-factory-run-audit.git'
+      ref: f9b58fca5b7543606a0ce33aa1a5724d6875d654
