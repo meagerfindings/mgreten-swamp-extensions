@@ -8,7 +8,7 @@ description: >
   schedule (e.g. every few minutes) via your own automation. If a companion
   origin snapshot file is present at liveOriginStatePath, it resolves the first
   checkpoint from that live geocoded location on each run.
-repository: https://github.com/meagerfindings/swamp-road-trip-risk-watch
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 paths:
