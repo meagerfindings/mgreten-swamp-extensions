@@ -10,7 +10,7 @@ description: >
   file is missing. A composable primitive for keeping a local copy of a shared
   skill, snapshot, or config fresh.
 
-repository: https://github.com/meagerfindings/swamp-github-file-track
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - github_file_track.ts
