@@ -5,7 +5,7 @@ description: >
   Todoist task management integration for swamp — task CRUD and moves, project
   and task-comment sync, filter-based sync, and natural language due dates via Todoist API v1.
 
-repository: https://github.com/meagerfindings/swamp-todoist
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
