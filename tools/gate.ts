@@ -77,7 +77,12 @@ async function tests(env: GateEnv, c: Catalog): Promise<PackageResult[]> {
       res.push({ name: p.name, ok: false, detail: "tests: none (manual publish only)" });
       continue;
     }
-    const r = await exec([env.deno, "test", "-A", "--frozen", "--no-prompt", p.path], env.root, { NO_COLOR: "1" });
+    // A package that ships its own deno.json (import map + lock) is tested
+    // against that config; everything else shares the root deno.lock.
+    const own = await Deno.stat(`${env.root}/${p.path}/deno.json`).then(() => true, () => false);
+    const r = own
+      ? await exec([env.deno, "test", "-A", "--frozen", "--no-prompt", "--config", "deno.json", "."], `${env.root}/${p.path}`, { NO_COLOR: "1" })
+      : await exec([env.deno, "test", "-A", "--frozen", "--no-prompt", p.path], env.root, { NO_COLOR: "1" });
     const summary = /(ok|FAILED) \| (\d+) passed.*?\| (\d+) failed/.exec(r.stdout + r.stderr);
     res.push({
       name: p.name,
