@@ -1,0 +1,25 @@
+manifestVersion: 1
+name: "@mgreten/jev-agent-tools"
+version: "2026.10.14.1"
+license: MIT
+description: >-
+  Agent-facing, scoped Jev questions over supplied context or repository files.
+  Inspired by IndyDevDan's "10 Levels of Jev For Agentic Engineers" cheap-read
+  and files-at-scale demos: agents get typed Noul, Choice, and Score judgments
+  without loading every candidate file into their conversation. One request
+  answers many questions over shared state; bounded concurrent requests judge
+  independent files through @swamp/typesafe-ai and @webframp/typesafe-batch.
+  See the bundled README for live matgreten.dev examples and end-to-end timings.
+repository: "https://github.com/meagerfindings/swamp-jev-agent-tools"
+paths:
+  base: manifest
+models:
+  - extensions/models/jev_agent_tools.ts
+workflows:
+  - workflows/workflow-jev-agent-ask.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+dependencies:
+  - "@swamp/typesafe-ai"
+  - "@webframp/typesafe-batch"

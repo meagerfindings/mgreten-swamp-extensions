@@ -138,6 +138,18 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-graphite-stack.git'
       ref: 6d0f665e444775a6f0c67177b305bfbbac85c28d
+  - name: '@mgreten/jev-agent-tools'
+    path: packages/jev-agent-tools
+    manifest: packages/jev-agent-tools/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:e3ac4d3c03cd986eac856ae8e7ca2dfb8b55715c709de20145162803360a4a9f'
+    tests: deterministic
+    dependsOn:
+      - '@swamp/typesafe-ai'
+      - '@webframp/typesafe-batch'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-jev-agent-tools.git'
+      ref: 8e3c7287b2c2e3d718c4bd7a0b343930798b1728
   - name: '@mgreten/macos-say-tts'
     path: packages/macos-say-tts
     manifest: packages/macos-say-tts/extensions/models/manifest.yaml
