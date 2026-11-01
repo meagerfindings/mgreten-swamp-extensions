@@ -210,3 +210,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-release-adoption.git'
       ref: 6e94b1a4851973d279b66a3ccac9b6138ae449fe
+  - name: '@mgreten/road-trip-risk-watch'
+    path: packages/road-trip-risk-watch
+    manifest: packages/road-trip-risk-watch/extensions/models/@mgreten/road-trip-risk-watch/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:ed21dbd1ae1dedd054a5d312bfcb137646b85226b4f9421baeab2f37e7dafa4f'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-road-trip-risk-watch.git'
+      ref: 071f6df0b1a499c4774489d395407bfdad238921
