@@ -9,7 +9,7 @@ description: >
   traceable to the record it came from. Optional retained-worktree and external
   issue-tracker (Linear) correlation joins are pluggable, not required.
 
-repository: https://github.com/meagerfindings/swamp-software-factory-run-audit
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models: []
