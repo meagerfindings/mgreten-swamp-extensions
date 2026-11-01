@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@mgreten/pimoroni-explorer"
+version: "2026.10.14.1"
+description: >
+  Inspect, run code on, safely install apps to, and display Swamp Club scores
+  on a USB-connected Pimoroni Explorer running MicroPython.
+repository: https://github.com/meagerfindings/swamp-pimoroni-explorer
+license: MIT
+models:
+  - pimoroni_explorer.ts
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+  - apps/rick_roll.py.txt
+  - apps/swamp_dashboard.py.txt
+platforms:
+  - darwin-aarch64
+  - darwin-x86_64
+  - linux-aarch64
+  - linux-x86_64

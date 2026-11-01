@@ -180,3 +180,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-ntfy-notify.git'
       ref: 82346aaafde9670d161c2d59838e44991dafa3ce
+  - name: '@mgreten/pimoroni-explorer'
+    path: packages/pimoroni-explorer
+    manifest: packages/pimoroni-explorer/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:908fb2c20c2ac8e786940f7cfe063f3f7bb3c564bbf093b6a4ceabe5008e7e12'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-pimoroni-explorer.git'
+      ref: b1800071f5aa160ce856c637c1d394bfabc7b4b4
