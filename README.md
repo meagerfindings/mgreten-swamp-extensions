@@ -15,8 +15,10 @@ tools/
   privacy-allowlist.json     # reviewed false positives, by rule + path + fingerprint
   gate.ts                    # gate steps, fan-out over catalog.yaml
   lib/calver.ts              # content-hash CalVer decision (tested in calver_test.ts)
-extensions/models/ext_gate.ts  # @mgreten/ext-gate model (one method per gate step)
-workflows/workflow-ext-gate.yaml
+extensions/models/ext_gate.ts     # @mgreten/ext-gate model (one method per gate step)
+extensions/models/ext_publish.ts  # @mgreten/ext-publish model (tools/publish.ts)
+workflows/workflow-ext-gate.yaml     # gate only
+workflows/workflow-ext-release.yaml  # gate + publish + deduped ntfy; extPublishEnabled tag
 ```
 
 ## Commands
@@ -34,3 +36,11 @@ the full filtered history, and merges only when clean. `--mailmap` rewrites comm
 identities during the filter; keep that file outside this repo.
 
 The gate is read-only. Its dry-run step only runs `swamp extension push --dry-run`.
+
+`ext-release` runs the gate, then ext-publish. While the workflow's `extPublishEnabled`
+tag is `'false'` (default) publish applies each due version bump in a throwaway worktree
+and only runs `push --dry-run`. With it `'true'` (activation A7) publish commits the bump,
+pushes, and verifies the registry's latest version and repository. Already-published
+versions are no-ops. An unknown push outcome halts every later run until the registry
+shows the version or a human reruns with `--input clearUnknown=true`; nothing retries.
+The ntfy URL lives in the local `ntfy` vault (`swamp vault put ntfy url`), not in git.

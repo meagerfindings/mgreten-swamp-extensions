@@ -1,0 +1,11 @@
+type: '@mgreten/ntfy-notify'
+typeVersion: 2026.08.23.1
+id: 8188f7fd-2d8c-4104-9a90-1df4b7145c2f
+name: ntfy-notify
+version: 1
+tags: {}
+globalArguments:
+  # Private ntfy host kept out of this public repo; set with `swamp vault put ntfy url`.
+  ntfyUrl: '${{ vault.get("ntfy", "url") }}'
+  defaultTopic: mat-brief
+methods: {}

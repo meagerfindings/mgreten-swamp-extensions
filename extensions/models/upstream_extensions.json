@@ -1,0 +1,16 @@
+{
+  "@mgreten/ntfy-notify": {
+    "version": "2026.10.30.2",
+    "pulledAt": "2026-11-01T13:24:06.866Z",
+    "files": [
+      ".swamp/pulled-extensions/@mgreten/ntfy-notify/files/LICENSE.txt",
+      ".swamp/pulled-extensions/@mgreten/ntfy-notify/files/README.md",
+      ".swamp/pulled-extensions/@mgreten/ntfy-notify/manifest.yaml",
+      ".swamp/pulled-extensions/@mgreten/ntfy-notify/models/ntfy_notify.ts"
+    ],
+    "checksum": "65b4bd45a462446e83ea4b9abdb788d40d0ab48ca510cbcb697e5b68bede5982",
+    "filesChecksum": "8189152ac40dac040cb886194f28374635f4500d527bb07cf812b582d95fed4d",
+    "serverUrl": "https://swamp-club.com",
+    "publishedChannel": "stable"
+  }
+}

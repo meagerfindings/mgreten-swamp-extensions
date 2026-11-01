@@ -30,10 +30,10 @@ export interface GateEnv {
   deno: string;
 }
 
-const PUBLIC_REPOSITORY = "https://github.com/meagerfindings/mgreten-swamp-extensions";
+export const PUBLIC_REPOSITORY = "https://github.com/meagerfindings/mgreten-swamp-extensions";
 const FORBIDDEN_DEP_SCOPES = ["@companycam/", "@matg/"];
 
-async function exec(args: string[], cwd: string, env: Record<string, string> = {}) {
+export async function exec(args: string[], cwd: string, env: Record<string, string> = {}) {
   const out = await new Deno.Command(args[0], { args: args.slice(1), cwd, stdout: "piped", stderr: "piped", env }).output();
   return { code: out.code, stdout: new TextDecoder().decode(out.stdout), stderr: new TextDecoder().decode(out.stderr) };
 }
@@ -60,8 +60,9 @@ async function consistency(env: GateEnv, c: Catalog): Promise<PackageResult[]> {
     if (JSON.stringify([...deps].sort()) !== JSON.stringify([...p.dependsOn].sort())) problems.push("dependsOn != manifest dependencies");
     for (const d of deps) if (FORBIDDEN_DEP_SCOPES.some((s) => d.startsWith(s))) problems.push(`private-scope dependency ${d}`);
     if (c.visibility === "public" && repo !== PUBLIC_REPOSITORY) problems.push(`repository ${repo} is not the public monorepo`);
+    // A changed content hash is not an inconsistency: the version step turns
+    // it into a release decision and ext-publish applies it.
     const hash = await hashPackage(env.root, p.path, p.manifest);
-    if (hash !== p.contentHash) problems.push("contentHash stale (content changed since recorded)");
     res.push({ name: p.name, ok: problems.length === 0, detail: problems.join("; ") || "consistent", data: { contentHash: hash, repository: repo } });
   }
   const names = c.packages.map((p) => p.name);
@@ -111,9 +112,9 @@ async function version(env: GateEnv, c: Catalog): Promise<PackageResult[]> {
     });
     res.push({
       name: p.name,
-      // "release" means content changed but the bump is not applied yet.
-      ok: d.action === "unchanged" || d.action === "pending" || d.action === "baseline",
-      detail: d.action === "release" ? `release ${d.version} needed: run deno task apply-versions --today ${env.today}` : `${d.action}: ${d.reason}`,
+      // Only drift blocks: "release" (content changed) is ext-publish's job.
+      ok: d.action !== "drift",
+      detail: d.action === "release" ? `release: content changed; next version ${d.version}` : `${d.action}: ${d.reason}`,
       data: { action: d.action, version: d.version, currentVersion: p.version, registryLatest: latest, contentHash: hash },
     });
   }

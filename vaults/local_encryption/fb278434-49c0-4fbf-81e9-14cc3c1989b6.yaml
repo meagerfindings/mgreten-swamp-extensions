@@ -1,0 +1,6 @@
+id: fb278434-49c0-4fbf-81e9-14cc3c1989b6
+name: ntfy
+type: local_encryption
+config:
+  auto_generate: true
+createdAt: '2026-11-01T13:24:02.960Z'

@@ -1,0 +1,8 @@
+type: '@mgreten/ext-publish'
+typeVersion: 2026.11.01.1
+id: ae6dccc1-919b-43cf-b37d-d822728ff6c9
+name: ext-publish
+version: 1
+tags: {}
+globalArguments: {}
+methods: {}

@@ -1,0 +1,157 @@
+id: 650381d6-0bbb-41c8-9819-addf7ebe712e
+name: ext-release
+description: >-
+  ext-gate then ext-publish over catalog.yaml, as one run. Every gate step runs
+  and records a result; ext-publish reads only this run's results, so a stale
+  or partial gate never publishes. Kill switch and activation (A7): the
+  extPublishEnabled tag. While it is 'false' (the default) the publish stage
+  does everything except the real `swamp extension push`. Notifies ntfy
+  mat-brief only on failure or for packages ready but awaiting activation,
+  deduped (new or changed signature, then at most every 24 h). Scheduled from
+  agentic-tooling's scheduler via its ext-catalog-observe bridge workflow.
+tags:
+  domain: extension-catalog
+  extPublishEnabled: 'false'
+  # Dry-run observation started; A7 may be proposed after 7 consecutive green days.
+  extPublishObservationStart: '2026-11-01'
+inputs:
+  type: object
+  properties:
+    today:
+      type: string
+      description: Release day YYYY-MM-DD in America/Denver.
+    now:
+      type: string
+      description: ISO timestamp of this run (notify dedupe).
+    clearUnknown:
+      type: boolean
+      default: false
+      description: Set only after a human resolved an unknown push outcome.
+  required:
+    - today
+    - now
+jobs:
+  - name: gate
+    description: All gate steps; each records a result even when it fails.
+    steps:
+      - name: consistency
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: consistency
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn: []
+        weight: 0
+        allowFailure: true
+      - name: tests
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: tests
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: consistency
+            condition: {type: completed}
+        weight: 0
+        allowFailure: true
+      - name: version
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: version
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: tests
+            condition: {type: completed}
+        weight: 0
+        allowFailure: true
+      - name: privacy
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: privacy
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: version
+            condition: {type: completed}
+        weight: 0
+        allowFailure: true
+      - name: dry-run
+        task:
+          type: model_method
+          modelIdOrName: ext-gate
+          methodName: dry-run
+          inputs:
+            today: ${{ inputs.today }}
+        dependsOn:
+          - step: privacy
+            condition: {type: completed}
+        weight: 0
+        allowFailure: true
+    dependsOn: []
+    weight: 0
+  - name: release
+    description: Publish (or dry-run) changed packages whose gate is green in this run, then notify.
+    steps:
+      - name: publish
+        task:
+          type: model_method
+          modelIdOrName: ext-publish
+          methodName: publish
+          inputs:
+            today: ${{ inputs.today }}
+            now: ${{ inputs.now }}
+            gateRunId: ${{ run.id }}
+            enabled: ${{ run.tags.?extPublishEnabled.orValue('false') == 'true' }}
+            observationStart: ${{ run.tags.?extPublishObservationStart.orValue(inputs.today) }}
+            gateResults: ${{ data.query('modelName == "ext-gate" && specName == "result" && workflowRunId == "' + run.id + '"') }}
+            previous: ${{ data.latest("ext-publish", "run").?attributes.orValue({}) }}
+            clearUnknown: ${{ inputs.clearUnknown }}
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: notify
+        description: ntfy on failure or ready-awaiting-activation, deduped by ext-publish.
+        guard: '${{ !(data.latest("ext-publish", "run").?attributes.?gateRunId.orValue("") == run.id && data.latest("ext-publish", "run").?attributes.?notify.orValue(false)) }}'
+        task:
+          type: model_method
+          modelIdOrName: ntfy-notify
+          methodName: send
+          inputs:
+            topic: mat-brief
+            title: '${{ data.latest("ext-publish", "run").?attributes.?title.orValue("ext-publish") }}'
+            message: '${{ data.latest("ext-publish", "run").?attributes.?message.orValue("see ext-publish run") }}'
+            priority: 3
+            tags: [package]
+        dependsOn:
+          - step: publish
+            condition: {type: always}
+        weight: 0
+        allowFailure: false
+      - name: notify-publish-crashed
+        description: ext-publish failed without recording this run; say so once per run.
+        guard: '${{ data.latest("ext-publish", "run").?attributes.?gateRunId.orValue("") == run.id }}'
+        task:
+          type: model_method
+          modelIdOrName: ntfy-notify
+          methodName: send
+          inputs:
+            topic: mat-brief
+            title: ext-publish crashed
+            message: '${{ "Run " + run.id + ": ext-publish failed before recording a result; see swamp workflow history ext-release in the catalog repo." }}'
+            priority: 4
+            tags: [warning]
+        dependsOn:
+          - step: publish
+            condition: {type: failed}
+        weight: 0
+        allowFailure: false
+    dependsOn:
+      - job: gate
+        condition: {type: completed}
+    weight: 0
+version: 1

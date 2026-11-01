@@ -9,6 +9,7 @@
  */
 import { decideVersion } from "./lib/calver.ts";
 import { hashPackage, readCatalog, writeCatalog } from "./lib/catalog.ts";
+import { applyRelease } from "./lib/release.ts";
 import { type GateEnv, registryLatest } from "./gate.ts";
 
 const i = Deno.args.indexOf("--today");
@@ -35,12 +36,7 @@ for (const p of catalog.packages) {
     today,
   });
   if (d.action === "release") {
-    const file = `${root}/${p.manifest}`;
-    const text = await Deno.readTextFile(file);
-    if (!/^version:.*$/m.test(text)) throw new Error(`${p.manifest}: no top-level version line`);
-    await Deno.writeTextFile(file, text.replace(/^version:.*$/m, `version: "${d.version}"`));
-    p.version = d.version;
-    p.contentHash = hash; // version line is excluded from the hash, so it is unchanged by the write
+    await applyRelease(root, catalog, p.name, d.version);
   } else if (d.action === "baseline") {
     p.contentHash = hash;
   }
