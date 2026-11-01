@@ -6,7 +6,7 @@ description: >
   recognized multi-language test-runner command, then commit-pins the evidence
   to an immutable Git commit and branch, returning a single pass/fail verdict.
 
-repository: https://github.com/meagerfindings/swamp-test-evidence-validator
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
