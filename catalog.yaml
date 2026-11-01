@@ -26,6 +26,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-agent-provider-catalog.git'
       ref: d3bff92b9d9a957b03e6f6c7f866eafd9844df96
+  - name: '@mgreten/brief-sanitize'
+    path: packages/brief-sanitize
+    manifest: packages/brief-sanitize/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:e13edc599d338c067f91a6415213a7b6f3cd3cd495f8c9a66dc8459bac1e87bd'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-brief-sanitize.git'
+      ref: 5fb640aa86eac63f48b6382425177517fd45331b
   - name: '@mgreten/canva'
     path: packages/canva
     manifest: packages/canva/extensions/models/canva/manifest.yaml
