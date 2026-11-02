@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: '@mgreten/election-packet'
+version: 2026.11.02.1
+description: Politically neutral ballot-evidence validation, concise packet assembly and local PDF export. No voter profiles, political scoring or personal workflows.
+repository: https://github.com/meagerfindings/mgreten-swamp-extensions
+paths:
+  base: manifest
+models:
+  - extensions/models/election_packet.ts
+  - extensions/models/election_pdf.ts
+workflows: []
+vaults: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - examples/election-packet.json
+dependencies: []

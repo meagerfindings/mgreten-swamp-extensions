@@ -1,0 +1,164 @@
+{
+  "outputStem": "Elections/2026/Synthetic election compiler check",
+  "packet": {
+    "version": 1,
+    "asOf": "2026-11-02",
+    "ballot": {
+      "electionDate": "2026-11-03",
+      "jurisdiction": "Example City — synthetic test, not a real election guide",
+      "style": {
+        "confirmed": true,
+        "description": "Synthetic style A",
+        "sources": ["official"]
+      },
+      "items": [
+        {
+          "id": "council-b",
+          "kind": "candidate",
+          "label": "Council — Example Candidate B"
+        },
+        {
+          "id": "council-a",
+          "kind": "candidate",
+          "label": "Council — Example Candidate A"
+        },
+        { "id": "measure-1", "kind": "measure", "label": "Example Measure 1" },
+        {
+          "id": "judge-1",
+          "kind": "judge",
+          "label": "Example Judge — Example Court"
+        }
+      ]
+    },
+    "sources": [
+      {
+        "id": "official",
+        "title": "Synthetic official evidence fixture",
+        "url": "https://example.org/official",
+        "kind": "official",
+        "accessed": "2026-11-02",
+        "historical": false
+      },
+      {
+        "id": "opinion",
+        "title": "Synthetic opinion fixture",
+        "url": "https://example.org/opinion",
+        "kind": "opinion",
+        "accessed": "2026-11-02",
+        "historical": false
+      }
+    ],
+    "subjects": [
+      {
+        "id": "council-a",
+        "kind": "candidate",
+        "reviewed": true,
+        "summary": {
+          "text": "Supports revising the permit process.",
+          "status": "documented",
+          "sources": ["official"]
+        },
+        "findings": [
+          {
+            "text": "The proposal has not been adopted.",
+            "status": "documented",
+            "sources": ["official"]
+          }
+        ]
+      },
+      {
+        "id": "council-b",
+        "kind": "candidate",
+        "reviewed": true,
+        "summary": {
+          "text": "Supports keeping the existing permit process.",
+          "status": "documented",
+          "sources": ["official"]
+        },
+        "findings": [
+          {
+            "text": "The existing rules remain in effect.",
+            "status": "documented",
+            "sources": ["official"]
+          }
+        ]
+      },
+      {
+        "id": "measure-1",
+        "kind": "measure",
+        "reviewed": true,
+        "summary": {
+          "text": "Changes an application deadline.",
+          "status": "documented",
+          "sources": ["official"]
+        },
+        "yesMeans": {
+          "text": "Moves the deadline to June.",
+          "status": "documented",
+          "sources": ["official"]
+        },
+        "noMeans": {
+          "text": "Keeps the deadline in April.",
+          "status": "documented",
+          "sources": ["official"]
+        },
+        "fiscal": {
+          "text": "No fiscal estimate was located in the reviewed materials.",
+          "status": "unknown",
+          "sources": []
+        },
+        "positions": [
+          {
+            "organization": "Example Civic Association",
+            "position": "oppose",
+            "evidence": {
+              "text": "The association favors the earlier deadline.",
+              "status": "opinion",
+              "sources": ["opinion"]
+            }
+          }
+        ]
+      },
+      {
+        "id": "judge-1",
+        "kind": "judge",
+        "reviewed": true,
+        "summary": {
+          "text": "The examples show attention to evidentiary requirements; they do not establish the entire record.",
+          "status": "opinion",
+          "sources": ["official"]
+        },
+        "appointment": {
+          "text": "Selected by Example Governor in 2020; took office in 2021.",
+          "status": "documented",
+          "sources": ["official"]
+        },
+        "evaluation": {
+          "text": "Meets standards; survey sample was small.",
+          "status": "documented",
+          "sources": ["official"]
+        },
+        "accountability": {
+          "text": "An opinion writer alleges an accountability lapse; no adjudicated misconduct finding is established by this fixture.",
+          "status": "allegation",
+          "sources": ["opinion"]
+        },
+        "cases": [{
+          "name": "Example v. Example",
+          "role": "author",
+          "outcome": "new_trial",
+          "finding": {
+            "text": "Ordered a new trial due to an unreliable identification.",
+            "status": "documented",
+            "sources": ["official"]
+          },
+          "limits": {
+            "text": "Not an acquittal or release order. Later custody and trial outcomes were not verified.",
+            "status": "documented",
+            "sources": ["official"]
+          }
+        }]
+      }
+    ]
+  }
+}
