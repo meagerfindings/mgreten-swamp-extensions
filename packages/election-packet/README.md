@@ -44,7 +44,7 @@ The exporter requires `uvx`, WeasyPrint's native text/font libraries, and fonts 
 
 ```bash
 ~/.swamp/deno/deno check extensions/models/election_packet.ts extensions/models/election_pdf.ts
-~/.swamp/deno/deno test --allow-read --allow-write extensions/models/election_packet_test.ts
+~/.swamp/deno/deno test --allow-read --allow-write --allow-run --allow-env=PATH extensions/models/
 ```
 
-Tests use fictional evidence. Real election research and voter decisions are not test fixtures.
+Tests use fictional evidence. PDF tests substitute a temporary local renderer using `/bin/sh` and `cat`; they do not download or run WeasyPrint. They check distinct concise/appendix output, failed rendering, invalid PDF output, overwrite protection and path safety. Real election research and voter decisions are not test fixtures.

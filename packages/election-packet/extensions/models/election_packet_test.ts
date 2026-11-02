@@ -1,6 +1,5 @@
 import { deepStrictEqual as equal, ok, rejects } from "node:assert/strict";
 import { model, Packet } from "./election_packet.ts";
-import { model as pdf } from "./election_pdf.ts";
 
 async function fixture() {
   return Packet.parse(
@@ -140,29 +139,4 @@ Deno.test("strict public-evidence inputs reject voter fields and private attachm
   ok(!doc.html.includes("<script>"));
   ok(doc.html.includes("&lt;script&gt;"));
   ok(doc.markdown.includes("\\|"));
-});
-
-Deno.test("PDF export refuses existing files, traversal and symlink descendants before rendering", async () => {
-  const root = await Deno.realPath(await Deno.makeTempDir());
-  try {
-    const packet = await fixture();
-    const ctx = { ...context(), globalArgs: { outputRoot: root } };
-    await Deno.writeTextFile(`${root}/existing.pdf`, "preserve original");
-    await rejects(
-      () => pdf.methods.export.execute({ packet, outputStem: "existing" }, ctx),
-      /overwrite/,
-    );
-    equal(await Deno.readTextFile(`${root}/existing.pdf`), "preserve original");
-    await rejects(() =>
-      pdf.methods.export.execute({ packet, outputStem: "../escape" }, ctx)
-    );
-    await Deno.symlink(root, `${root}/link`);
-    await rejects(
-      () =>
-        pdf.methods.export.execute({ packet, outputStem: "link/escape" }, ctx),
-      /symlinks/,
-    );
-  } finally {
-    await Deno.remove(root, { recursive: true });
-  }
 });
