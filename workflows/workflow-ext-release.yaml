@@ -11,8 +11,8 @@ description: >-
   agentic-tooling's scheduler via its ext-catalog-observe bridge workflow.
 tags:
   domain: extension-catalog
-  extPublishEnabled: 'false'
-  # Dry-run observation started; A7 may be proposed after 7 consecutive green days.
+  extPublishEnabled: 'true'
+  # A7 approved by Mat on 2026-11-03, before the 7-day observation finished.
   extPublishObservationStart: '2026-11-01'
 inputs:
   type: object
