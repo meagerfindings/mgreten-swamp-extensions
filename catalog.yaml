@@ -111,8 +111,8 @@ packages:
   - name: '@mgreten/graphite-draft-submit'
     path: packages/graphite-draft-submit
     manifest: packages/graphite-draft-submit/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:2fb9200b99e40dde95098d3ebec6d1b692646abad82613276a825b5d408aff53'
+    version: 2026.11.03.1
+    contentHash: 'sha256:ef92708c620f2e89823b60e7ffbd0db67528177104704b1779a6c33fb05b47dd'
     tests: deterministic
     dependsOn: []
     source:
