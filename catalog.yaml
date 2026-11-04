@@ -273,8 +273,8 @@ packages:
   - name: '@mgreten/test-evidence-validator'
     path: packages/test-evidence-validator
     manifest: packages/test-evidence-validator/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:b9f3ba9fcecf56957a1ecce9a5651e77abf05ae9f76e0bd04b4a9004371f8e74'
+    version: 2026.11.03.1
+    contentHash: 'sha256:3e2168cada8543b9ad604361e00456c39b83929c58d5c420749f9023e02199aa'
     tests: deterministic
     dependsOn: []
     source:
