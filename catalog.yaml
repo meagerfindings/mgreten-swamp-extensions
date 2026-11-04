@@ -49,8 +49,8 @@ packages:
   - name: '@mgreten/code-review-panel'
     path: packages/code-review-panel
     manifest: packages/code-review-panel/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:1f4246f68b3346e1a7edc8aa4d7fe901e54895d546289917fad2c90f9c9b5fc8'
+    version: 2026.11.03.1
+    contentHash: 'sha256:b5754f77ce4bcb8ae25254df2b749963288d1fd32d945567c4c56083fe484689'
     tests: deterministic
     dependsOn:
       - '@mgreten/cli-agent'
