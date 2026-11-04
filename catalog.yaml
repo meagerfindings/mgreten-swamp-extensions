@@ -293,8 +293,8 @@ packages:
   - name: '@mgreten/todoist-watcher'
     path: packages/todoist-watcher
     manifest: packages/todoist-watcher/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:66470bf4d37563afa21ed2b3d6a12d904fab23a94d165a67c7c659bea910f7ff'
+    version: 2026.11.03.1
+    contentHash: 'sha256:48206a4b936f3b2856811ad61a2f45b5b9343193fab8818ad22a7dc752913d57'
     tests: deterministic
     dependsOn: []
     source:
