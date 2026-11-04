@@ -131,8 +131,8 @@ packages:
   - name: '@mgreten/graphite-stack'
     path: packages/graphite-stack
     manifest: packages/graphite-stack/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:14fb71dd8f8d326845096c4ad81b1cd10e9716f1aa2402116ed038a52298c34c'
+    version: 2026.11.03.1
+    contentHash: 'sha256:f1aa49505dbe5337c4aa86f65a303f14e945a9b3aff5348865b9064d1a54bcd9'
     tests: deterministic
     dependsOn: []
     source:
