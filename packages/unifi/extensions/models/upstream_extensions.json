@@ -3,7 +3,6 @@
     "version": "2026.03.10.1",
     "pulledAt": "2026-05-18T00:07:13.542Z",
     "files": [
-      ".swamp/bundles/1d052c69/unifi_traffic.js",
       ".swamp/pulled-extensions/@stack72/ubiquity/files/LICENSE.txt",
       ".swamp/pulled-extensions/@stack72/ubiquity/files/README.md",
       ".swamp/pulled-extensions/@stack72/ubiquity/manifest.yaml",
