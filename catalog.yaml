@@ -19,8 +19,8 @@ packages:
   - name: '@mgreten/agent-provider-catalog'
     path: packages/agent-provider-catalog
     manifest: packages/agent-provider-catalog/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:a7bd32e3db2cf92d518a3d212db684d984bb3e5f4980d6b0eda31be61945dd2d'
+    version: 2026.11.03.1
+    contentHash: 'sha256:eae3ac159387bb34a4342ff7f2888e6d873f1599dd719ea5f0d33fc8f206a4d1'
     tests: deterministic
     dependsOn: []
     source:

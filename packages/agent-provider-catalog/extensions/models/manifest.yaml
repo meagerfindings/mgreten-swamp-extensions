@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/agent-provider-catalog"
-version: "2026.10.14.1"
+version: "2026.11.03.1"
 license: MIT
 description: >
   A pure, deterministic provider/model catalog with tiered fallback and
