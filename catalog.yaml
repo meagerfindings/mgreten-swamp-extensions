@@ -263,8 +263,8 @@ packages:
   - name: '@mgreten/task-skill-router'
     path: packages/task-skill-router
     manifest: packages/task-skill-router/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:2a7729e1d7dc12c212e07dd68cd057c67417798eeba17c621a6c64cc9468ed4c'
+    version: 2026.11.03.1
+    contentHash: 'sha256:1784f5475082d42e84bddfb043bbeeff264ef972e79d23d7eec6fc8f99ab6c49'
     tests: deterministic
     dependsOn: []
     source:
