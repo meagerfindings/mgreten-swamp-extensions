@@ -61,8 +61,8 @@ packages:
   - name: '@mgreten/colorado-homeschool-attendance'
     path: packages/colorado-homeschool-attendance
     manifest: packages/colorado-homeschool-attendance/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:f17a1ad14185d64ad0cb6310bae70bb24c0979a38b83533e67ff4f0885ebbbf9'
+    version: 2026.11.03.1
+    contentHash: 'sha256:669ff22fcf1e48021650fc19fd8d39ba5c6841fb227cbdb7e98aa36f84ec76ba'
     tests: deterministic
     dependsOn: []
     source:
