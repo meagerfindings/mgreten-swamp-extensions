@@ -223,8 +223,8 @@ packages:
   - name: '@mgreten/slack-blocks'
     path: packages/slack-blocks
     manifest: packages/slack-blocks/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:b7a8a8309f4768714c23b927a0a4bd585b1e0935bdb6ec9c3c379cc86dc5797a'
+    version: 2026.11.03.1
+    contentHash: 'sha256:ab8bcabfb4c1b451dc411e33d18e03206f6870625c11f4322692d176e7b1208c'
     tests: deterministic
     dependsOn: []
     source:
