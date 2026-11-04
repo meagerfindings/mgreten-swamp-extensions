@@ -233,8 +233,8 @@ packages:
   - name: '@mgreten/software-factory-flow-metrics'
     path: packages/software-factory-flow-metrics
     manifest: packages/software-factory-flow-metrics/extensions/manifest.yaml
-    version: 2026.10.14.2
-    contentHash: 'sha256:ffa703653f65e5540f8b7b79bea83e8e6917c3bb00c1ba3849064c12846c0e98'
+    version: 2026.11.03.1
+    contentHash: 'sha256:24653a323e75d861ed1273248b168406c75dbb7bd5d14c3cebb904f39b0c7a54'
     tests: deterministic
     dependsOn: []
     source:
