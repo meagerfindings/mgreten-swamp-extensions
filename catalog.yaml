@@ -29,8 +29,8 @@ packages:
   - name: '@mgreten/brief-sanitize'
     path: packages/brief-sanitize
     manifest: packages/brief-sanitize/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:e13edc599d338c067f91a6415213a7b6f3cd3cd495f8c9a66dc8459bac1e87bd'
+    version: 2026.11.03.1
+    contentHash: 'sha256:492a57dd4ff566ae2fd23b5fb9aafb628ca24c192348c4859e4e4784f8da67f1'
     tests: deterministic
     dependsOn: []
     source:
