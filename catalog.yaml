@@ -243,8 +243,8 @@ packages:
   - name: '@mgreten/software-factory-run-audit'
     path: packages/software-factory-run-audit
     manifest: packages/software-factory-run-audit/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:d3da814956e475b7a55ae8332761eaea3e21288ba1e401948a6433c4563fb73e'
+    version: 2026.11.03.1
+    contentHash: 'sha256:49abca517fd2bfaedc37c3dc79a5724fa7964710dcaeb6b1ac71b743bc4ca8fb'
     tests: deterministic
     dependsOn: []
     source:
