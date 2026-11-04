@@ -121,8 +121,8 @@ packages:
   - name: '@mgreten/graphite-linear-sync'
     path: packages/graphite-linear-sync
     manifest: packages/graphite-linear-sync/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:0d2697a922843e8b9544f18cb0a7af40c294cfcdd1ee95a03e7e6dc530745b4f'
+    version: 2026.11.03.1
+    contentHash: 'sha256:0eb1bc7f728a58cbd801a16fe613658a0966bce6e89c22f1de0ce66608d392ff'
     tests: deterministic
     dependsOn: []
     source:
