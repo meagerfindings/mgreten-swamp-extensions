@@ -91,8 +91,8 @@ packages:
   - name: '@mgreten/granola-api'
     path: packages/granola-api
     manifest: packages/granola-api/extensions/models/manifest.yaml
-    version: 2026.10.29.2
-    contentHash: 'sha256:e5b28b02bd60e030a275964a90936bfe3d2418ea9c4a724199602a647cfdde4e'
+    version: 2026.11.03.1
+    contentHash: 'sha256:712b7fa7c9e22905bb4647fa59eb0e44c05071ab2489767cb075311cd73586ef'
     tests: deterministic
     dependsOn: []
     source:
