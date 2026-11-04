@@ -283,8 +283,8 @@ packages:
   - name: '@mgreten/todoist'
     path: packages/todoist
     manifest: packages/todoist/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:7621d8056ac4a04a96d8e5292936b996f16a9fcdc41df3458b9b3ab953c29eb0'
+    version: 2026.11.03.1
+    contentHash: 'sha256:1b2e528a3613c68ee77dc73961fe12ef1409ea56db6a75c47596c1895eca1f2b'
     tests: deterministic
     dependsOn: []
     source:
