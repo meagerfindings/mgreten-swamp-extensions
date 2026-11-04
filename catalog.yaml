@@ -203,8 +203,8 @@ packages:
   - name: '@mgreten/release-adoption'
     path: packages/release-adoption
     manifest: packages/release-adoption/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:5787a7d97327982899161ce7e1a2684e92e9b97c2b0f3b222e8ae71882e8838e'
+    version: 2026.11.03.1
+    contentHash: 'sha256:6246d8ac589274862062f3b459deb6380d6490d7df83f85aa872bb1dc175843e'
     tests: deterministic
     dependsOn: []
     source:
