@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/jev-agent-tools"
-version: "2026.10.14.1"
+version: "2026.11.03.1"
 license: MIT
 description: >-
   Agent-facing, scoped Jev questions over supplied context or repository files.

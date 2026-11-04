@@ -141,8 +141,8 @@ packages:
   - name: '@mgreten/jev-agent-tools'
     path: packages/jev-agent-tools
     manifest: packages/jev-agent-tools/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:e3ac4d3c03cd986eac856ae8e7ca2dfb8b55715c709de20145162803360a4a9f'
+    version: 2026.11.03.1
+    contentHash: 'sha256:56b382d9542e061a8d8ca413ac17892870d421eef3c340d2347139797a66533f'
     tests: deterministic
     dependsOn:
       - '@swamp/typesafe-ai'
