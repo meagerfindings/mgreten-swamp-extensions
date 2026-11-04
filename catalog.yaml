@@ -253,8 +253,8 @@ packages:
   - name: '@mgreten/stack-status'
     path: packages/stack-status
     manifest: packages/stack-status/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:643440373f7a5059874d21b714c75fcc76dd0d3fedf820aaa5d5edcddb7a573e'
+    version: 2026.11.03.1
+    contentHash: 'sha256:3b9d7777fc24ca1ef89d68cc807b9b5c9dc8a755354199cc38ac9080bbf327e1'
     tests: deterministic
     dependsOn: []
     source:

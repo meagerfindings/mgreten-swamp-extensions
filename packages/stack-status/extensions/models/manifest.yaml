@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/stack-status"
-version: "2026.10.14.1"
+version: "2026.11.03.1"
 description: >
   Fetches PR-stack review and CI status from GitHub via `gh` and renders it as
   a self-contained, theme-aware HTML flowchart — for anyone using Graphite-style
