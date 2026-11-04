@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/github-file-track"
-version: "2026.10.14.1"
+version: "2026.11.03.1"
 license: MIT
 description: >
   Track files in GitHub repositories and materialize them on the local

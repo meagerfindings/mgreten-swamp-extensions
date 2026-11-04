@@ -71,8 +71,8 @@ packages:
   - name: '@mgreten/github-file-track'
     path: packages/github-file-track
     manifest: packages/github-file-track/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:1a713eaf6eb1c17fd6bf716dbf5e21f3b8aa4a604854db6c0ef0d4d63467655e'
+    version: 2026.11.03.1
+    contentHash: 'sha256:94241fc72da45b750c32a17dc94476ed21beed8d70a101052e211c5c944462ac'
     tests: deterministic
     dependsOn: []
     source:
