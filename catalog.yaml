@@ -183,8 +183,8 @@ packages:
   - name: '@mgreten/pimoroni-explorer'
     path: packages/pimoroni-explorer
     manifest: packages/pimoroni-explorer/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:908fb2c20c2ac8e786940f7cfe063f3f7bb3c564bbf093b6a4ceabe5008e7e12'
+    version: 2026.11.03.1
+    contentHash: 'sha256:a7f425ecb7d63227b9662f143667f21cf2bc5e109902940101c6597882b9c28c'
     tests: deterministic
     dependsOn: []
     source:
