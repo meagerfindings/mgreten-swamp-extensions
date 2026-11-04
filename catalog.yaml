@@ -193,8 +193,8 @@ packages:
   - name: '@mgreten/railway-read'
     path: packages/railway-read
     manifest: packages/railway-read/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:122c2ceeeebcd1b6386c6453844b6e7ca442f6beaf9adae3a31ebf439c985314'
+    version: 2026.11.03.1
+    contentHash: 'sha256:95aec6bab36a3f4f6f76a9bb6169b65172edcae3cea9cec999ee0323a190f104'
     tests: deterministic
     dependsOn: []
     source:
