@@ -319,6 +319,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-feedback-response-core.git'
       ref: 60e0a0848d78536bef1cd44613dc793492dbcd72
+  - name: '@mgreten/feedback-triage'
+    path: packages/feedback-triage
+    manifest: packages/feedback-triage/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:1196d857c4e476fc715c10619c5e2141b1f192dfb81fd2bfbbd80b3172093a40'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-feedback-triage.git'
+      ref: 65a10ed002ec7819aa21b531e327e4c98b0063df
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
