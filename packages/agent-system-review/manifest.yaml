@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/agent-system-review"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Deterministically ranks bounded, caller-supplied agent-system evidence into
   recommendation-only proposals that always require separate human approval.

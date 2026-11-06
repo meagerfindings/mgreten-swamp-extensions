@@ -29,8 +29,8 @@ packages:
   - name: '@mgreten/agent-system-review'
     path: packages/agent-system-review
     manifest: packages/agent-system-review/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:91bb5246780461d7d7ee00fba3fe4db5335b0034e10145a0b2dadaac168e9af4'
+    version: 2026.11.06.1
+    contentHash: 'sha256:abba4c587556cb9b8851e296530d445d91f303bf7d4b7e5286c8c79dd33970e9'
     tests: deterministic
     dependsOn: []
     source:
