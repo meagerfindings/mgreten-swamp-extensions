@@ -584,8 +584,8 @@ packages:
   - name: '@mgreten/moment-savor'
     path: packages/moment-savor
     manifest: packages/moment-savor/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:6238a08d20445d19a97356ea2424415c7293ad1dce5ab7ec6ebdc3370ca40b89'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ca9aa2edebd142f928d5eac567384541da6a61aa9ef9edd1cdf483538c7e3b04'
     tests: deterministic
     dependsOn: []
     source:
