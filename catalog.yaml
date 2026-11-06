@@ -472,8 +472,8 @@ packages:
   - name: '@mgreten/incident-dispatcher'
     path: packages/incident-dispatcher
     manifest: packages/incident-dispatcher/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:c160f9119066bbd1ea94ee95a22b1f8b74d3833137d0e996887926d3f357ec18'
+    version: 2026.11.06.1
+    contentHash: 'sha256:56151adaf4a6927e9d890148e46e8c7683344e70b8b305494bcd9946601253dc'
     tests: deterministic
     dependsOn: []
     source:
