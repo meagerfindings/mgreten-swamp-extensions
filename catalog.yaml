@@ -198,6 +198,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-graphite-stack.git'
       ref: 6d0f665e444775a6f0c67177b305bfbbac85c28d
+  - name: '@mgreten/grist'
+    path: packages/grist
+    manifest: packages/grist/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:1ded9e0b90adeac02b699ce23bd2fe46a0b8f86f3381cf4cb49d71c9913df024'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-grist.git'
+      ref: 4b79f7b3d2f585707208bb11dc63bd308e25342d
   - name: '@mgreten/jev-agent-tools'
     path: packages/jev-agent-tools
     manifest: packages/jev-agent-tools/manifest.yaml
