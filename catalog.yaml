@@ -182,8 +182,8 @@ packages:
   - name: '@mgreten/cron-builder'
     path: packages/cron-builder
     manifest: packages/cron-builder/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:cf45c5024948941403a7461c8e1603969fff1611898950b221096e644ae39b2f'
+    version: 2026.11.06.1
+    contentHash: 'sha256:9f0155e855511ad4a1c834a254c0e71f1886f38924c1bece8c87da8c34bf0e42'
     tests: deterministic
     dependsOn: []
     source:
