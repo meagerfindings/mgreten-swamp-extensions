@@ -990,3 +990,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-trip-expense-tracker.git'
       ref: 9091d3967e74915d6f2e83b31078001ee6eaf009
+  - name: '@mgreten/trip-packing'
+    path: packages/trip-packing
+    manifest: packages/trip-packing/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:a2e996a5c0be46b4000ede2f1c58c21a8ae4d782077f5edc18cb05e687b910a0'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-trip-packing.git'
+      ref: fae1f9043275756deff7c60bd26bef6041369bee

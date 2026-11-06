@@ -1,0 +1,15 @@
+{
+  "projectName": "Fixture family road trip",
+  "days": 5,
+  "travelMode": "car",
+  "lodging": "rental",
+  "activities": ["casual", "hiking", "farm"],
+  "travelers": 4,
+  "includesKids": true,
+  "includeWorkGear": false,
+  "international": false,
+  "customItems": [
+    { "category": "food", "item": "Reusable coffee mugs" },
+    { "category": "toiletries", "item": "Sunscreen" }
+  ]
+}
