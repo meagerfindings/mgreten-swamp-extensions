@@ -1,0 +1,13 @@
+manifestVersion: 1
+name: "@mgreten/incident-dispatcher"
+license: MIT
+version: "2026.10.14.1"
+description: "Generic gated incident lifecycle with minimized typed agent requests and validated results."
+repository: "https://github.com/meagerfindings/swamp-incident-dispatcher"
+paths:
+  base: manifest
+models:
+  - extensions/models/incident_dispatcher.ts
+additionalFiles:
+  - README.md
+  - LICENSE
