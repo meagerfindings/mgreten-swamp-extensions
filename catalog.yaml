@@ -796,6 +796,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-openai-decision-tools.git'
       ref: 49f9ddc5a36d331f8e0361736165bbb4d01a5b04
+  - name: '@mgreten/operational-triage'
+    path: packages/operational-triage
+    manifest: packages/operational-triage/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:c0481e8fa72880cafcf97201329e18b4588504a35957205a2f3319cb252f3e24'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-operational-triage.git'
+      ref: 211fd8e1c32d12d2216dacd64ce851ee1cb27127
   - name: '@mgreten/packet-certifier'
     path: packages/packet-certifier
     manifest: packages/packet-certifier/extensions/models/manifest.yaml
