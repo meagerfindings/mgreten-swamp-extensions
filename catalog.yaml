@@ -68,6 +68,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-colorado-homeschool-attendance.git'
       ref: 2a297f63aaae8c360d3b8f860a0f4837073092ae
+  - name: '@mgreten/election-packet'
+    path: packages/election-packet
+    manifest: packages/election-packet/manifest.yaml
+    version: 2026.11.02.1
+    contentHash: 'sha256:43d9b955d42bf3e8fe15f758ed53967ee232c2845640ddacbdd39378a73c61dd'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'https://github.com/meagerfindings/mgreten-swamp-extensions'
+      ref: d60af38272683550944c2d00127c47c367498a91
   - name: '@mgreten/github-file-track'
     path: packages/github-file-track
     manifest: packages/github-file-track/extensions/models/manifest.yaml
