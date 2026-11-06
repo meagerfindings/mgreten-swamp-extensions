@@ -830,6 +830,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-s3-object-read.git'
       ref: 0f1ecc2f24ec899e56f1663077e85b9f8a36b5ca
+  - name: '@mgreten/service-watchdog'
+    path: packages/service-watchdog
+    manifest: packages/service-watchdog/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:d86e4a5fb728b8470451e855b6303921cd545bd3e016d6e4150a743e6bf138d8'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-service-watchdog.git'
+      ref: 1c9d04afcc168cef9cfd7d731b77be18ca3b9459
   - name: '@mgreten/slack-blocks'
     path: packages/slack-blocks
     manifest: packages/slack-blocks/extensions/models/manifest.yaml
