@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/feature-idea-gate"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   A generic, deterministic, evidence-gated feature-idea recommendation model.
   It is read-only and never approves, plans, executes, invokes tools, or creates side effects.
