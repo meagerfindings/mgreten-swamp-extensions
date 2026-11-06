@@ -5,7 +5,7 @@ description: >
   Deterministic, evidence-bound decision-context packets that persist advisory
   recommendations without authority to invoke providers, use a network, publish,
   communicate externally, spend, change policy, or mutate production.
-repository: "https://github.com/meagerfindings/swamp-decision-context"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - decision_context.ts
