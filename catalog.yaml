@@ -429,6 +429,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-grist.git'
       ref: 4b79f7b3d2f585707208bb11dc63bd308e25342d
+  - name: '@mgreten/hermes-interest-signals'
+    path: packages/hermes-interest-signals
+    manifest: packages/hermes-interest-signals/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:e2c6a45a8de15c06250691e8debd5df8de58ead2fab67ef98eb233286d32287c'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/hermes-interest--signals.git'
+      ref: 4bb5c29ad144231e003d8fddbbef04099cad9ac8
   - name: '@mgreten/hermes-review-kit'
     path: packages/hermes-review-kit
     manifest: packages/hermes-review-kit/manifest.yaml
