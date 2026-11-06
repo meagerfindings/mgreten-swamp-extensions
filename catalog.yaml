@@ -56,6 +56,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-s3-site-deploy.git'
       ref: c08aade3b873de052fc858c502c7544428161cd1
+  - name: '@mgreten/better-stack-read'
+    path: packages/better-stack-read
+    manifest: packages/better-stack-read/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:60cc51b4e24f1ea30d8b24f8c933d105d85209dada0920bf1a821d82723983a7'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-better-stack-read.git'
+      ref: 0bc23e6b73cfb6944eebb99e3aee982244d968c4
   - name: '@mgreten/bottleneck-ranking'
     path: packages/bottleneck-ranking
     manifest: packages/bottleneck-ranking/manifest.yaml
