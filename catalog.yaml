@@ -706,6 +706,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-obsidian-vault-fs.git'
       ref: 3b338626356b18606d0dea1d2bc51f052c4c8956
+  - name: '@mgreten/packet-certifier'
+    path: packages/packet-certifier
+    manifest: packages/packet-certifier/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:2fcdf80ec8bbcac5b528296ec3ee7ddb26d54df6581fe14061ed9c3f1167ca11'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-packet-certifier.git'
+      ref: b95ca705cc078c20e1435f7588fce407e385de5e
   - name: '@mgreten/pimoroni-explorer'
     path: packages/pimoroni-explorer
     manifest: packages/pimoroni-explorer/extensions/models/manifest.yaml
