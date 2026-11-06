@@ -1217,8 +1217,8 @@ packages:
   - name: '@mgreten/unifi'
     path: packages/unifi
     manifest: packages/unifi/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:bc43834d4e9bc2f0b066a2e7ff02bcf961b74f7e20a235c9a4f909a7e6565603'
+    version: 2026.11.06.1
+    contentHash: 'sha256:c7c913455972ac2b159d0394dfc843835e6845f0e9dcd0da1d1c5f29d5618c91'
     tests: deterministic
     dependsOn: []
     source:
