@@ -973,8 +973,8 @@ packages:
   - name: '@mgreten/trip-expense-tracker'
     path: packages/trip-expense-tracker
     manifest: packages/trip-expense-tracker/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:ed1db51c2094adbc0af9dedfb7e621564e65078ea42903ca638370a493e90773'
+    version: 2026.11.06.1
+    contentHash: 'sha256:5e6274970b4b4dec4bec6358445524259dee7b5772fa984c40707757e48e957b'
     tests: deterministic
     dependsOn: []
     source:
