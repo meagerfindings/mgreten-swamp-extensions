@@ -3,7 +3,7 @@ name: "@mgreten/s3-object-read"
 license: MIT
 version: 2026.10.14.1
 description: "Least-privilege, bounded reads from S3-compatible object storage."
-repository: "https://github.com/meagerfindings/swamp-s3-object-read"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - s3_object_read.ts
 workflows: []
