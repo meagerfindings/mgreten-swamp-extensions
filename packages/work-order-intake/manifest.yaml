@@ -5,7 +5,7 @@ version: 2026.10.14.1
 description: >
   Deterministic, decision-only intake for bounded work proposals. It preserves
   explicit human acceptance while granting no implementation or external-action authority.
-repository: "https://github.com/meagerfindings/swamp-work-order-intake"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - work_order_intake.ts
 workflows: []
