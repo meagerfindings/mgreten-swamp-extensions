@@ -88,6 +88,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-colorado-homeschool-attendance.git'
       ref: 2a297f63aaae8c360d3b8f860a0f4837073092ae
+  - name: '@mgreten/cron-builder'
+    path: packages/cron-builder
+    manifest: packages/cron-builder/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:cf45c5024948941403a7461c8e1603969fff1611898950b221096e644ae39b2f'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/cron-builder.git'
+      ref: 559205034e299577ee6de95589a10d4ea2880a1e
   - name: '@mgreten/election-packet'
     path: packages/election-packet
     manifest: packages/election-packet/manifest.yaml
