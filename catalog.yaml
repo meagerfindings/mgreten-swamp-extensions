@@ -272,8 +272,8 @@ packages:
   - name: '@mgreten/extension-radar'
     path: packages/extension-radar
     manifest: packages/extension-radar/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:bfb0d25357ab68ab52e24867289aac854d3d40537ff6a2c777981cab3806e407'
+    version: 2026.11.06.1
+    contentHash: 'sha256:97810a46dbdd885616f102afa613e4922c0039c57431c86bf7f71cbfe888a337'
     tests: deterministic
     dependsOn: []
     source:
