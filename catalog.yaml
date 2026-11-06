@@ -404,8 +404,8 @@ packages:
   - name: '@mgreten/gcal-read'
     path: packages/gcal-read
     manifest: packages/gcal-read/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:f6b501278f428c8eb46dba51f5968c49d394336183e80c0e5c75dc779325bcc1'
+    version: 2026.11.06.1
+    contentHash: 'sha256:3bd5feacef69dfda72b3ed86f69a4881fd5c4ed279a229ec6ec2f5287b7907b3'
     tests: deterministic
     dependsOn: []
     source:
