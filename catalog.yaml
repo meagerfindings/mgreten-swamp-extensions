@@ -803,8 +803,8 @@ packages:
   - name: '@mgreten/s3-backup-retention'
     path: packages/s3-backup-retention
     manifest: packages/s3-backup-retention/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:1440ac4fb76cbf41c3da5fdc0ceb9924c7a2fc0c1c86e41342be7a73fa17f6e3'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ce8265229f566170eee1d52b9a01fc75826e1f84201d6beb956df1e68735ba01'
     tests: deterministic
     dependsOn: []
     source:
