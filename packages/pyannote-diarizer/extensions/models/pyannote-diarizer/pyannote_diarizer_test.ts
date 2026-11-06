@@ -261,3 +261,57 @@ Deno.test("diarize falls back to the original transcript when the helper fails",
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test("diarize falls back when the helper exits 0 but its output is unusable", async () => {
+  const meta = JSON.stringify({
+    speakerCount: 2,
+    turnCount: 2,
+    speakers: ["SPEAKER_00", "SPEAKER_01"],
+  });
+  const cases = [
+    {
+      label: "log line before the JSON",
+      stdout: `warning: slow\n${meta}`,
+      diarized: DIARIZED,
+    },
+    {
+      label: "JSON missing fields",
+      stdout: JSON.stringify({ speakers: "two" }),
+      diarized: DIARIZED,
+    },
+    { label: "empty diarized file", stdout: meta, diarized: "" },
+  ];
+  for (const c of cases) {
+    const dir = await Deno.makeTempDir({ prefix: "pyannote-test-" });
+    try {
+      const { bin } = await makeStub(dir, {
+        stdout: c.stdout,
+        diarized: c.diarized,
+      });
+      const { context, written, logs } = fakeContext({
+        pythonBin: bin,
+        device: "auto",
+      });
+      await withoutParentToken(() =>
+        model.methods.diarize.execute({
+          transcriptJson: INPUT,
+          audioPath: "/synthetic/team.m4a",
+        }, context)
+      );
+      assertEquals(written.map((w) => w.data), [{
+        transcriptJson: INPUT,
+        diarized: false,
+        speakerCount: 0,
+        speakers: [],
+      }], c.label);
+      assertEquals(logs.length, 1, c.label);
+      assertStringIncludes(
+        logs[0],
+        "warn:Diarization failed (continuing without speakers): unusable helper output",
+        c.label,
+      );
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  }
+});

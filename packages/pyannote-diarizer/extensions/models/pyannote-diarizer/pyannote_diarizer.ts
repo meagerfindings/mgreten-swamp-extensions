@@ -196,12 +196,10 @@ export const model = {
 
           const result = await cmd.output();
 
-          if (!result.success) {
-            const stderr = new TextDecoder().decode(result.stderr);
+          // Any failure falls back to the original transcript, undiarized.
+          const fallBack = async (reason: string) => {
             context.logger.warn(
-              `Diarization failed (continuing without speakers): ${
-                stderr.slice(-500)
-              }`,
+              `Diarization failed (continuing without speakers): ${reason}`,
             );
             const handle = await context.writeResource(
               "diarizedTranscript",
@@ -214,15 +212,39 @@ export const model = {
               },
             );
             return { dataHandles: [handle] };
+          };
+
+          if (!result.success) {
+            return await fallBack(
+              new TextDecoder().decode(result.stderr).slice(-500),
+            );
           }
 
           const stdout = new TextDecoder().decode(result.stdout).trim();
-          const meta: {
+          let meta: {
             speakerCount: number;
             turnCount: number;
             speakers: string[];
-          } = JSON.parse(stdout);
-          const diarizedJson = await Deno.readTextFile(outPath);
+          };
+          let diarizedJson: string;
+          try {
+            meta = JSON.parse(stdout);
+            if (
+              typeof meta?.speakerCount !== "number" ||
+              typeof meta.turnCount !== "number" ||
+              !Array.isArray(meta.speakers)
+            ) {
+              throw new Error(
+                "helper output is not {speakerCount, turnCount, speakers}",
+              );
+            }
+            diarizedJson = await Deno.readTextFile(outPath);
+            JSON.parse(diarizedJson);
+          } catch (e) {
+            return await fallBack(
+              `unusable helper output: ${(e as Error).message.slice(0, 200)}`,
+            );
+          }
 
           context.logger.info(
             `Diarized: ${meta.speakerCount} speakers, ${meta.turnCount} turns`,
