@@ -5,7 +5,7 @@ description: >
   Privacy-preserving local safety watcher that polls official weather, roadway,
   and wildfire sources, reconciles material event changes, and emits redacted
   output only when action is needed.
-repository: 'https://github.com/meagerfindings/swamp-local-safety-watch'
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 paths:
   base: manifest
