@@ -172,8 +172,8 @@ packages:
   - name: '@mgreten/code-review-rubric'
     path: packages/code-review-rubric
     manifest: packages/code-review-rubric/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:0db6b1ff8deacc2a48599b3368e039beb8c5bb3a756f32ab157f081046bde3d5'
+    version: 2026.11.06.1
+    contentHash: 'sha256:54df2813e9c1b2ff248b09e36b4b274d9052968ed39668225813942751797382'
     tests: deterministic
     dependsOn:
       - '@mgreten/cli-agent'
