@@ -299,6 +299,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-feature-idea-gate.git'
       ref: 33a6033dd0f54a7700594efe6fdefd3096442f62
+  - name: '@mgreten/feedback-lineage'
+    path: packages/feedback-lineage
+    manifest: packages/feedback-lineage/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:c2167d75a2f109e9e1c1f08f4bcb951ac7875a818e2cfa6b8608a6809cd4012a'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-feedback-lineage.git'
+      ref: 17f114f88d62bb10c5da8b17b7a6a7266fe698f6
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml

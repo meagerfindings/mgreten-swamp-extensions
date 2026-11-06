@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@mgreten/feedback-lineage"
+version: 2026.10.14.1
+description: >
+  Validates and immutably records source-preserving feedback lineage with
+  explicit evidence freshness and recommendation-only authority.
+repository: "https://github.com/meagerfindings/swamp-feedback-lineage"
+license: MIT
+paths:
+  base: manifest
+models:
+  - feedback_lineage.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+  - EVIDENCE.md
+  - deno.json
+  - feedback_lineage_test.ts
+platforms: []
