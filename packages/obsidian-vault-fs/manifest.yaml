@@ -7,7 +7,7 @@ description: >
   Reads, writes, appends, searches, lists, stats, and edits scalar frontmatter
   against a mounted vault without relying on the desktop Obsidian CLI.
 
-repository: https://github.com/meagerfindings/swamp-obsidian-vault-fs
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 paths:
   base: manifest
