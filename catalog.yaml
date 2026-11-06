@@ -1247,8 +1247,8 @@ packages:
   - name: '@mgreten/valetudo'
     path: packages/valetudo
     manifest: packages/valetudo/extensions/models/valetudo/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:8c4e7e2e5378a522a296c743711ea278976ec59e8667f502665693d140dbda39'
+    version: 2026.11.06.1
+    contentHash: 'sha256:3c2638f04ea1ef3a88f43d15b1ab50a62fd4d882f65c9c0bad853c7dc9fd9282'
     tests: deterministic
     dependsOn: []
     source:
