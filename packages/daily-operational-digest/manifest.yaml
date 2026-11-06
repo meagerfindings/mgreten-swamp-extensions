@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/daily-operational-digest"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   A neutral, deterministic, side-effect-free operational digest built only from
   normalized, fresh, redacted evidence supplied by the caller.

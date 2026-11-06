@@ -202,8 +202,8 @@ packages:
   - name: '@mgreten/daily-operational-digest'
     path: packages/daily-operational-digest
     manifest: packages/daily-operational-digest/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:eff843447da1f6a5384df7f0dbfadc02d72b6a205987582eb283e4587bd969a2'
+    version: 2026.11.06.1
+    contentHash: 'sha256:82d7bb8e6046439a2f3f69082a3f129b45cce316d77dba13c07b2c001524511c'
     tests: deterministic
     dependsOn: []
     source:
