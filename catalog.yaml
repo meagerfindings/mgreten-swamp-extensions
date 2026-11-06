@@ -250,6 +250,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-macos-say-tts.git'
       ref: ce3a11055691cd5690d24351e74871ed172554ec
+  - name: '@mgreten/manyfold-importer'
+    path: packages/manyfold-importer
+    manifest: packages/manyfold-importer/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:38fb8ad999721b1face3345d97b416e18664c9474a55d7d3bfa4268bc0a1308a'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-manyfold-importer.git'
+      ref: 3739eeb5f6b340fdb00ffa16881962a5d17ae34a
   - name: '@mgreten/meta-publishing'
     path: packages/meta-publishing
     manifest: packages/meta-publishing/extensions/models/meta-publishing/manifest.yaml
