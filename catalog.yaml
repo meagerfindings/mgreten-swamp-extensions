@@ -222,8 +222,8 @@ packages:
   - name: '@mgreten/decision-dossier'
     path: packages/decision-dossier
     manifest: packages/decision-dossier/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:52864f5daa0d778da0ddfb891cf5b98f05a43c6906088d4f252e209cca93a48e'
+    version: 2026.11.06.1
+    contentHash: 'sha256:bc1f96260c87afb25a129e51d5970d32c21e711850e8fb30ae4701cab6f14658'
     tests: deterministic
     dependsOn: []
     source:
