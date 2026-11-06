@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/post-release-outcome-review"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Records deterministic, evidence-bound post-release outcome recommendations
   without collecting data, executing recommendations, or affecting production.

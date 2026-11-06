@@ -667,8 +667,8 @@ packages:
   - name: '@mgreten/post-release-outcome-review'
     path: packages/post-release-outcome-review
     manifest: packages/post-release-outcome-review/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:bcc2d72c2d00badcfd9c869fcb972c2ead069f79bcb21cf72334bb8f5e4ec69f'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ae241b661e3aecf3f885cb7ed3a8dfdefe8835050830d4d2df4a4573b5419f43'
     tests: deterministic
     dependsOn: []
     source:
