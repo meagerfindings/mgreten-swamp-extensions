@@ -10,7 +10,7 @@ description: >
   ({kind, title, body}) array derived from the same events, for downstream
   summarizer consumers.
 
-repository: https://github.com/meagerfindings/swamp-gcal-read
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - gcal_read.ts
