@@ -1,1 +1,112 @@
-{ "entries": [] }
+{
+  "entries": [
+    {
+      "rule": "rfc1918-ip",
+      "path": "packages/better-stack-read/extensions/models/better_stack_read_test.ts",
+      "fingerprint": "sha256:26702f5a55cf",
+      "reason": "fixture/placeholder: redaction-test input with a synthetic private IP (review 2026-11-06)"
+    },
+    {
+      "rule": "url-credentials",
+      "path": "packages/browser-test-evidence/extensions/models/browser_test_evidence_test.ts",
+      "fingerprint": "sha256:ec25b8fa54a9",
+      "reason": "fixture/placeholder: credential-stripping test fixture on example.test (review 2026-11-06)"
+    },
+    {
+      "rule": "lan-hostname",
+      "path": "packages/canarytokens/README.md",
+      "fingerprint": "sha256:0a516c6e13c4",
+      "reason": "fixture/placeholder: docs placeholder host on an example.internal domain (review 2026-11-06)"
+    },
+    {
+      "rule": "generic-secret-assignment",
+      "path": "packages/canarytokens/creator_test.ts",
+      "fingerprint": "sha256:cb6e5c47386f",
+      "reason": "fixture/placeholder: test token is a readable dummy phrase (review 2026-11-06)"
+    },
+    {
+      "rule": "generic-secret-assignment",
+      "path": "packages/gcal-read/extensions/models/gcal_read_test.ts",
+      "fingerprint": "sha256:86fbbc778f22",
+      "reason": "fixture/placeholder: redaction-test dummy secret (review 2026-11-06)"
+    },
+    {
+      "rule": "generic-secret-assignment",
+      "path": "packages/gmail-read/extensions/models/gmail_read_test.ts",
+      "fingerprint": "sha256:553d1f1e5896",
+      "reason": "fixture/placeholder: redaction-test dummy secret (review 2026-11-06)"
+    },
+    {
+      "rule": "tailnet-host",
+      "path": "packages/hermes-config/README.md",
+      "fingerprint": "sha256:d3903e71324b",
+      "reason": "fixture/placeholder: placeholder yourdomain/example .ts.net host in docs and option help (review 2026-11-06)"
+    },
+    {
+      "rule": "tailnet-host",
+      "path": "packages/hermes-config/extensions/models/hermes_config.ts",
+      "fingerprint": "sha256:c8601780e868",
+      "reason": "fixture/placeholder: placeholder yourdomain/example .ts.net host in docs and option help (review 2026-11-06)"
+    },
+    {
+      "rule": "url-credentials",
+      "path": "packages/local-dev-server/extensions/models/dev_server_core_test.ts",
+      "fingerprint": "sha256:a28b8176f573",
+      "reason": "fixture/placeholder: credential-stripping test fixture on localhost (review 2026-11-06)"
+    },
+    {
+      "rule": "generic-secret-assignment",
+      "path": "packages/notification-outbox/extensions/models/notification_outbox_test.ts",
+      "fingerprint": "sha256:023ff1e61d37",
+      "reason": "fixture/placeholder: test token is a readable dummy phrase (review 2026-11-06)"
+    },
+    {
+      "rule": "github-token",
+      "path": "packages/notification-outbox/extensions/models/notification_outbox_test.ts",
+      "fingerprint": "sha256:60a1bd967c57",
+      "reason": "fixture/placeholder: ghp_ prefix plus sequential dummy characters (review 2026-11-06)"
+    },
+    {
+      "rule": "generic-secret-assignment",
+      "path": "packages/openai-decision-tools/extensions/models/openai_decision_tools_test.ts",
+      "fingerprint": "sha256:f64a1b561671",
+      "reason": "fixture/placeholder: test apiKey is an UPPER_SNAKE placeholder constant (review 2026-11-06)"
+    },
+    {
+      "rule": "rfc1918-ip",
+      "path": "packages/operational-triage/extensions/models/operational_triage_test.ts",
+      "fingerprint": "sha256:fec9cdeaf025",
+      "reason": "fixture/placeholder: redaction-test input with a synthetic private IP (review 2026-11-06)"
+    },
+    {
+      "rule": "lan-hostname",
+      "path": "packages/public-draft-check/extensions/models/public_draft_check_test.ts",
+      "fingerprint": "sha256:0562ab914d5d",
+      "reason": "fixture/placeholder: redactor test input (fake host, the thing under test) (review 2026-11-06)"
+    },
+    {
+      "rule": "tailnet-host",
+      "path": "packages/public-draft-check/extensions/models/public_safe_draft_test.ts",
+      "fingerprint": "sha256:290d38445610",
+      "reason": "fixture/placeholder: redactor test input (fake host, the thing under test) (review 2026-11-06)"
+    },
+    {
+      "rule": "url-credentials",
+      "path": "packages/quality-canary-evidence/extensions/models/quality_canary_evidence_test.ts",
+      "fingerprint": "sha256:ec25b8fa54a9",
+      "reason": "fixture/placeholder: credential-stripping test fixture on example.com (review 2026-11-06)"
+    },
+    {
+      "rule": "url-credentials",
+      "path": "packages/repeated-friction/extensions/models/repeated_friction_test.ts",
+      "fingerprint": "sha256:ec25b8fa54a9",
+      "reason": "fixture/placeholder: credential-stripping test fixture on example.test (review 2026-11-06)"
+    },
+    {
+      "rule": "url-credentials",
+      "path": "packages/valetudo/extensions/models/valetudo/valetudo_test.ts",
+      "fingerprint": "sha256:8f86cb6d303f",
+      "reason": "fixture/placeholder: user:secret@example.test test fixture (review 2026-11-06)"
+    }
+  ]
+}
