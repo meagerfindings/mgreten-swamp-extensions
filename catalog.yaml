@@ -340,6 +340,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-pimoroni-explorer.git'
       ref: b1800071f5aa160ce856c637c1d394bfabc7b4b4
+  - name: '@mgreten/pyannote-diarizer'
+    path: packages/pyannote-diarizer
+    manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:cab208e85bd4e6c33ed14b2cf1acaf4cc2150a9d3ba991cc79c053bebb5003bc'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
+      ref: 569409c3597b7f8ab3a1f6bc60110be401cb78b4
   - name: '@mgreten/railway-read'
     path: packages/railway-read
     manifest: packages/railway-read/extensions/models/manifest.yaml
