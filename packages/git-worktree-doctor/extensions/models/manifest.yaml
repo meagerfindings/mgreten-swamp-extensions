@@ -8,7 +8,7 @@ description: >
   and optionally prunes them. Works with any git repository — no
   project-specific assumptions.
 
-repository: https://github.com/meagerfindings/swamp-git-worktree-doctor
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - git_worktree_doctor.ts
