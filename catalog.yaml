@@ -432,8 +432,8 @@ packages:
   - name: '@mgreten/hermes-interest-signals'
     path: packages/hermes-interest-signals
     manifest: packages/hermes-interest-signals/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:e2c6a45a8de15c06250691e8debd5df8de58ead2fab67ef98eb233286d32287c'
+    version: 2026.11.06.1
+    contentHash: 'sha256:43f1d66aad362c8f919cdd4c9ebd78fe5f6de2192a3c7e5a4bbb72c8b2cae684'
     tests: deterministic
     dependsOn: []
     source:
