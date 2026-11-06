@@ -4,7 +4,7 @@ version: 2026.10.14.1
 description: >
   Privacy-hardened deterministic feedback normalization, bounded triage-request
   preparation, and fail-closed validation of recommendation-only triage output.
-repository: "https://github.com/meagerfindings/swamp-feedback-triage"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - feedback_triage.ts
