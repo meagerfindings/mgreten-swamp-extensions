@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/decision-record"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: "Records explicit human decisions against an exact dossier without authorizing execution."
 repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT

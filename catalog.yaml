@@ -232,8 +232,8 @@ packages:
   - name: '@mgreten/decision-record'
     path: packages/decision-record
     manifest: packages/decision-record/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:03bc715b909dfb21a23ca6ce0d4c919b8b91bc290a20b260dc8a85d0068ecf9e'
+    version: 2026.11.06.1
+    contentHash: 'sha256:0979f7f5572f4bf231ac3f8dd99f090df31ee91fdaaac22b9486922e1c4c96e4'
     tests: deterministic
     dependsOn: []
     source:
