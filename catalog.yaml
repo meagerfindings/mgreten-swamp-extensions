@@ -745,6 +745,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-railway-read.git'
       ref: 5d4ee42cbafb67c72d853ad78cec2d1656579bc0
+  - name: '@mgreten/read-only-investigation'
+    path: packages/read-only-investigation
+    manifest: packages/read-only-investigation/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:e72e3bbcceeea9f6992042906521dbf786209a867478302533dd7a4422703d26'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-read-only-investigation.git'
+      ref: 6596b9a8574b9b8defb261cb3528ceddbeceb68e
   - name: '@mgreten/release-adoption'
     path: packages/release-adoption
     manifest: packages/release-adoption/extensions/models/manifest.yaml
