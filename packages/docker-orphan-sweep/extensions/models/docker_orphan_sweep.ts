@@ -45,6 +45,9 @@ const OrphanScanSchema = z.object({
   orphans: z.array(OrphanEntrySchema).describe(
     "Details for each orphaned container.",
   ),
+  skippedContainers: z.array(z.string()).describe(
+    "Containers left alone because their compose project could not be derived with certainty.",
+  ),
 });
 
 const SweepDetailSchema = z.object({
@@ -65,6 +68,9 @@ const SweepResultSchema = z.object({
   removedCount: z.number().describe("Containers successfully removed."),
   errorCount: z.number().describe("Containers that failed removal."),
   details: z.array(SweepDetailSchema).describe("Per-container sweep details."),
+  skippedContainers: z.array(z.string()).describe(
+    "Containers left alone because their compose project could not be derived with certainty.",
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -100,7 +106,10 @@ async function getWorktrees(repoPath: string): Promise<ParsedWorktree[]> {
     ["git", "worktree", "list", "--porcelain"],
     { cwd: repoPath },
   );
-  if (!result.success) return [];
+  // Fail closed: with no worktree list every project would look orphaned.
+  if (!result.success) {
+    throw new Error(`git worktree list failed: ${result.stderr}`);
+  }
 
   const worktrees: ParsedWorktree[] = [];
   let current: ParsedWorktree = { path: "", branch: "", bare: false };
@@ -139,8 +148,14 @@ async function resolveRepoPath(raw: string): Promise<string> {
  * List all Docker containers, optionally filtered by a name prefix.
  * Returns an array of container name strings.
  */
-async function listContainers(prefix?: string): Promise<string[]> {
-  const args = ["docker", "ps", "-a", "--format", "{{.Names}}"];
+async function listContainers(prefix?: string): Promise<Container[]> {
+  const args = [
+    "docker",
+    "ps",
+    "-a",
+    "--format",
+    '{{.Names}}\t{{.Label "com.docker.compose.project"}}',
+  ];
   if (prefix) {
     args.push("--filter", `name=^${prefix}`);
   }
@@ -148,15 +163,63 @@ async function listContainers(prefix?: string): Promise<string[]> {
   if (!result.success) {
     throw new Error(`docker ps failed: ${result.stderr}`);
   }
-  return result.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+  return result.stdout.split("\n").filter((l) => l.trim()).map((line) => {
+    const [name, projectLabel = ""] = line.split("\t");
+    return { name: name.trim(), projectLabel };
+  });
 }
 
 /**
- * Derive the compose project name from a container name by stripping
- * the Docker Compose service-index suffix (e.g., "-web-1").
+ * Derive a container's compose project from its `com.docker.compose.project`
+ * label, never from the name alone: project names may contain hyphens, so
+ * "feature-a-web-1" cannot be split reliably. Returns null (the caller skips
+ * the container) unless the label is present and the name is the
+ * `<project>-<service>-<n>` (or v1 `<project>_<service>_<n>`) name Compose
+ * gives that project.
  */
-function deriveComposeProject(containerName: string): string {
-  return containerName.replace(/-[a-z0-9_-]+-\d+$/, "");
+export function deriveComposeProject(
+  containerName: string,
+  projectLabel: string,
+): string | null {
+  const project = projectLabel.trim();
+  if (!project) return null;
+  for (const sep of ["-", "_"]) {
+    if (!containerName.startsWith(`${project}${sep}`)) continue;
+    const rest = containerName.slice(project.length + 1);
+    const service = new RegExp(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*\\${sep}\\d+$`);
+    if (service.test(rest)) return project;
+  }
+  return null;
+}
+
+type Container = { name: string; projectLabel: string };
+
+/** Group containers by compose project; containers without a certain project are skipped. */
+function groupByProject(containers: Container[]): {
+  projects: Map<string, string[]>;
+  skipped: string[];
+} {
+  const projects = new Map<string, string[]>();
+  const skipped: string[] = [];
+  for (const c of containers) {
+    const project = deriveComposeProject(c.name, c.projectLabel);
+    if (project === null) {
+      skipped.push(c.name);
+      continue;
+    }
+    projects.set(project, [...(projects.get(project) ?? []), c.name]);
+  }
+  return { projects, skipped };
+}
+
+/** A project is live if a worktree exists under its literal or slug name. */
+function projectIsLive(
+  project: string,
+  parentDir: string,
+  livePaths: Set<string>,
+): boolean {
+  return livePaths.has(`${parentDir}/${project}`) ||
+    livePaths.has(`${parentDir}/${projectToWorktreeSlug(project)}`);
 }
 
 /**
@@ -266,12 +329,14 @@ export const model = {
         const parentDir = repoPath.split("/").slice(0, -1).join("/");
 
         // Deduplicate containers into compose projects
-        const projectContainers = new Map<string, string[]>();
-        for (const name of containers) {
-          const project = deriveComposeProject(name);
-          const existing = projectContainers.get(project) ?? [];
-          existing.push(name);
-          projectContainers.set(project, existing);
+        const { projects: projectContainers, skipped } = groupByProject(
+          containers,
+        );
+        if (skipped.length) {
+          context.logger.warning(
+            "Skipping {count} container(s) with no certain compose project: {names}",
+            { count: skipped.length, names: skipped.join(", ") },
+          );
         }
 
         // Cross-reference each project against live worktrees
@@ -281,7 +346,7 @@ export const model = {
         for (const [project, containerNames] of projectContainers.entries()) {
           const slug = projectToWorktreeSlug(project);
           const expectedPath = `${parentDir}/${slug}`;
-          const exists = livePaths.has(expectedPath);
+          const exists = projectIsLive(project, parentDir, livePaths);
 
           if (!exists) {
             for (const containerName of containerNames) {
@@ -301,6 +366,7 @@ export const model = {
           worktreesFound: worktrees.length,
           orphanCount: orphans.length,
           orphans,
+          skippedContainers: skipped,
         };
 
         const handle = await context.writeResource(
@@ -348,12 +414,14 @@ export const model = {
         const parentDir = repoPath.split("/").slice(0, -1).join("/");
 
         // Deduplicate containers into compose projects
-        const projectContainers = new Map<string, string[]>();
-        for (const name of containers) {
-          const project = deriveComposeProject(name);
-          const existing = projectContainers.get(project) ?? [];
-          existing.push(name);
-          projectContainers.set(project, existing);
+        const { projects: projectContainers, skipped } = groupByProject(
+          containers,
+        );
+        if (skipped.length) {
+          context.logger.warning(
+            "Skipping {count} container(s) with no certain compose project: {names}",
+            { count: skipped.length, names: skipped.join(", ") },
+          );
         }
 
         // Find orphans and optionally remove them
@@ -361,9 +429,7 @@ export const model = {
         const details: Detail[] = [];
 
         for (const [project, containerNames] of projectContainers.entries()) {
-          const slug = projectToWorktreeSlug(project);
-          const expectedPath = `${parentDir}/${slug}`;
-          const exists = livePaths.has(expectedPath);
+          const exists = projectIsLive(project, parentDir, livePaths);
 
           if (!exists) {
             for (const containerName of containerNames) {
@@ -403,6 +469,7 @@ export const model = {
           removedCount,
           errorCount,
           details,
+          skippedContainers: skipped,
         };
 
         const handle = await context.writeResource(

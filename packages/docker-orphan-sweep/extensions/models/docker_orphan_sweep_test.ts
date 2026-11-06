@@ -56,7 +56,11 @@ function makeContext(globalArgs: Record<string, unknown>) {
   const context = {
     globalArgs: model.globalArguments.parse(globalArgs),
     logger: { info: noop, warning: noop, error: noop },
-    writeResource: (spec: string, name: string, data: Record<string, unknown>) => {
+    writeResource: (
+      spec: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
       writes.push({ spec, name, data });
       return Promise.resolve({ name });
     },
@@ -86,18 +90,23 @@ const PORCELAIN = [
 
 // Containers: feature_live is backed by a live worktree; old_branch has two
 // services and no worktree; bare_store maps to a bare entry, which is ignored.
-const CONTAINERS = [
-  "feature_live-web-1",
-  "feature_live-db-1",
-  "old_branch-web-1",
-  "old_branch-worker-2",
-  "bare_store-web-1",
-].join("\n");
+const PS_FORMAT = '{{.Names}}\t{{.Label "com.docker.compose.project"}}';
+const psLines = (rows: Array<[string, string]>) =>
+  rows.map(([n, p]) => `${n}\t${p}`).join("\n");
+const CONTAINERS = psLines([
+  ["feature_live-web-1", "feature_live"],
+  ["feature_live-db-1", "feature_live"],
+  ["old_branch-web-1", "old_branch"],
+  ["old_branch-worker-2", "old_branch"],
+  ["bare_store-web-1", "bare_store"],
+]);
 
 function standardResponder(rmFailures: Record<string, string> = {}): Responder {
   return (argv) => {
     const key = argv.slice(0, 2).join(" ");
-    if (key === "docker ps") return { success: true, stdout: CONTAINERS + "\n" };
+    if (key === "docker ps") {
+      return { success: true, stdout: CONTAINERS + "\n" };
+    }
     if (key === "git worktree") return { success: true, stdout: PORCELAIN };
     if (key === "docker rm") {
       const name = argv[3];
@@ -112,7 +121,10 @@ function standardResponder(rmFailures: Record<string, string> = {}): Responder {
 Deno.test("global args default repoPath to '.' and sweep defaults to dryRun", () => {
   assertEquals(model.globalArguments.parse({}), { repoPath: "." });
   assertEquals(model.methods.sweep.arguments.parse({}), { dryRun: true });
-  assertEquals(model.methods.sweep.arguments.safeParse({ dryRun: "no" }).success, false);
+  assertEquals(
+    model.methods.sweep.arguments.safeParse({ dryRun: "no" }).success,
+    false,
+  );
 });
 
 Deno.test("scan reports only containers whose worktree is missing or bare", async () => {
@@ -121,7 +133,7 @@ Deno.test("scan reports only containers whose worktree is missing or bare", asyn
     const result = await model.methods.scan.execute({}, context);
 
     assertEquals(calls, [
-      { argv: ["docker", "ps", "-a", "--format", "{{.Names}}"], cwd: undefined },
+      { argv: ["docker", "ps", "-a", "--format", PS_FORMAT], cwd: undefined },
       { argv: ["git", "worktree", "list", "--porcelain"], cwd: REPO },
     ]);
     assertEquals(writes.length, 1);
@@ -153,41 +165,109 @@ Deno.test("scan reports only containers whose worktree is missing or bare", asyn
         exists: false,
       },
     ]);
-    assertEquals(model.resources.orphanScan.schema.safeParse(data).success, true);
+    assertEquals(
+      model.resources.orphanScan.schema.safeParse(data).success,
+      true,
+    );
   });
 });
 
 Deno.test("containerPrefix adds an anchored docker name filter", async () => {
   await withFakeCommands(standardResponder(), async (calls) => {
-    const { context } = makeContext({ repoPath: REPO, containerPrefix: "old_" });
+    const { context } = makeContext({
+      repoPath: REPO,
+      containerPrefix: "old_",
+    });
     await model.methods.scan.execute({}, context);
     assertEquals(calls[0].argv, [
       "docker",
       "ps",
       "-a",
       "--format",
-      "{{.Names}}",
+      PS_FORMAT,
       "--filter",
       "name=^old_",
     ]);
   });
 });
 
-Deno.test("git failure yields zero worktrees so every project is an orphan", async () => {
+Deno.test("git failure fails closed: no scan written and no container removed", async () => {
   const respond: Responder = (argv) =>
     argv[0] === "docker"
-      ? { success: true, stdout: "feature_live-web-1" }
+      ? {
+        success: true,
+        stdout: psLines([["feature_live-web-1", "feature_live"]]),
+      }
       : { success: false, stderr: "fatal: not a git repository" };
-  await withFakeCommands(respond, async () => {
+  await withFakeCommands(respond, async (calls) => {
     const { context, writes } = makeContext({ repoPath: REPO });
-    await model.methods.scan.execute({}, context);
-    assertEquals(writes[0].data.worktreesFound, 0);
-    assertEquals(writes[0].data.orphanCount, 1);
+    await assertRejects(
+      () => model.methods.scan.execute({}, context),
+      Error,
+      "git worktree list failed",
+    );
+    await assertRejects(
+      () => model.methods.sweep.execute({ dryRun: false }, context),
+      Error,
+      "git worktree list failed",
+    );
+    assertEquals(writes.length, 0);
+    assertEquals(calls.some((c) => c.argv[1] === "rm"), false);
+  });
+});
+
+Deno.test("hyphenated project names are taken from the compose label, so live containers survive a sweep", async () => {
+  const porcelain = [
+    `worktree ${REPO}`,
+    "HEAD 1111111111111111111111111111111111111111",
+    "branch refs/heads/main",
+    "",
+    "worktree /nonexistent-test-root/repos/feature-a",
+    "HEAD 2222222222222222222222222222222222222222",
+    "branch refs/heads/feature-a",
+    "",
+    "worktree /nonexistent-test-root/repos/fix_b",
+    "HEAD 3333333333333333333333333333333333333333",
+    "branch refs/heads/fix_b",
+    "",
+  ].join("\n");
+  const ps = psLines([
+    ["feature-a-web-1", "feature-a"], // live; the old suffix regex derived "feature"
+    ["feature-a-db-1", "feature-a"],
+    ["fix_b_web_1", "fix_b"], // compose v1 naming, worktree named literally fix_b
+    ["gone-branch-web-1", "gone-branch"], // real orphan
+    ["standalone-thing-1", ""], // no compose label: uncertain, skip
+    ["custom-name", "gone-branch"], // custom container_name: not tied to the label, skip
+  ]);
+  const respond: Responder = (argv) => {
+    if (argv[1] === "ps") return { success: true, stdout: ps };
+    if (argv[0] === "git") return { success: true, stdout: porcelain };
+    if (argv[1] === "rm") return { success: true, stdout: argv[3] };
+    throw new Error(`unexpected command: ${argv.join(" ")}`);
+  };
+  await withFakeCommands(respond, async (calls) => {
+    const { context, writes } = makeContext({ repoPath: REPO });
+    await model.methods.sweep.execute({ dryRun: false }, context);
+    assertEquals(
+      calls.filter((c) => c.argv[1] === "rm").map((c) => c.argv[3]),
+      ["gone-branch-web-1"],
+    );
+    assertEquals(writes[0].data.skippedContainers, [
+      "standalone-thing-1",
+      "custom-name",
+    ]);
+    assertEquals(
+      model.resources.sweepResult.schema.safeParse(writes[0].data).success,
+      true,
+    );
   });
 });
 
 Deno.test("docker ps failure throws and writes nothing", async () => {
-  const respond: Responder = () => ({ success: false, stderr: "daemon not running" });
+  const respond: Responder = () => ({
+    success: false,
+    stderr: "daemon not running",
+  });
   await withFakeCommands(respond, async () => {
     const { context, writes } = makeContext({ repoPath: REPO });
     await assertRejects(
@@ -207,16 +287,27 @@ Deno.test("sweep dry run lists orphans without calling docker rm", async () => {
     const data = writes[0].data;
     assertEquals(writes[0].spec, "sweepResult");
     assertEquals(data.dryRun, true);
-    assertEquals([data.orphanCount, data.removedCount, data.errorCount], [3, 0, 0]);
+    assertEquals([data.orphanCount, data.removedCount, data.errorCount], [
+      3,
+      0,
+      0,
+    ]);
     assertEquals(
-      (data.details as Array<Record<string, unknown>>).map((d) => [d.containerName, d.removed]),
-      [["old_branch-web-1", false], ["old_branch-worker-2", false], ["bare_store-web-1", false]],
+      (data.details as Array<Record<string, unknown>>).map((
+        d,
+      ) => [d.containerName, d.removed]),
+      [["old_branch-web-1", false], ["old_branch-worker-2", false], [
+        "bare_store-web-1",
+        false,
+      ]],
     );
   });
 });
 
 Deno.test("live sweep removes only orphans and records per-container failures", async () => {
-  const responder = standardResponder({ "old_branch-worker-2": "Error: permission denied" });
+  const responder = standardResponder({
+    "old_branch-worker-2": "Error: permission denied",
+  });
   await withFakeCommands(responder, async (calls) => {
     const { context, writes } = makeContext({ repoPath: REPO });
     await model.methods.sweep.execute({ dryRun: false }, context);
@@ -231,17 +322,32 @@ Deno.test("live sweep removes only orphans and records per-container failures", 
     );
     const data = writes[0].data;
     assertEquals(data.dryRun, false);
-    assertEquals([data.orphanCount, data.removedCount, data.errorCount], [3, 2, 1]);
+    assertEquals([data.orphanCount, data.removedCount, data.errorCount], [
+      3,
+      2,
+      1,
+    ]);
     assertEquals(data.details, [
-      { containerName: "old_branch-web-1", composeProject: "old_branch", removed: true },
+      {
+        containerName: "old_branch-web-1",
+        composeProject: "old_branch",
+        removed: true,
+      },
       {
         containerName: "old_branch-worker-2",
         composeProject: "old_branch",
         removed: false,
         removeError: "Error: permission denied",
       },
-      { containerName: "bare_store-web-1", composeProject: "bare_store", removed: true },
+      {
+        containerName: "bare_store-web-1",
+        composeProject: "bare_store",
+        removed: true,
+      },
     ]);
-    assertEquals(model.resources.sweepResult.schema.safeParse(data).success, true);
+    assertEquals(
+      model.resources.sweepResult.schema.safeParse(data).success,
+      true,
+    );
   });
 });
