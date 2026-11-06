@@ -2,7 +2,7 @@ manifestVersion: 1
 name: "@mgreten/response-quality"
 version: "2026.10.14.1"
 description: "Deterministically evaluates caller-supplied response-quality evidence and scores without external side effects."
-repository: "https://github.com/meagerfindings/swamp-response-quality"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - response_quality.ts
