@@ -130,8 +130,8 @@ packages:
   - name: '@mgreten/canarytokens'
     path: packages/canarytokens
     manifest: packages/canarytokens/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:6f7645271e56e64580b5194f593fbea06ebda7b0857b9a285a1b36b74b7dab95'
+    version: 2026.11.06.1
+    contentHash: 'sha256:f3440d405060eb072d16f8929188aa6811c1f61bb1ea162fcd9efc79c47d60ee'
     tests: deterministic
     dependsOn: []
     source:
