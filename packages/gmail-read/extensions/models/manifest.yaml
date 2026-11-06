@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/gmail-read"
-version: "2026.10.14.1"
+version: "2026.11.06.1"
 license: MIT
 description: >
   Read-only Gmail reader — list recent/unread messages (From/Subject/Date/

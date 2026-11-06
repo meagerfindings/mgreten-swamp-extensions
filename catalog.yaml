@@ -454,8 +454,8 @@ packages:
   - name: '@mgreten/gmail-read'
     path: packages/gmail-read
     manifest: packages/gmail-read/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:bb26cccc6593e0cefaeeddd39eb3090248c14632667031da2500db577bdd82f6'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ae3d226ec6a0e11a0335b125b8410c1f5dd41c9c98578a4bce965f0e9e3f0363'
     tests: deterministic
     dependsOn: []
     source:
