@@ -120,8 +120,8 @@ packages:
   - name: '@mgreten/cli-process-audit'
     path: packages/cli-process-audit
     manifest: packages/cli-process-audit/extensions/models/manifest.yaml
-    version: 2026.10.14.2
-    contentHash: 'sha256:8a5ed16f5e87631679ad576919da9df2170054f7dddb467078ceb68ad39f97d7'
+    version: 2026.11.06.1
+    contentHash: 'sha256:324b2f4a91ac58b8b387746c9b5c90f62b02cb6c11089583157436f8472f1d58'
     tests: deterministic
     dependsOn: []
     source:
