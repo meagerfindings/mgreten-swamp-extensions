@@ -455,6 +455,8 @@ packages:
       - { from: examples/, to: examples/ }
       - { from: extensions/, to: extensions/ }
       - { from: manifest.yaml, to: manifest.yaml }
+      # skills: in the manifest resolve from .claude/skills/
+      - { from: .claude/skills/, to: .claude/skills/ }
   - name: "@mgreten/software-factory-flow-metrics"
     short: software-factory-flow-metrics
     source: git@github.com:meagerfindings/swamp-software-factory-flow-metrics.git
@@ -490,6 +492,13 @@ packages:
     manifest: extensions/colorado-candidate/manifest.yaml
     paths:
       - { from: "extensions/colorado-candidate/", to: "extensions/colorado-candidate/" }
+      # the package's models/ entry re-exports from the repo-root models/ tree
+      - { from: models/colorado/, to: models/colorado/ }
+      - { from: models/shared/, to: models/shared/ }
+      # models/shared/candidate-research-privacy_test.ts reads these repo-root files
+      - { from: README.md, to: README.md }
+      - { from: docs/repo-shape.md, to: docs/repo-shape.md }
+      - { from: examples/, to: examples/ }
   - name: "@mgreten/swamp-candidate-researcher-colorado-judge"
     short: swamp-candidate-researcher-colorado-judge
     source: git@github.com:meagerfindings/swamp-candidate-researcher.git
@@ -497,6 +506,13 @@ packages:
     manifest: extensions/colorado-judge/manifest.yaml
     paths:
       - { from: "extensions/colorado-judge/", to: "extensions/colorado-judge/" }
+      # the package's models/ entry re-exports from the repo-root models/ tree
+      - { from: models/colorado/, to: models/colorado/ }
+      - { from: models/shared/, to: models/shared/ }
+      # models/shared/candidate-research-privacy_test.ts reads these repo-root files
+      - { from: README.md, to: README.md }
+      - { from: docs/repo-shape.md, to: docs/repo-shape.md }
+      - { from: examples/, to: examples/ }
   - name: "@mgreten/swamp-candidate-researcher-federal"
     short: swamp-candidate-researcher-federal
     source: git@github.com:meagerfindings/swamp-candidate-researcher.git
@@ -504,6 +520,13 @@ packages:
     manifest: extensions/federal-candidate/manifest.yaml
     paths:
       - { from: "extensions/federal-candidate/", to: "extensions/federal-candidate/" }
+      # the package's models/ entry re-exports from the repo-root models/ tree
+      - { from: models/federal/, to: models/federal/ }
+      - { from: models/shared/, to: models/shared/ }
+      # models/shared/candidate-research-privacy_test.ts reads these repo-root files
+      - { from: README.md, to: README.md }
+      - { from: docs/repo-shape.md, to: docs/repo-shape.md }
+      - { from: examples/, to: examples/ }
   - name: "@mgreten/swamp-club-score"
     short: swamp-club-score
     source: git@github.com:meagerfindings/swamp-club-score.git
@@ -558,3 +581,604 @@ packages:
     manifest: extensions/models/valetudo/manifest.yaml
     paths:
       - { from: "extensions/models/valetudo/", to: "extensions/models/valetudo/" }
+  # GitHub-only sources (no local checkout). Pinned to GitHub HEAD on 2026-11-06
+  # after every file of the registry build was found byte-identical in that tree.
+  - name: "@mgreten/agent-system-review"
+    short: agent-system-review
+    source: git@github.com:meagerfindings/swamp-agent-system-review.git
+    ref: 3703849b374883136efcd1d373bb1dc8911383c6
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/approval-gate"
+    short: approval-gate
+    source: git@github.com:meagerfindings/swamp-approval-gate.git
+    ref: 3f66758425a0feb8750f30857c37da4e8c1c4148
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/better-stack-read"
+    short: better-stack-read
+    source: git@github.com:meagerfindings/swamp-better-stack-read.git
+    ref: 0bc23e6b73cfb6944eebb99e3aee982244d968c4
+    manifest: extensions/models/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/bottleneck-ranking"
+    short: bottleneck-ranking
+    source: git@github.com:meagerfindings/swamp-bottleneck-ranking.git
+    ref: 99ac06424a1a00a7c2bbaba30e3b5a778191e896
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: docs/, to: docs/ }
+      - { from: examples/, to: examples/ }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/bounded-context-workflows"
+    short: bounded-context-workflows
+    source: git@github.com:meagerfindings/swamp-bounded-context-workflows.git
+    ref: 064eb3d5a5ae889b8d22936b90bb2c9f285c63db
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: docs/, to: docs/ }
+      - { from: examples/, to: examples/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: tests/, to: tests/ }
+      - { from: workflows/, to: workflows/ }
+  - name: "@mgreten/bounded-experiment"
+    short: bounded-experiment
+    source: git@github.com:meagerfindings/swamp-bounded-experiment.git
+    ref: 29a676e2b0fab99a74564c70c69fa9c2f4581385
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: USAGE.md, to: USAGE.md }
+      - { from: _lib/, to: _lib/ }
+      - { from: bounded_experiment.ts, to: bounded_experiment.ts }
+      - { from: bounded_experiment_test.ts, to: bounded_experiment_test.ts }
+      - { from: examples/, to: examples/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/browser-test-evidence"
+    short: browser-test-evidence
+    source: git@github.com:meagerfindings/swamp-browser-test-evidence.git
+    ref: 2fcf68c692e95fcccb768270aed3e0914e89c296
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/campaign-outcome"
+    short: campaign-outcome
+    source: git@github.com:meagerfindings/swamp-campaign-outcome.git
+    ref: 6d6320f579a8c54fb2bf0cf401dd6d871456e1f4
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/contained-git-write"
+    short: contained-git-write
+    source: git@github.com:meagerfindings/swamp-contained-git-write.git
+    ref: ff11e588c828c55509cf9a55fcb39ac46cad0ce0
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: model.ts, to: model.ts }
+      - { from: model_test.ts, to: model_test.ts }
+  - name: "@mgreten/context-compiler"
+    short: context-compiler
+    source: git@github.com:meagerfindings/swamp-context-compiler.git
+    ref: ee4f4ca20a9494af7b9db631a7b9dd21337b00b3
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/context-conflict-detector"
+    short: context-conflict-detector
+    source: git@github.com:meagerfindings/swamp-context-conflict-detector.git
+    ref: 07cace8f2dbdc4cbf37e99087338301ac68be77d
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/cross-source-evidence"
+    short: cross-source-evidence
+    source: git@github.com:meagerfindings/swamp-cross-source-evidence.git
+    ref: e3b3d3740a05347ddf5822f50f066d040bab1637
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/daily-operational-digest"
+    short: daily-operational-digest
+    source: git@github.com:meagerfindings/swamp-daily-operational-digest.git
+    ref: 5f6a9346ebfa56fa53fa42795303305283318e49
+    manifest: manifest.yaml
+    paths:
+      - { from: CONTRACTS.md, to: CONTRACTS.md }
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/decision-context"
+    short: decision-context
+    source: git@github.com:meagerfindings/swamp-decision-context.git
+    ref: 7d7571295ba4c47e09f6e9828a45627ed81db626
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/decision-dossier"
+    short: decision-dossier
+    source: git@github.com:meagerfindings/swamp-decision-dossier.git
+    ref: 4bfb503da839e739b80a791013448d2e0be7417f
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/decision-record"
+    short: decision-record
+    source: git@github.com:meagerfindings/swamp-decision-record.git
+    ref: fe9e6117980f45728d93bf8fbc95df701738e4cb
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/decision-review"
+    short: decision-review
+    source: git@github.com:meagerfindings/swamp-decision-review.git
+    ref: a30c61745b110ea3a5e6d650e0ddad72afd7695d
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/extension-radar"
+    short: extension-radar
+    source: git@github.com:meagerfindings/swamp-extension-radar.git
+    ref: dd265162e75c6331bcd41cd1cf7e2272b23ef990
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/factory-watcher"
+    short: factory-watcher
+    source: git@github.com:meagerfindings/swamp-factory-watcher.git
+    ref: 363ad053c18b489006fd50d2527b29c85609a654
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: docs/, to: docs/ }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/feature-idea-gate"
+    short: feature-idea-gate
+    source: git@github.com:meagerfindings/swamp-feature-idea-gate.git
+    ref: 33a6033dd0f54a7700594efe6fdefd3096442f62
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: docs/, to: docs/ }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/feedback-lineage"
+    short: feedback-lineage
+    source: git@github.com:meagerfindings/swamp-feedback-lineage.git
+    ref: 17f114f88d62bb10c5da8b17b7a6a7266fe698f6
+    manifest: manifest.yaml
+    paths:
+      - { from: EVIDENCE.md, to: EVIDENCE.md }
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: _lib/, to: _lib/ }
+      - { from: deno.json, to: deno.json }
+      - { from: feedback_lineage.ts, to: feedback_lineage.ts }
+      - { from: feedback_lineage_test.ts, to: feedback_lineage_test.ts }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/feedback-response-core"
+    short: feedback-response-core
+    source: git@github.com:meagerfindings/swamp-feedback-response-core.git
+    ref: 60e0a0848d78536bef1cd44613dc793492dbcd72
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/feedback-triage"
+    short: feedback-triage
+    source: git@github.com:meagerfindings/swamp-feedback-triage.git
+    ref: 65a10ed002ec7819aa21b531e327e4c98b0063df
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/github-pr-feedback"
+    short: github-pr-feedback
+    source: git@github.com:meagerfindings/swamp-github-pr-feedback.git
+    ref: 50c538ac84ee1e12c9cd069b0c47896c2d822fb2
+    manifest: extensions/models/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/hermes-interest-signals"
+    short: hermes-interest-signals
+    source: git@github.com:meagerfindings/hermes-interest--signals.git
+    ref: 4bb5c29ad144231e003d8fddbbef04099cad9ac8
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/implementer-benchmark"
+    short: implementer-benchmark
+    source: git@github.com:meagerfindings/swamp-implementer-benchmark.git
+    ref: 7852d8712e26f709879281ee8cc9f07232be08b4
+    manifest: extensions/models/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/incident-communication"
+    short: incident-communication
+    source: git@github.com:meagerfindings/swamp-incident-communication.git
+    ref: 68e4bfc09560459c70d0b5be145988390b9d99c0
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/incident-dispatcher"
+    short: incident-dispatcher
+    source: git@github.com:meagerfindings/swamp-incident-dispatcher.git
+    ref: b892f2b42e3b5640cba370920ffa96ca519aac42
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/local-dev-server"
+    short: local-dev-server
+    source: git@github.com:meagerfindings/swamp-local-dev-server.git
+    ref: 4e180b4f5747cc4168fc0a27503f5bb055c642af
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/local-safety-watch"
+    short: local-safety-watch
+    source: git@github.com:meagerfindings/swamp-local-safety-watch.git
+    ref: 5408331f552c0698f8e4dc4d2f50449a20cac1f8
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: model.ts, to: model.ts }
+      - { from: model_test.ts, to: model_test.ts }
+  - name: "@mgreten/markdown-blog"
+    short: markdown-blog
+    source: git@github.com:meagerfindings/swamp-markdown-blog.git
+    ref: 7a8647f9ad20fdb327548d0fa27cdd0fdc450609
+    manifest: extensions/models/markdown-blog/manifest.yaml
+    paths:
+      - { from: "extensions/models/markdown-blog/", to: "extensions/models/markdown-blog/" }
+  - name: "@mgreten/marketing-orchestration"
+    short: marketing-orchestration
+    source: git@github.com:meagerfindings/swamp-marketing-orchestration.git
+    ref: e28ad4f3c91687844312c95cf4f8635f97f3f540
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/notification-outbox-workflows"
+    short: notification-outbox-workflows
+    source: git@github.com:meagerfindings/swamp-notification-outbox-workflows.git
+    ref: 36f87720e35146ac82ef1436c44bcd6a627108c8
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: fixtures/, to: fixtures/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: workflows/, to: workflows/ }
+  - name: "@mgreten/observability-workflows"
+    short: observability-workflows
+    source: git@github.com:meagerfindings/swamp-observability-workflows.git
+    ref: 63616bf1aac7ec547023e68cabfe68f813ef9bdb
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: docs/, to: docs/ }
+      - { from: examples/, to: examples/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: tests/, to: tests/ }
+      - { from: workflows/, to: workflows/ }
+  - name: "@mgreten/observation-record"
+    short: observation-record
+    source: git@github.com:meagerfindings/swamp-observation-record.git
+    ref: 008dbaf79badecb3ef769d7360ab87d34074da1b
+    manifest: manifest.yaml
+    paths:
+      - { from: COMPATIBILITY.md, to: COMPATIBILITY.md }
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: TYPE_DECISION.md, to: TYPE_DECISION.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/operational-triage"
+    short: operational-triage
+    source: git@github.com:meagerfindings/swamp-operational-triage.git
+    ref: 211fd8e1c32d12d2216dacd64ce851ee1cb27127
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/post-release-measurement"
+    short: post-release-measurement
+    source: git@github.com:meagerfindings/swamp-post-release-measurement.git
+    ref: fe9d565f81ceedfe6d735dd40fdf0e26a2f81387
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/post-release-outcome-review"
+    short: post-release-outcome-review
+    source: git@github.com:meagerfindings/swamp-post-release-outcome-review.git
+    ref: 831271131512b0baf6f457a90fb9d0d1601f0458
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/pr-browser-test-planner"
+    short: pr-browser-test-planner
+    source: git@github.com:meagerfindings/swamp-pr-browser-test-planner.git
+    ref: 6d12e48fce6f7cd1043344d1b149a7cdc92ee8a2
+    manifest: extensions/models/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/pricing-unit-economics"
+    short: pricing-unit-economics
+    source: git@github.com:meagerfindings/swamp-pricing-unit-economics.git
+    ref: dedb515968b80c3669592062a1077e29d2080f81
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/product-behavior-summary"
+    short: product-behavior-summary
+    source: git@github.com:meagerfindings/swamp-product-behavior-summary.git
+    ref: 7fab53fe4a188798711b70ebabedfdea3ca61d22
+    manifest: manifest.yaml
+    paths:
+      - { from: CONTRACT_BOUNDARY.md, to: CONTRACT_BOUNDARY.md }
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/product-lineage"
+    short: product-lineage
+    source: git@github.com:meagerfindings/swamp-product-lineage.git
+    ref: 207fe5ecdb24484bef4634f7fde5288ac4f16937
+    manifest: manifest.yaml
+    paths:
+      - { from: CONTRACT.md, to: CONTRACT.md }
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/quality-canary-evidence"
+    short: quality-canary-evidence
+    source: git@github.com:meagerfindings/swamp-quality-canary-evidence.git
+    ref: 877316a19e1d62608d1f61437046c9210d7c6f64
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/read-only-investigation"
+    short: read-only-investigation
+    source: git@github.com:meagerfindings/swamp-read-only-investigation.git
+    ref: 6596b9a8574b9b8defb261cb3528ceddbeceb68e
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/read-only-trial"
+    short: read-only-trial
+    source: git@github.com:meagerfindings/swamp-read-only-trial.git
+    ref: 70f497f233fcbcd91b0b6ad5185c39aad5d9e21f
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/readonly-assessment-workflows"
+    short: readonly-assessment-workflows
+    source: git@github.com:meagerfindings/swamp-readonly-assessment-workflows.git
+    ref: 150831c97ddb43f1c6ef4180c047874eb5680c48
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: docs/, to: docs/ }
+      - { from: examples/, to: examples/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: tests/, to: tests/ }
+      - { from: workflows/, to: workflows/ }
+  - name: "@mgreten/repeated-friction"
+    short: repeated-friction
+    source: git@github.com:meagerfindings/swamp-repeated-friction.git
+    ref: 0a5c1f1fa793d9864573c6ddc3905b7ce02db1f0
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/response-quality"
+    short: response-quality
+    source: git@github.com:meagerfindings/swamp-response-quality.git
+    ref: 8c4fbc41de88042c23b0f99ccb736840e7bc7a4b
+    manifest: extensions/manifest.yaml
+    paths:
+      - { from: extensions/, to: extensions/ }
+  - name: "@mgreten/s3-backup-retention"
+    short: s3-backup-retention
+    source: git@github.com:meagerfindings/swamp-s3-backup-retention.git
+    ref: 458150ca3358aad5d81fde1847124a5e36e68229
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: deno.json, to: deno.json }
+      - { from: deno.lock, to: deno.lock }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/s3-object-read"
+    short: s3-object-read
+    source: git@github.com:meagerfindings/swamp-s3-object-read.git
+    ref: 0f1ecc2f24ec899e56f1663077e85b9f8a36b5ca
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/service-watchdog"
+    short: service-watchdog
+    source: git@github.com:meagerfindings/swamp-service-watchdog.git
+    ref: 1c9d04afcc168cef9cfd7d731b77be18ca3b9459
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/tailscale-oauth-client"
+    short: tailscale-oauth-client
+    source: git@github.com:meagerfindings/swamp-tailscale-oauth.git
+    ref: af484a67156f9b1c756c1971cc717f4a1dcf44f3
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: model.ts, to: model.ts }
+      - { from: model_test.ts, to: model_test.ts }
+  - name: "@mgreten/trip-expense-tracker"
+    short: trip-expense-tracker
+    source: git@github.com:meagerfindings/swamp-trip-expense-tracker.git
+    ref: 9091d3967e74915d6f2e83b31078001ee6eaf009
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/trip-packing"
+    short: trip-packing
+    source: git@github.com:meagerfindings/swamp-trip-packing.git
+    ref: fae1f9043275756deff7c60bd26bef6041369bee
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: fixtures/, to: fixtures/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: trip-packing.ts, to: trip-packing.ts }
+      - { from: trip-packing_test.ts, to: trip-packing_test.ts }
+  - name: "@mgreten/unifi-release-safety"
+    short: unifi-release-safety
+    source: git@github.com:meagerfindings/swamp-unifi-release-safety.git
+    ref: 6708ae85dcca6f5e2ced08622ce0935bba57d0e0
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE.md, to: LICENSE.md }
+      - { from: README.md, to: README.md }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: model.ts, to: model.ts }
+      - { from: model_test.ts, to: model_test.ts }
+  - name: "@mgreten/weekly-decision-queue"
+    short: weekly-decision-queue
+    source: git@github.com:meagerfindings/swamp-weekly-decision-queue.git
+    ref: c75b5e812dd964e9426c69964a520953d6ae10e6
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+  - name: "@mgreten/work-order-intake"
+    short: work-order-intake
+    source: git@github.com:meagerfindings/swamp-work-order-intake.git
+    ref: 972c8eda933b404a45198c2f3dc2f9f184bb68b0
+    manifest: manifest.yaml
+    paths:
+      - { from: LICENSE, to: LICENSE }
+      - { from: README.md, to: README.md }
+      - { from: extensions/, to: extensions/ }
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: tests/, to: tests/ }
+  - name: "@mgreten/zernio"
+    short: zernio
+    source: git@github.com:meagerfindings/swamp-zernio.git
+    ref: f959c14664e96bf593d1f7146b87116e0814f32d
+    manifest: extensions/models/zernio/manifest.yaml
+    paths:
+      - { from: "extensions/models/zernio/", to: "extensions/models/zernio/" }
