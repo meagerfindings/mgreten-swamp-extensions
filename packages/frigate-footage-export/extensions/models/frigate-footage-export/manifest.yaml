@@ -7,7 +7,7 @@ description: >
   support.
 license: MIT
 visibility: public
-repository: 'https://github.com/meagerfindings/swamp-frigate-footage-export'
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 models:
