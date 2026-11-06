@@ -9,7 +9,7 @@ description: >
   name, comment threads, document and project-resource retrieval, and
   team/project/state listing via the official @linear/sdk.
 
-repository: https://github.com/meagerfindings/swamp-linear
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
