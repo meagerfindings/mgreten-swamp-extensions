@@ -152,8 +152,8 @@ packages:
   - name: '@mgreten/contained-git-write'
     path: packages/contained-git-write
     manifest: packages/contained-git-write/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:4efcbbaaa6a668fe39150151dac645c0090baa504de1c69a67d8def77d6874f7'
+    version: 2026.11.06.1
+    contentHash: 'sha256:36f6484132942a01231f2dcb300cc04ea2a4b320336983c1e92dd05fa4622b11'
     tests: deterministic
     dependsOn: []
     source:
