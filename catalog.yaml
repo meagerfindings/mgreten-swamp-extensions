@@ -329,6 +329,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-feedback-triage.git'
       ref: 65a10ed002ec7819aa21b531e327e4c98b0063df
+  - name: '@mgreten/frigate-footage-export'
+    path: packages/frigate-footage-export
+    manifest: packages/frigate-footage-export/extensions/models/frigate-footage-export/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:b64432c2732ad7bbb7582b0f5132c047f26a5beb0cb6c8cf1338ab48c4e25459'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'registry:@mgreten/frigate-footage-export@2026.10.14.1'
+      ref: 282811844a23fdbc03591e056e227950ea400654
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
