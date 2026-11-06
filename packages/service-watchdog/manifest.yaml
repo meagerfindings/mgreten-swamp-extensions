@@ -3,7 +3,7 @@ name: "@mgreten/service-watchdog"
 license: MIT
 version: 2026.10.14.1
 description: "Provider-neutral, transition-only service watchdog with no delivery capability."
-repository: "https://github.com/meagerfindings/swamp-service-watchdog"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - service_watchdog.ts
 additionalFiles:
