@@ -1004,6 +1004,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-candidate-researcher.git'
       ref: 16a4d88cb262fceab94d9d8fd837eb74dcec58fe
+  - name: '@mgreten/swamp-club-score'
+    path: packages/swamp-club-score
+    manifest: packages/swamp-club-score/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:9af2bd0ebd4e9de846145c9229a047a18bfcd9bf6d8954ffbb24daee6a8a76d2'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-club-score.git'
+      ref: 6b298395c9ba85b63ebb0f77d9bd6c6e6fda1afe
   - name: '@mgreten/tailscale-oauth-client'
     path: packages/tailscale-oauth-client
     manifest: packages/tailscale-oauth-client/manifest.yaml
