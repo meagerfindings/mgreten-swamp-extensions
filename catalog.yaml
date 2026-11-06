@@ -613,6 +613,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-linear-activity.git'
       ref: 108baaa88fb1229f6e64cb8be9acc8f35131a0ae
+  - name: '@mgreten/local-dev-server'
+    path: packages/local-dev-server
+    manifest: packages/local-dev-server/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:5966ab469c4038adc52383f791aed11a642b66b7c4d096b44cf7b7835826eacd'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-local-dev-server.git'
+      ref: 4e180b4f5747cc4168fc0a27503f5bb055c642af
   - name: '@mgreten/local-safety-watch'
     path: packages/local-safety-watch
     manifest: packages/local-safety-watch/manifest.yaml
