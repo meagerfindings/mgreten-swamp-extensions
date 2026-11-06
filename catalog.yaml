@@ -36,6 +36,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-agent-system-review.git'
       ref: 3703849b374883136efcd1d373bb1dc8911383c6
+  - name: '@mgreten/approval-gate'
+    path: packages/approval-gate
+    manifest: packages/approval-gate/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:40535461969f17a91701431482e97b4df648f864756a60b56f0eb1d74f011f99'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-approval-gate.git'
+      ref: 3f66758425a0feb8750f30857c37da4e8c1c4148
   - name: '@mgreten/aws/s3-site-deploy'
     path: packages/s3-site-deploy
     manifest: packages/s3-site-deploy/manifest.yaml
