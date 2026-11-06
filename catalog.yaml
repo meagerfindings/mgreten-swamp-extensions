@@ -823,8 +823,8 @@ packages:
   - name: '@mgreten/service-watchdog'
     path: packages/service-watchdog
     manifest: packages/service-watchdog/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:d86e4a5fb728b8470451e855b6303921cd545bd3e016d6e4150a743e6bf138d8'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ef3e2124859cefcf094651b36db9145d39037480ccd06f825fb82687e80b3e08'
     tests: deterministic
     dependsOn: []
     source:

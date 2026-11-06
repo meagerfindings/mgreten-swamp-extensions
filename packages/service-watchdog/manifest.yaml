@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/service-watchdog"
 license: MIT
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: "Provider-neutral, transition-only service watchdog with no delivery capability."
 repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
