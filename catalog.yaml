@@ -98,6 +98,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/cron-builder.git'
       ref: 559205034e299577ee6de95589a10d4ea2880a1e
+  - name: '@mgreten/docker-orphan-sweep'
+    path: packages/docker-orphan-sweep
+    manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:62514d96a186d1dd67537501969bd09ab26a6912115e6eec80c2f244e5b2e548'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-docker-orphan-sweep.git'
+      ref: 542299517cf385cfd712d0236b7da7cd4f8df95f
   - name: '@mgreten/election-packet'
     path: packages/election-packet
     manifest: packages/election-packet/manifest.yaml
