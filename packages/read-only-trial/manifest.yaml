@@ -5,7 +5,7 @@ version: 2026.10.14.1
 description: >
   Generic deterministic evaluator for caller-supplied read-only trial evidence.
   It has no operational bindings and persists only its own evaluation record.
-repository: "https://github.com/meagerfindings/swamp-read-only-trial"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 models:
