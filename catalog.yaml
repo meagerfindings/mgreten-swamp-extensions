@@ -359,6 +359,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-github-pr-feed.git'
       ref: 984aacdc19da215c32f9173015c3f781e8ce42f3
+  - name: '@mgreten/github-pr-feedback'
+    path: packages/github-pr-feedback
+    manifest: packages/github-pr-feedback/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:5ff76ac5314e4f435c267e0ec6e066c6f1b7f83684a1f835245a6e224193df64'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-github-pr-feedback.git'
+      ref: 50c538ac84ee1e12c9cd069b0c47896c2d822fb2
   - name: '@mgreten/granola-api'
     path: packages/granola-api
     manifest: packages/granola-api/extensions/models/manifest.yaml
