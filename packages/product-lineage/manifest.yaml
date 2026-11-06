@@ -6,7 +6,7 @@ description: >
   Validates and persists an immutable, ordered product-delivery lineage from
   source signal through post-release measurement without creating or inferring
   producer evidence.
-repository: "https://github.com/meagerfindings/swamp-product-lineage"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - product_lineage.ts
 workflows: []
