@@ -930,6 +930,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-candidate-researcher.git'
       ref: 16a4d88cb262fceab94d9d8fd837eb74dcec58fe
+  - name: '@mgreten/tailscale-oauth-client'
+    path: packages/tailscale-oauth-client
+    manifest: packages/tailscale-oauth-client/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:4d60261a2533138a37a0981226e568e7afdf8f9e0c33e1c742012bdcb250f1a9'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-tailscale-oauth.git'
+      ref: af484a67156f9b1c756c1971cc717f4a1dcf44f3
   - name: '@mgreten/task-skill-router'
     path: packages/task-skill-router
     manifest: packages/task-skill-router/extensions/models/manifest.yaml
