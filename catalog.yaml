@@ -192,8 +192,8 @@ packages:
   - name: '@mgreten/cross-source-evidence'
     path: packages/cross-source-evidence
     manifest: packages/cross-source-evidence/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:5feb54e57a17a8f2a42493b4568f133dcbb357f4cdef0e04e72299b7a9241d44'
+    version: 2026.11.06.1
+    contentHash: 'sha256:2536492914ad627b3337d44b7a71b195a8edfe7726454ea238cdb79cae1ac263'
     tests: deterministic
     dependsOn: []
     source:
