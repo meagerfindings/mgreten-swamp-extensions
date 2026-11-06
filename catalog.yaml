@@ -440,6 +440,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-storage-health.git'
       ref: 40f121d722c480171b67c5f3b4f9511271dea161
+  - name: '@mgreten/swamp-candidate-researcher-colorado'
+    path: packages/swamp-candidate-researcher-colorado
+    manifest: packages/swamp-candidate-researcher-colorado/extensions/colorado-candidate/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:16bbe37bce15d4c1a27a110640c4c190eb15ea3fe9ca43ace7d109d50e798d68'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-candidate-researcher.git'
+      ref: 16a4d88cb262fceab94d9d8fd837eb74dcec58fe
   - name: '@mgreten/task-skill-router'
     path: packages/task-skill-router
     manifest: packages/task-skill-router/extensions/models/manifest.yaml
