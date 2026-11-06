@@ -4,7 +4,7 @@ version: "2026.10.14.1"
 description: >
   Runs five deterministic, bounded synthetic JavaScript tasks to compare coding
   implementers with isolated hidden verification and durable evidence.
-repository: https://github.com/meagerfindings/swamp-implementer-benchmark
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - implementer_benchmark.ts
