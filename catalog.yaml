@@ -913,8 +913,8 @@ packages:
   - name: '@mgreten/swamp-candidate-researcher-federal'
     path: packages/swamp-candidate-researcher-federal
     manifest: packages/swamp-candidate-researcher-federal/extensions/federal-candidate/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:66990fe91140f6c525af372e855af0fb2e8a30eef85dd1835c573c94d9f81ef1'
+    version: 2026.11.06.1
+    contentHash: 'sha256:aa7faf434ed6e52fbe800e8caca9512a78cfec329d8a2f16dc0f7a18483121f7'
     tests: deterministic
     dependsOn: []
     source:
