@@ -300,6 +300,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
       ref: 569409c3597b7f8ab3a1f6bc60110be401cb78b4
+  - name: '@mgreten/moment-savor'
+    path: packages/moment-savor
+    manifest: packages/moment-savor/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:6238a08d20445d19a97356ea2424415c7293ad1dce5ab7ec6ebdc3370ca40b89'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-moment-savor.git'
+      ref: 75ac1cf88dd33a9a31bc5d49728b3c788ed6c816
   - name: '@mgreten/ntfy-notify'
     path: packages/ntfy-notify
     manifest: packages/ntfy-notify/extensions/models/manifest.yaml
