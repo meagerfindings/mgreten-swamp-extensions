@@ -3,7 +3,7 @@ name: "@mgreten/pricing-unit-economics"
 license: MIT
 version: "2026.10.14.1"
 description: "Deterministic, recommendation-only validation and summarization of observed cost proxies and hypothetical revenue scenarios."
-repository: "https://github.com/meagerfindings/swamp-pricing-unit-economics"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - pricing_unit_economics.ts
 additionalFiles:
