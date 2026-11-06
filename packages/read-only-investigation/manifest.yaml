@@ -6,7 +6,7 @@ description: >
   Creates deterministic, bounded authorization plans for read-only
   investigations without executing queries, invoking providers, or mutating
   production systems.
-repository: "https://github.com/meagerfindings/swamp-read-only-investigation"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 models:
