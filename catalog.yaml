@@ -688,8 +688,8 @@ packages:
   - name: '@mgreten/pricing-unit-economics'
     path: packages/pricing-unit-economics
     manifest: packages/pricing-unit-economics/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:dcf73f891b8611261c3bc87bb1961359ecb5538e47610fc8f2f22c6fbb003183'
+    version: 2026.11.06.1
+    contentHash: 'sha256:cc82473050e39afa5679420fce8b8c19538fa5dbfaea0e16edba4e30288314c3'
     tests: deterministic
     dependsOn: []
     source:
