@@ -765,6 +765,21 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-read-only-trial.git'
       ref: 70f497f233fcbcd91b0b6ad5185c39aad5d9e21f
+  - name: '@mgreten/readonly-assessment-workflows'
+    path: packages/readonly-assessment-workflows
+    manifest: packages/readonly-assessment-workflows/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:a218ae95d3ffdcfcfecb32252a8f2c42138d3738e4b4a7712f5ee2d2386499f1'
+    tests: deterministic
+    dependsOn:
+      - '@mgreten/cli-agent'
+      - '@mgreten/decision-review'
+      - '@mgreten/feedback-triage'
+      - '@mgreten/cross-source-evidence'
+      - '@mgreten/feature-idea-gate'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-readonly-assessment-workflows.git'
+      ref: 150831c97ddb43f1c6ef4180c047874eb5680c48
   - name: '@mgreten/release-adoption'
     path: packages/release-adoption
     manifest: packages/release-adoption/extensions/models/manifest.yaml
