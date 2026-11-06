@@ -113,6 +113,14 @@ async function walkRecentFiles(
   maxFiles: number,
 ): Promise<Array<{ path: string; mtime: string }>> {
   const results: Array<{ path: string; mtime: string }> = [];
+  // A root file can also sit under a scanned root (.hermes/config.yaml is in
+  // .hermes/), so each path is recorded once.
+  const seen = new Set<string>();
+  const record = (path: string, mtime: Date) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    results.push({ path, mtime: mtime.toISOString() });
+  };
   const roots = [
     `${root}/extensions`,
     `${root}/models`,
@@ -134,7 +142,7 @@ async function walkRecentFiles(
     try {
       const stat = await Deno.stat(path);
       if (stat.isFile && stat.mtime && stat.mtime.getTime() >= cutoffMs) {
-        results.push({ path, mtime: stat.mtime.toISOString() });
+        record(path, stat.mtime);
         return;
       }
       if (!stat.isDirectory) return;
@@ -161,7 +169,7 @@ async function walkRecentFiles(
         const stat = await Deno.stat(child);
         if (!stat.mtime) continue;
         if (stat.mtime.getTime() < cutoffMs) continue;
-        results.push({ path: child, mtime: stat.mtime.toISOString() });
+        record(child, stat.mtime);
       } catch {
         continue;
       }

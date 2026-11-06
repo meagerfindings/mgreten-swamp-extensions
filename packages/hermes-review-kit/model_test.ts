@@ -3,7 +3,11 @@ import { parse } from "@std/yaml";
 import { model } from "./model.ts";
 import { report } from "./review_report.ts";
 
-type Logged = { level: string; message: string; props?: Record<string, unknown> };
+type Logged = {
+  level: string;
+  message: string;
+  props?: Record<string, unknown>;
+};
 type Written = { spec: string; name: string; data: Record<string, unknown> };
 
 function makeContext(globalArgs: Record<string, unknown>) {
@@ -152,15 +156,23 @@ Deno.test("collect truncates long user requests to 260 chars and keeps at most f
   try {
     const messages = [
       { role: "user", content: "x".repeat(300) },
-      ...Array.from({ length: 6 }, (_, i) => ({ role: "user", content: `ask ${i}` })),
+      ...Array.from(
+        { length: 6 },
+        (_, i) => ({ role: "user", content: `ask ${i}` }),
+      ),
     ];
     await Deno.writeTextFile(
       `${sessionDir}/a.json`,
-      JSON.stringify({ session_id: "s-long", last_updated: hoursAgo(1), messages }),
+      JSON.stringify({
+        session_id: "s-long",
+        last_updated: hoursAgo(1),
+        messages,
+      }),
     );
     const { context, writes } = makeContext({ sessionDir, repoDir });
     await model.methods.collect.execute({}, context);
-    const session = model.resources.summary.schema.parse(writes[0].data).sessions[0];
+    const session =
+      model.resources.summary.schema.parse(writes[0].data).sessions[0];
     assertEquals(session.userRequests.length, 5);
     assertEquals(session.userRequests[0], `${"x".repeat(259)}…`);
     assertEquals(session.userRequests[4], "ask 3");
@@ -184,7 +196,11 @@ Deno.test("collect lists recent repo files only from watched roots, skips old an
     await writeFileWithAge(`${repoDir}/extensions/node_modules/dep.ts`, 1);
     await writeFileWithAge(`${repoDir}/other/ignored.ts`, 1);
 
-    const { context, writes } = makeContext({ sessionDir, repoDir, lookbackHours: 24 });
+    const { context, writes } = makeContext({
+      sessionDir,
+      repoDir,
+      lookbackHours: 24,
+    });
     await model.methods.collect.execute({}, context);
     const summary = model.resources.summary.schema.parse(writes[0].data);
     assertEquals(summary.recentFiles.map((f) => f.path), [
@@ -201,10 +217,36 @@ Deno.test("collect lists recent repo files only from watched roots, skips old an
 
     const capped = makeContext({ sessionDir, repoDir, maxFiles: 1 });
     await model.methods.collect.execute({}, capped.context);
-    const cappedSummary = model.resources.summary.schema.parse(capped.writes[0].data);
-    assertEquals(cappedSummary.recentFiles.map((f) => f.path), [`${repoDir}/AGENTS.md`]);
+    const cappedSummary = model.resources.summary.schema.parse(
+      capped.writes[0].data,
+    );
+    assertEquals(cappedSummary.recentFiles.map((f) => f.path), [
+      `${repoDir}/AGENTS.md`,
+    ]);
   } finally {
     await Deno.remove(sessionDir, { recursive: true });
+    await Deno.remove(repoDir, { recursive: true });
+  }
+});
+
+Deno.test("collect counts .hermes/config.yaml once although it is both a root file and under .hermes/", async () => {
+  const repoDir = await Deno.makeTempDir();
+  try {
+    await Deno.mkdir(`${repoDir}/.hermes`);
+    await writeFileWithAge(`${repoDir}/.hermes/config.yaml`, 1);
+    await writeFileWithAge(`${repoDir}/.hermes/notes.md`, 2);
+    const { context, writes } = makeContext({
+      sessionDir: `${repoDir}/none`,
+      repoDir,
+    });
+    await model.methods.collect.execute({}, context);
+    const summary = model.resources.summary.schema.parse(writes[0].data);
+    assertEquals(summary.recentFiles.map((f) => f.path), [
+      `${repoDir}/.hermes/config.yaml`,
+      `${repoDir}/.hermes/notes.md`,
+    ]);
+    assertEquals(summary.fileCount, 2);
+  } finally {
     await Deno.remove(repoDir, { recursive: true });
   }
 });
@@ -255,7 +297,10 @@ Deno.test("daily review workflow wires the collector method, its inputs, and the
   assertEquals(methodSteps.length, 1);
   for (const step of methodSteps) {
     assertEquals(step.task.modelType, model.type);
-    assert(step.task.methodName! in model.methods, `unknown method ${step.task.methodName}`);
+    assert(
+      step.task.methodName! in model.methods,
+      `unknown method ${step.task.methodName}`,
+    );
     const globalKeys = Object.keys(model.globalArguments.shape);
     for (const key of Object.keys(step.task.inputs ?? {})) {
       assert(globalKeys.includes(key), `input ${key} is not a global argument`);
