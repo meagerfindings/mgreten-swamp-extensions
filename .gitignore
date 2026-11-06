@@ -10,3 +10,6 @@
 # Created by deno test for packages with nodeModulesDir: auto; an untracked
 # node_modules would leave the tree dirty and stop a live ext-publish run.
 node_modules/
+
+# Python venvs for package tests (tools/setup-markdown-blog-venv).
+.venvs/

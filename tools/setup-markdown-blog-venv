@@ -1,0 +1,13 @@
+#!/bin/sh
+# Create the gitignored venv the markdown-blog tests use (.venvs/markdown-blog)
+# with the package's pinned requirements. Never touches system Python.
+# PyYAML 5.4.1 has no wheel for current Python; --no-build-isolation without
+# Cython builds its pure-Python variant.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+venv="$root/.venvs/markdown-blog"
+req="$root/packages/markdown-blog/extensions/models/markdown-blog/requirements.txt"
+python3 -m venv "$venv"
+"$venv/bin/pip" install -q --disable-pip-version-check setuptools wheel
+"$venv/bin/pip" install -q --disable-pip-version-check --no-build-isolation -r "$req"
+"$venv/bin/python3" -c 'import markdown, yaml; print("markdown", markdown.__version__, "pyyaml", yaml.__version__)'

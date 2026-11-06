@@ -1,0 +1,57 @@
+id: 9803c8c0-0c56-4f88-958a-ff734501d842
+name: '@mgreten/markdown-blog/write-and-verify'
+description: Write an already reviewed Markdown preview locally, then verify its exact HTML. No deployment.
+tags: {}
+inputs:
+  type: object
+  properties:
+    modelName:
+      type: string
+      description: Consumer-owned markdown-blog instance; create and configure it before previewing
+    sourcePath:
+      type: string
+    expectedRenderHash:
+      type: string
+      pattern: '^[a-f0-9]{64}$'
+    expectedHtmlHash:
+      type: string
+      pattern: '^[a-f0-9]{64}$'
+    operation:
+      type: string
+      enum: [create, update]
+  required: [modelName, sourcePath, expectedRenderHash, expectedHtmlHash, operation]
+jobs:
+  - name: main
+    description: Local write followed by byte verification
+    steps:
+      - name: write
+        task:
+          type: model_method
+          modelType: '@mgreten/markdown-blog'
+          modelName: ${{ inputs.modelName }}
+          methodName: write
+          inputs:
+            sourcePath: ${{ inputs.sourcePath }}
+            expectedRenderHash: ${{ inputs.expectedRenderHash }}
+            operation: ${{ inputs.operation }}
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: verify
+        task:
+          type: model_method
+          modelType: '@mgreten/markdown-blog'
+          modelName: ${{ inputs.modelName }}
+          methodName: verify
+          inputs:
+            sourcePath: ${{ inputs.sourcePath }}
+            expectedHtmlHash: ${{ inputs.expectedHtmlHash }}
+        dependsOn:
+          - step: write
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1

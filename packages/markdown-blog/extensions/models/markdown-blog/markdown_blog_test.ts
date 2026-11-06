@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { model } from "./markdown_blog.ts";
 
+// The renderer needs the pinned requirements.txt (Markdown 3.3.6, PyYAML
+// 5.4.1). Tests use MARKDOWN_BLOG_PYTHON, else the monorepo's gitignored
+// venv made by tools/setup-markdown-blog-venv, else python3.
+const venvPython = fileURLToPath(
+  new URL("../../../../../.venvs/markdown-blog/bin/python3", import.meta.url),
+);
+const PYTHON = Deno.env.get("MARKDOWN_BLOG_PYTHON") ??
+  (await Deno.stat(venvPython).then(() => venvPython, () => "python3"));
+
 // Match the site's integration-test style without adding a testing dependency.
 async function fixture() {
   const repoDir = await Deno.makeTempDir({ prefix: "markdown-blog-test-" });
@@ -11,6 +20,7 @@ async function fixture() {
     globalArgs: model.globalArguments.parse({
       siteTitle: 'Notes & "Things"',
       outputDir: "public/articles",
+      pythonExecutable: PYTHON,
     }),
     extensionFile: (path: string) =>
       fileURLToPath(new URL(path, import.meta.url)),
