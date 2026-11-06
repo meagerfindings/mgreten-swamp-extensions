@@ -3,7 +3,7 @@ name: "@mgreten/swamp-candidate-researcher-colorado-judge"
 version: "2026.10.14.1"
 license: MIT
 description: "Colorado judge research extension for retention, discipline, and sentencing-pattern analysis."
-repository: https://github.com/meagerfindings/swamp-candidate-researcher
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 models:
