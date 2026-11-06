@@ -574,8 +574,8 @@ packages:
   - name: '@mgreten/mlx-whisper'
     path: packages/mlx-whisper
     manifest: packages/mlx-whisper/extensions/models/mlx-whisper/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:8d9d56bca396b490aa6044ebc46dde1399d0eee482bf8bc5b90ae9247c445035'
+    version: 2026.11.06.1
+    contentHash: 'sha256:70606604cd23d37b77e8b97958ea91646d109f9213f31b44383ed937cf697da5'
     tests: deterministic
     dependsOn: []
     source:
