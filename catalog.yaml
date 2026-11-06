@@ -706,6 +706,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-obsidian-vault-fs.git'
       ref: 3b338626356b18606d0dea1d2bc51f052c4c8956
+  - name: '@mgreten/openai-decision-tools'
+    path: packages/openai-decision-tools
+    manifest: packages/openai-decision-tools/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:b1f416feaba2f1c8f057cd80dca27b1f5cd988d423bc7fc8f96de8089e0b47f3'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-openai-decision-tools.git'
+      ref: 49f9ddc5a36d331f8e0361736165bbb4d01a5b04
   - name: '@mgreten/packet-certifier'
     path: packages/packet-certifier
     manifest: packages/packet-certifier/extensions/models/manifest.yaml
