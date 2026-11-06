@@ -860,8 +860,8 @@ packages:
   - name: '@mgreten/pr-watcher'
     path: packages/pr-watcher
     manifest: packages/pr-watcher/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:12b91aef6c7a2da0443cb5efe135b816dbe8be9222f27cad011cb6d26c4bfe7c'
+    version: 2026.11.06.1
+    contentHash: 'sha256:f71b7e1fd6ec555c09081627637b0c6ca21242b88dc9bc7eb6fa5c8b55dc6793'
     tests: deterministic
     dependsOn:
       - '@mgreten/cli-agent'
