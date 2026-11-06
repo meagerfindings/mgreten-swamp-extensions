@@ -1023,8 +1023,8 @@ packages:
   - name: '@mgreten/zernio'
     path: packages/zernio
     manifest: packages/zernio/extensions/models/zernio/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:6838e8e1e3c1d634c7e069813cc8572d5b2f42b0f934e120463957c647e81793'
+    version: 2026.11.06.1
+    contentHash: 'sha256:9382f92ba94c5450a35f883d4ffbc74e086e21d6f1007f20af45773d0708ef27'
     tests: deterministic
     dependsOn: []
     source:
