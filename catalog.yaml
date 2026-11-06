@@ -705,6 +705,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-pricing-unit-economics.git'
       ref: dedb515968b80c3669592062a1077e29d2080f81
+  - name: '@mgreten/product-behavior-summary'
+    path: packages/product-behavior-summary
+    manifest: packages/product-behavior-summary/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:4ae825abd17be95c83482d7fc438e4221b569965c10320cb4bacabd03d4451f9'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-product-behavior-summary.git'
+      ref: 7fab53fe4a188798711b70ebabedfdea3ca61d22
   - name: '@mgreten/pyannote-diarizer'
     path: packages/pyannote-diarizer
     manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
