@@ -127,7 +127,16 @@ Deno.test("health URLs reject non-HTTP protocols and embedded credentials", () =
 });
 
 Deno.test("working directories are confined to the repository", async () => {
-  assertEquals(await validateWorkingDirectory("/tmp", "/tmp"), "/tmp");
+  // The result is the real path; on macOS /tmp itself is a symlink, so use
+  // a resolved temp dir rather than assuming /tmp is canonical.
+  const repo = await Deno.realPath(await Deno.makeTempDir());
+  try {
+    await Deno.mkdir(`${repo}/web`);
+    assertEquals(await validateWorkingDirectory(repo, repo), repo);
+    assertEquals(await validateWorkingDirectory(repo, `${repo}/web`), `${repo}/web`);
+  } finally {
+    await Deno.remove(repo, { recursive: true });
+  }
   await assertRejects(
     () => validateWorkingDirectory("/tmp", "/"),
     Error,
