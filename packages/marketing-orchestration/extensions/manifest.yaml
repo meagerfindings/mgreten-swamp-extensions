@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/marketing-orchestration"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: Approval-gated, digest-bound marketing release orchestration with a content calendar report.
 repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT

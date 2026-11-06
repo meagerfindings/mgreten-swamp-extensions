@@ -544,8 +544,8 @@ packages:
   - name: '@mgreten/marketing-orchestration'
     path: packages/marketing-orchestration
     manifest: packages/marketing-orchestration/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:3d8433c1fe2c9d5c5839ddbf16ca6f27ae7a64b2f2a6d8d82325789e3d0416c0'
+    version: 2026.11.06.1
+    contentHash: 'sha256:e97041307363890899118877376af545a5d86f09dfe150de8f1728a5e1502587'
     tests: deterministic
     dependsOn: []
     source:
