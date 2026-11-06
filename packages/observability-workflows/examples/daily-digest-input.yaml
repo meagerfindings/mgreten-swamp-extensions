@@ -1,0 +1,20 @@
+readAdapter: example-read-adapter
+readMethod: collect
+readSpecName: observation-window
+readInputs:
+  limit: 100
+selector:
+  groups: [example]
+window:
+  lookbackSeconds: 86400
+normalization:
+  schemaVersion: "1.0"
+severityPolicy:
+  levels: [critical, warning, info]
+freshnessPolicy:
+  maximumAgeSeconds: 900
+normalizer: example-normalizer
+normalizeMethod: normalize
+normalizedSpecName: normalized-observations
+digestBuilder: example-digest-builder
+digestMethod: digest

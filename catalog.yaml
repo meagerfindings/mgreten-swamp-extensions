@@ -622,6 +622,18 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-ntfy-notify.git'
       ref: 82346aaafde9670d161c2d59838e44991dafa3ce
+  - name: '@mgreten/observability-workflows'
+    path: packages/observability-workflows
+    manifest: packages/observability-workflows/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:fa5689143ecc7276c9b07ee00fde75bf7053ffba2367b4d05076654f556473c1'
+    tests: none
+    dependsOn:
+      - '@mgreten/notification-outbox'
+      - '@mgreten/notification-outbox-workflows'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-observability-workflows.git'
+      ref: 63616bf1aac7ec547023e68cabfe68f813ef9bdb
   - name: '@mgreten/obsidian-vault-fs'
     path: packages/obsidian-vault-fs
     manifest: packages/obsidian-vault-fs/manifest.yaml
