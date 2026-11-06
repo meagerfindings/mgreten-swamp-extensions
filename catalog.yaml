@@ -554,8 +554,8 @@ packages:
   - name: '@mgreten/meeting-summarizer'
     path: packages/meeting-summarizer
     manifest: packages/meeting-summarizer/extensions/models/meeting-summarizer/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:03e1282235a9388109b730601142ffa642dd5d5d33fba3dbbed8b6a091151238'
+    version: 2026.11.06.1
+    contentHash: 'sha256:78fb532a41905b63e8aa5f431ea3233e87765e7d9bf1516fa228655168be59db'
     tests: deterministic
     dependsOn: []
     source:
