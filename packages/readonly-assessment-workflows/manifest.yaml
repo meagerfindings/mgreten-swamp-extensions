@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/readonly-assessment-workflows"
 license: MIT
-version: "2026.10.14.1"
+version: "2026.11.06.1"
 description: >-
   Generic, bounded, recommendation-only Swamp workflows for decision review,
   feedback triage, cross-source evidence, and quarterly idea gates.

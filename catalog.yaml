@@ -758,8 +758,8 @@ packages:
   - name: '@mgreten/readonly-assessment-workflows'
     path: packages/readonly-assessment-workflows
     manifest: packages/readonly-assessment-workflows/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:a218ae95d3ffdcfcfecb32252a8f2c42138d3738e4b4a7712f5ee2d2386499f1'
+    version: 2026.11.06.1
+    contentHash: 'sha256:f6a6c12428110fde8b7d971b3a216fe86c6dfa0ed61a08002c3a5fb4e73a06c2'
     tests: deterministic
     dependsOn:
       - '@mgreten/cli-agent'
