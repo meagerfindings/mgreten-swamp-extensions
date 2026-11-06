@@ -269,6 +269,16 @@ packages:
     source:
       repo: 'https://github.com/meagerfindings/mgreten-swamp-extensions'
       ref: d60af38272683550944c2d00127c47c367498a91
+  - name: '@mgreten/extension-radar'
+    path: packages/extension-radar
+    manifest: packages/extension-radar/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:bfb0d25357ab68ab52e24867289aac854d3d40537ff6a2c777981cab3806e407'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-extension-radar.git'
+      ref: dd265162e75c6331bcd41cd1cf7e2272b23ef990
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
