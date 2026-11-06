@@ -4,7 +4,7 @@ version: 2026.10.14.1
 description: >-
   Reusable, reference-only Swamp workflows for compiling bounded context and
   operating packets from caller-configured model instances.
-repository: "https://github.com/meagerfindings/swamp-bounded-context-workflows"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 workflows:
   - workflow-bounded-reference-context.yaml
