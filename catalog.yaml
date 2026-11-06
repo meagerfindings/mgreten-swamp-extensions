@@ -279,6 +279,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-extension-radar.git'
       ref: dd265162e75c6331bcd41cd1cf7e2272b23ef990
+  - name: '@mgreten/factory-watcher'
+    path: packages/factory-watcher
+    manifest: packages/factory-watcher/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:00e327330080e532da30fa75514e34404ac490d1e3a7f613763b21223cde5b7f'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-factory-watcher.git'
+      ref: 363ad053c18b489006fd50d2527b29c85609a654
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
