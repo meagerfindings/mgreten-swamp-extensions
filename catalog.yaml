@@ -110,8 +110,8 @@ packages:
   - name: '@mgreten/browser-test-evidence'
     path: packages/browser-test-evidence
     manifest: packages/browser-test-evidence/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:45e646a9a2e80f687864c777eff81d031c7abf4ed9484f481fb36197e66ed3c9'
+    version: 2026.11.06.1
+    contentHash: 'sha256:54221070793c3e2b76431f528a515c2dfd41044751a2cd7794691aad8e688897'
     tests: deterministic
     dependsOn: []
     source:
