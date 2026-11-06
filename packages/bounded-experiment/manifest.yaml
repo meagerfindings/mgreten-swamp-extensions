@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/bounded-experiment"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Deterministic, recommendation-only bounded experiment proposals with
   provenance-backed fresh evidence, caller-policy downside limits, explicit

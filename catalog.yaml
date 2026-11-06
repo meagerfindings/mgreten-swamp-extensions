@@ -80,8 +80,8 @@ packages:
   - name: '@mgreten/bounded-experiment'
     path: packages/bounded-experiment
     manifest: packages/bounded-experiment/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:9a7421f41bedea3c9bb0d117f8b6740b0b2517c715b6251ef2f976326580ecf9'
+    version: 2026.11.06.1
+    contentHash: 'sha256:672f82dd91cab23c60ff8d9cd9009fe42a0d5661cd932d447da2059f2e265080'
     tests: deterministic
     dependsOn: []
     source:
