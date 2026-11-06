@@ -677,8 +677,8 @@ packages:
   - name: '@mgreten/pr-browser-test-planner'
     path: packages/pr-browser-test-planner
     manifest: packages/pr-browser-test-planner/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:61342ed95cd10e39e8ba0e5a5495932f8bf1d0f7ae0685c9cf71308bb2abd35f'
+    version: 2026.11.06.1
+    contentHash: 'sha256:34f0ecbff1bef4936667381ffab5f76d48a55d5b48d06b91b9a6c541c7cb9c03'
     tests: deterministic
     dependsOn:
       - '@mgreten/cli-agent'

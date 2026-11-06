@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/pr-browser-test-planner"
-version: "2026.10.14.1"
+version: "2026.11.06.1"
 description: >
   Generate safe, validated browser test plans from GitHub pull requests using
   a configurable target application and @mgreten/cli-agent.
