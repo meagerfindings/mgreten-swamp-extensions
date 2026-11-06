@@ -431,6 +431,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-github-pr-feedback.git'
       ref: 50c538ac84ee1e12c9cd069b0c47896c2d822fb2
+  - name: '@mgreten/gmail-read'
+    path: packages/gmail-read
+    manifest: packages/gmail-read/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:bb26cccc6593e0cefaeeddd39eb3090248c14632667031da2500db577bdd82f6'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-gmail-read.git'
+      ref: 031f3fec9c5c5b916e5449e9da3dbad2411611af
   - name: '@mgreten/granola-api'
     path: packages/granola-api
     manifest: packages/granola-api/extensions/models/manifest.yaml
