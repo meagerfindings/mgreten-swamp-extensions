@@ -159,6 +159,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-contained-git-write.git'
       ref: ff11e588c828c55509cf9a55fcb39ac46cad0ce0
+  - name: '@mgreten/context-compiler'
+    path: packages/context-compiler
+    manifest: packages/context-compiler/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:b5016fc182a9924ffe9c5b0f46cffdbf02585b6bd6d11558976dfcbdae8cdd77'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-context-compiler.git'
+      ref: ee4f4ca20a9494af7b9db631a7b9dd21337b00b3
   - name: '@mgreten/cron-builder'
     path: packages/cron-builder
     manifest: packages/cron-builder/manifest.yaml
