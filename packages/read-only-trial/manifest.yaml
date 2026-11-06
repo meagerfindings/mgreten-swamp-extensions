@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@mgreten/read-only-trial"
+license: MIT
+version: 2026.10.14.1
+description: >
+  Generic deterministic evaluator for caller-supplied read-only trial evidence.
+  It has no operational bindings and persists only its own evaluation record.
+repository: "https://github.com/meagerfindings/swamp-read-only-trial"
+paths:
+  base: manifest
+models:
+  - extensions/models/read_only_trial.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE
+dependencies: []

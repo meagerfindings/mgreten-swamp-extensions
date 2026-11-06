@@ -755,6 +755,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-read-only-investigation.git'
       ref: 6596b9a8574b9b8defb261cb3528ceddbeceb68e
+  - name: '@mgreten/read-only-trial'
+    path: packages/read-only-trial
+    manifest: packages/read-only-trial/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:f82abec530cd79bdbb5c0ce639c488976b21fbd0f2f0a70e5c9d2053eead1b0d'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-read-only-trial.git'
+      ref: 70f497f233fcbcd91b0b6ad5185c39aad5d9e21f
   - name: '@mgreten/release-adoption'
     path: packages/release-adoption
     manifest: packages/release-adoption/extensions/models/manifest.yaml
