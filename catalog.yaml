@@ -162,8 +162,8 @@ packages:
   - name: '@mgreten/context-compiler'
     path: packages/context-compiler
     manifest: packages/context-compiler/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:b5016fc182a9924ffe9c5b0f46cffdbf02585b6bd6d11558976dfcbdae8cdd77'
+    version: 2026.11.06.1
+    contentHash: 'sha256:86b0e802f6ef0f4896c0375fdf8598ae5c855505e83cdb6581afb7f6f86a5004'
     tests: deterministic
     dependsOn: []
     source:
