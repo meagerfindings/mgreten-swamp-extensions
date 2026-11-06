@@ -49,8 +49,8 @@ packages:
   - name: '@mgreten/aws/s3-site-deploy'
     path: packages/s3-site-deploy
     manifest: packages/s3-site-deploy/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:34284cfc22d26aa6de46ae799e47053f2fcc0b96f46b4f503d1e841d90c9ded5'
+    version: 2026.11.06.1
+    contentHash: 'sha256:d9f0ecc19c5d1fa861b5c7c3442c41e0be06bef8f24b673f7813c0be4a3239ac'
     tests: deterministic
     dependsOn: []
     source:
