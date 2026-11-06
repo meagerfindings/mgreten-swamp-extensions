@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/operational-triage"
 license: MIT
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Provider-neutral validation of producer redaction attestations, bounded
   pattern denylist checks, and persistence of read-only triage snapshots.

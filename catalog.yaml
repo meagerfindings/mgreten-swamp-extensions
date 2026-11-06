@@ -799,8 +799,8 @@ packages:
   - name: '@mgreten/operational-triage'
     path: packages/operational-triage
     manifest: packages/operational-triage/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:c0481e8fa72880cafcf97201329e18b4588504a35957205a2f3319cb252f3e24'
+    version: 2026.11.06.1
+    contentHash: 'sha256:de029348733dc5efa426fee17574ac446f3bee5503c53d40e13d4316bf91962c'
     tests: deterministic
     dependsOn: []
     source:
