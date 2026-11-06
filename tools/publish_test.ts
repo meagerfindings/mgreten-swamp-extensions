@@ -70,9 +70,14 @@ class FakeIo implements Io {
     if (o.kind === "pushed" && !dryRun) this.registry[name] = { latest: version, repository: PUBLIC_REPOSITORY };
     return o;
   }
+  autoPushes: string[][] = [];
   commit(_root: string, _paths: string[], message: string) {
     this.commits.push(message.split("\n")[0]);
-    return Promise.resolve();
+    return Promise.resolve(`sha-${this.commits.length}`);
+  }
+  autoPush(_root: string, runShas: string[]) {
+    this.autoPushes.push(runShas);
+    return Promise.resolve({ status: "pushed" as const, detail: "ok", originBefore: "a", headAfter: "b", commits: runShas.length });
   }
   async scratch(root: string) {
     const dir = await Deno.makeTempDir();
@@ -114,6 +119,9 @@ Deno.test("live: publishes, commits the bump, verifies; a second run is a no-op"
   const r2 = await runPublish({ ...base, root, enabled: true, gate: await greenGate(root), io });
   assertEquals(r2.packages.map((p) => p.outcome), ["no-op", "no-op"]);
   assertEquals(io.pushes.length, 1);
+  // Only the first run made a release commit, so only it auto-pushes.
+  assertEquals(io.autoPushes, [["sha-1"]]);
+  assertEquals([r1.autoPush?.status, r2.autoPush], ["pushed", null]);
 });
 
 Deno.test("unknown push outcome stops the run and halts later runs until the registry confirms", async () => {
@@ -141,6 +149,9 @@ Deno.test("red gate or definite push failure blocks; later packages are not push
   const red = await runPublish({ ...base, root, enabled: true, gate: await greenGate(root, { "@mgreten/beta": "tests" }), io });
   assertEquals(red.packages.map((p) => p.outcome), ["failed", "blocked-gate"]);
   assertEquals(io.pushes.length, 1);
+  // The failed package's release commit exists locally but is never pushed to git.
+  assertEquals(io.autoPushes, []);
+  assertEquals(red.autoPush?.status, "skipped");
   assertEquals(red.ok, false);
 });
 

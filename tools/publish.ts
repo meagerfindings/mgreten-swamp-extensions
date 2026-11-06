@@ -19,6 +19,7 @@
 import { compareCalVer, decideVersion } from "./lib/calver.ts";
 import { type Catalog, hashPackage, readCatalog, writeCatalog } from "./lib/catalog.ts";
 import { applyRelease } from "./lib/release.ts";
+import { type AutoPushResult, pushReleaseCommits } from "./lib/autopush.ts";
 import { exec, PUBLIC_REPOSITORY, type PackageResult, STEPS } from "./gate.ts";
 
 export type RegistryInfo = { latest: string | null; repository: string | null };
@@ -32,8 +33,10 @@ export interface Io {
   /** Read-only registry lookup; throws when the lookup itself fails. */
   info(name: string): Promise<RegistryInfo>;
   push(root: string, manifest: string, extensionsDir: string, dryRun: boolean): Promise<PushOutcome>;
-  /** Live mode only: commit the version bump in root. */
-  commit(root: string, paths: string[], message: string): Promise<void>;
+  /** Live mode only: commit the version bump in root; returns the new commit SHA. */
+  commit(root: string, paths: string[], message: string): Promise<string>;
+  /** Live mode only: push exactly this run's release commits (lib/autopush.ts). */
+  autoPush(root: string, runShas: string[]): Promise<AutoPushResult>;
   /** Dry-run mode: a disposable checkout of HEAD to apply bumps in. */
   scratch(root: string): Promise<{ dir: string; dispose: () => Promise<void> }>;
   clean(root: string): Promise<boolean>;
@@ -89,6 +92,7 @@ export interface PublishRun {
   greenSince: string | null;
   observationDays: number;
   a7Eligible: boolean;
+  autoPush: AutoPushResult | null;
   signature: string;
   notify: boolean;
   lastNotifiedAt: string | null;
@@ -154,22 +158,29 @@ export async function runPublish(o: PublishOptions): Promise<PublishRun> {
   let unknown: UnknownOutcome | null = null;
   let stopped = false;
   let repoCommitsOk = true;
+  const releaseShas: string[] = [];
+  let autoPush: AutoPushResult | null = null;
 
   const finish = (): PublishRun => {
     const ready = packages.filter((p) => p.outcome === "ready-awaiting-activation").map((p) => `${p.name}@${p.version}`);
     const ok = failures.length === 0 && !unknown;
     const obs = observation(o.previous, ok, o.today, o.observationStart);
-    const sig = [...failures.map((f) => `fail:${f}`), ...(unknown ? [`unknown:${unknown.name}@${unknown.version}`] : []), ...ready.map((r) => `ready:${r}`)].sort().join("|");
+    // A skip caused by a failed run is already reported by that failure.
+    const pushSkipped = autoPush?.status === "skipped" && failures.length === 0 && !unknown ? [`push-skipped:${autoPush.detail}`] : [];
+    const sig = [...failures.map((f) => `fail:${f}`), ...(unknown ? [`unknown:${unknown.name}@${unknown.version}`] : []), ...ready.map((r) => `ready:${r}`), ...pushSkipped].sort().join("|");
     const n = notifyDecision(o.previous, sig, o.now);
     const title = unknown
       ? "ext-publish halted: unknown push outcome"
       : failures.length
       ? `ext-publish: ${failures.length} failure(s)`
+      : pushSkipped.length
+      ? "ext-publish: published, but git auto-push skipped"
       : `ext-publish: ${ready.length} package(s) ready, awaiting activation`;
     const lines = [
       ...(unknown ? [`UNKNOWN ${unknown.name}@${unknown.version}: ${unknown.detail}. Check the registry; rerun with clearUnknown after resolving.`] : []),
       ...failures.map((f) => `FAIL ${f}`),
       ...(ready.length ? [`Ready (extPublishEnabled is false): ${ready.join(", ")}`] : []),
+      ...(pushSkipped.length ? [`Release commits not pushed: ${autoPush!.detail}. Push main by hand.`] : []),
       `Observation since ${o.observationStart}: ${obs.greenSince ? `${obs.observationDays} green day(s)` : "not green"}${obs.a7Eligible ? "; A7 can be proposed" : ""}.`,
     ];
     return {
@@ -180,6 +191,7 @@ export async function runPublish(o: PublishOptions): Promise<PublishRun> {
       ok,
       repoCommitsOk,
       packages,
+      autoPush,
       readyAwaitingActivation: ready,
       failures,
       unknown,
@@ -288,7 +300,7 @@ export async function runPublish(o: PublishOptions): Promise<PublishRun> {
         await applyRelease(workRoot, catalog, p.name, d.version);
         await writeCatalog(workRoot, catalog);
         if (live) {
-          await o.io.commit(workRoot, [p.manifest, "catalog.yaml"], `release(${p.path.split("/").pop()}): ${p.name} ${d.version}\n\nApplied by ext-publish (gate run ${o.gateRunId}).`);
+          releaseShas.push(await o.io.commit(workRoot, [p.manifest, "catalog.yaml"], `release(${p.path.split("/").pop()}): ${p.name} ${d.version}\n\nApplied by ext-publish (gate run ${o.gateRunId}).`));
         }
       }
       const outcome = await o.io.push(workRoot, p.manifest, p.path, !live);
@@ -329,6 +341,17 @@ export async function runPublish(o: PublishOptions): Promise<PublishRun> {
     }
   } finally {
     await scratch?.dispose();
+  }
+  // Push this run's release commits only after a fully clean live run: a
+  // failed or unknown registry push leaves a release commit for a version the
+  // registry may not have, and that must not reach git unreviewed.
+  if (live && releaseShas.length) {
+    if (failures.length || unknown) {
+      autoPush = { status: "skipped", detail: "run had failures or an unknown outcome", originBefore: null, headAfter: null, commits: releaseShas.length };
+    } else {
+      autoPush = await o.io.autoPush(o.root, releaseShas);
+      if (autoPush.status === "failed") failures.push(`(auto-push): ${autoPush.detail}`);
+    }
   }
   return finish();
 }
@@ -383,6 +406,10 @@ export function realIo(swamp: string, pushTimeoutMs = 300_000): Io {
         const r = await exec(["git", "-C", root, ...args], root);
         if (r.code !== 0) throw new Error(`git ${args[0]}: ${r.stderr.trim()}`);
       }
+      return (await exec(["git", "-C", root, "rev-parse", "HEAD"], root)).stdout.trim();
+    },
+    autoPush(root, runShas) {
+      return pushReleaseCommits(root, runShas);
     },
     async scratch(root) {
       const dir = await Deno.makeTempDir({ prefix: "ext-publish-" });

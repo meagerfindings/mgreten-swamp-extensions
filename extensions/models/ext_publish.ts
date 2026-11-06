@@ -44,6 +44,13 @@ const RunSchema = z.object({
   greenSince: z.string().nullable(),
   observationDays: z.number(),
   a7Eligible: z.boolean(),
+  autoPush: z.object({
+    status: z.enum(["none", "pushed", "skipped", "failed"]),
+    detail: z.string(),
+    originBefore: z.string().nullable(),
+    headAfter: z.string().nullable(),
+    commits: z.number(),
+  }).nullable(),
   signature: z.string(),
   notify: z.boolean(),
   lastNotifiedAt: z.string().nullable(),
