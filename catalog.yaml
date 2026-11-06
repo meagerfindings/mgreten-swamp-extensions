@@ -698,8 +698,8 @@ packages:
   - name: '@mgreten/product-behavior-summary'
     path: packages/product-behavior-summary
     manifest: packages/product-behavior-summary/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:4ae825abd17be95c83482d7fc438e4221b569965c10320cb4bacabd03d4451f9'
+    version: 2026.11.06.1
+    contentHash: 'sha256:0254fda9c4ecbda1cbf69bc49f7caa1d647512cef12410ca957a442bf107031e'
     tests: deterministic
     dependsOn: []
     source:
