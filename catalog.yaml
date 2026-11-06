@@ -230,6 +230,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-jev-agent-tools.git'
       ref: 8e3c7287b2c2e3d718c4bd7a0b343930798b1728
+  - name: '@mgreten/linear-activity'
+    path: packages/linear-activity
+    manifest: packages/linear-activity/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:de95e7dc0f913ebde70a4c74055a90286bf4ed74a41c146f5ff3f4bfa272f986'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-linear-activity.git'
+      ref: 108baaa88fb1229f6e64cb8be9acc8f35131a0ae
   - name: '@mgreten/macos-say-tts'
     path: packages/macos-say-tts
     manifest: packages/macos-say-tts/extensions/models/manifest.yaml
