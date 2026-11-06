@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@mgreten/zernio"
+version: "2026.10.14.1"
+description: >-
+  Vault-backed Zernio account verification plus approval-bound, schedule-only
+  Facebook and Instagram publishing.
+repository: "https://github.com/meagerfindings/swamp-zernio"
+license: MIT
+paths:
+  base: manifest
+models:
+  - zernio.ts
+  - zernio_publisher.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+platforms: []
+labels:
+  - zernio
+  - social-media
+  - read-only

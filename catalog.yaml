@@ -1030,3 +1030,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-work-order-intake.git'
       ref: 972c8eda933b404a45198c2f3dc2f9f184bb68b0
+  - name: '@mgreten/zernio'
+    path: packages/zernio
+    manifest: packages/zernio/extensions/models/zernio/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:6838e8e1e3c1d634c7e069813cc8572d5b2f42b0f934e120463957c647e81793'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-zernio.git'
+      ref: f959c14664e96bf593d1f7146b87116e0814f32d
