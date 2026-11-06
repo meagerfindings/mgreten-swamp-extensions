@@ -209,6 +209,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-daily-operational-digest.git'
       ref: 5f6a9346ebfa56fa53fa42795303305283318e49
+  - name: '@mgreten/decision-context'
+    path: packages/decision-context
+    manifest: packages/decision-context/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:c946b10970ba579eea5f9269c093be2aba22d4919e02333179ee23c4344dab63'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-decision-context.git'
+      ref: 7d7571295ba4c47e09f6e9828a45627ed81db626
   - name: '@mgreten/docker-orphan-sweep'
     path: packages/docker-orphan-sweep
     manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml
