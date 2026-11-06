@@ -7,7 +7,7 @@ description: >-
   chunking and an LLM merge pass. Pure TypeScript — no Python, no subprocess.
   Also provides combine_notes (merge handwritten + analysis) and write_note
   (write markdown to disk) for full pipeline workflows.
-repository: "https://github.com/meagerfindings/swamp-meeting-transcriber"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 paths:
   base: manifest
