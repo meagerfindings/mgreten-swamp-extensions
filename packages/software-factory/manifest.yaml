@@ -134,7 +134,7 @@ description: |
   `status-_factory` holds the fleet overview) that the driver queries instead
   of scraping a log line.
 
-repository: "https://github.com/meagerfindings/swamp-software-factory"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 skills:
   - software-factory
