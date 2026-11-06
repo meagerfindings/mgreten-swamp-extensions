@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@mgreten/work-order-intake"
 license: MIT
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Deterministic, decision-only intake for bounded work proposals. It preserves
   explicit human acceptance while granting no implementation or external-action authority.

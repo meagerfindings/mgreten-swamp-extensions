@@ -1013,8 +1013,8 @@ packages:
   - name: '@mgreten/work-order-intake'
     path: packages/work-order-intake
     manifest: packages/work-order-intake/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:9524285497ae4cc4b1f6811fe65a83f9b2f8986c120c8848f1eca20977ca0739'
+    version: 2026.11.06.1
+    contentHash: 'sha256:a572790a587c54c9964021b8e4a1437f1d353d340efde51dc02aacbce0bee90b'
     tests: deterministic
     dependsOn: []
     source:
