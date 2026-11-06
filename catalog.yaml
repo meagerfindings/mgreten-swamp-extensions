@@ -1020,3 +1020,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-weekly-decision-queue.git'
       ref: c75b5e812dd964e9426c69964a520953d6ae10e6
+  - name: '@mgreten/work-order-intake'
+    path: packages/work-order-intake
+    manifest: packages/work-order-intake/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:9524285497ae4cc4b1f6811fe65a83f9b2f8986c120c8848f1eca20977ca0739'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-work-order-intake.git'
+      ref: 972c8eda933b404a45198c2f3dc2f9f184bb68b0
