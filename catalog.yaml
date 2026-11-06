@@ -708,8 +708,8 @@ packages:
   - name: '@mgreten/product-lineage'
     path: packages/product-lineage
     manifest: packages/product-lineage/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:6419f4895c0787551945ef533dec62ea95dbc9425537fed47b80fdd9486ebad5'
+    version: 2026.11.06.1
+    contentHash: 'sha256:8ec116b4ccd35b74ed6154a7bb62498d66fe01be711566f980d8f976efdeb31d'
     tests: deterministic
     dependsOn: []
     source:
