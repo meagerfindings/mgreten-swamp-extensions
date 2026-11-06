@@ -843,8 +843,8 @@ packages:
   - name: '@mgreten/software-factory'
     path: packages/software-factory
     manifest: packages/software-factory/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:78ceada4bd196b9bc4a3490cee11dcfc3dafe3aef104f6a7be0a6b428e2b2d3d'
+    version: 2026.11.06.1
+    contentHash: 'sha256:70da27bba02adb3705d6b92ed68f3579cd2b4d74339c1478b6a0b372019acb09'
     tests: deterministic
     dependsOn: []
     source:
