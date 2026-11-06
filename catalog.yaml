@@ -139,6 +139,18 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-code-review-panel.git'
       ref: 3408aa5d5bd8f3c3a3ac39845e6cd00f50f07366
+  - name: '@mgreten/code-review-rubric'
+    path: packages/code-review-rubric
+    manifest: packages/code-review-rubric/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:0db6b1ff8deacc2a48599b3368e039beb8c5bb3a756f32ab157f081046bde3d5'
+    tests: deterministic
+    dependsOn:
+      - '@mgreten/cli-agent'
+      - '@mgreten/agent-provider-catalog'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-code-review-rubric.git'
+      ref: f79e67ffd646574c743fec6c62940a4b1f1c722a
   - name: '@mgreten/colorado-homeschool-attendance'
     path: packages/colorado-homeschool-attendance
     manifest: packages/colorado-homeschool-attendance/manifest.yaml
