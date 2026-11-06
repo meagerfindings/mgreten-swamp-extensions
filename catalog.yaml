@@ -149,6 +149,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-colorado-homeschool-attendance.git'
       ref: 2a297f63aaae8c360d3b8f860a0f4837073092ae
+  - name: '@mgreten/contained-git-write'
+    path: packages/contained-git-write
+    manifest: packages/contained-git-write/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:4efcbbaaa6a668fe39150151dac645c0090baa504de1c69a67d8def77d6874f7'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-contained-git-write.git'
+      ref: ff11e588c828c55509cf9a55fcb39ac46cad0ce0
   - name: '@mgreten/cron-builder'
     path: packages/cron-builder
     manifest: packages/cron-builder/manifest.yaml
