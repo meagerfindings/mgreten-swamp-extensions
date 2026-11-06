@@ -24,6 +24,20 @@
  *     --allow-unrelated-histories and add the package to catalog.yaml in the
  *     same commit. Trailers record source, ref, and scan rules version.
  *
+ * Content rewrite (sources.yaml `rewrite: true`): the filter-repo pass also
+ * applies --replace-text <rewrite-dir>/<short>.text and, when present,
+ * --replace-message <rewrite-dir>/<short>.message, so removed content never
+ * enters this repo's history. The expression files name what they remove, so
+ * like the mailmap they live outside this public repo (default
+ * ~/.config/swamp-extensions/rewrites, mode 600); only their hashes are
+ * recorded in the import commit.
+ *
+ * Registry sources (`source: registry:<name>@<version>`, `published: <ISO>`):
+ * for packages whose true source is lost or behind the registry, the
+ * published archive is pulled (integrity-verified by swamp) and committed as
+ * one deterministic commit under extensions/models/<short>/ in the cache, with
+ * fixed identity and date, so its SHA can be pinned as `ref`.
+ *
  * Idempotent: if HEAD already has an import commit for <short> at the same
  * ref, it exits 0 without changes. A different ref is refused (re-import is a
  * separate, explicit operation).
@@ -32,13 +46,24 @@
  * 2 error, 3 source behind the registry (--require-current).
  */
 import { parse } from "jsr:@std/yaml@1.0.5";
-import { applyAllowlist, type AllowEntry, type RuleSet, scanHistory } from "./privacy-scan.ts";
-import { hashPackage, readCatalog, readManifestFields, writeCatalog } from "./lib/catalog.ts";
+import {
+  type AllowEntry,
+  applyAllowlist,
+  type RuleSet,
+  scanHistory,
+} from "./privacy-scan.ts";
+import {
+  hashPackage,
+  readCatalog,
+  readManifestFields,
+  writeCatalog,
+} from "./lib/catalog.ts";
 import { compareCalVer } from "./lib/calver.ts";
 import { PUBLIC_REPOSITORY } from "./gate.ts";
 
 export interface ImportOptions {
   mailmap?: string | null;
+  rewriteDir?: string;
   requireCurrent?: boolean;
   repoint?: boolean;
   swamp?: string;
@@ -51,11 +76,145 @@ interface Source {
   ref: string;
   manifest: string;
   paths: Array<{ from: string; to: string }>;
+  rewrite?: boolean;
+  published?: string;
+}
+
+async function sha16(path: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", await Deno.readFile(path));
+  return "sha256:" +
+    [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("")
+      .slice(0, 16);
+}
+
+/**
+ * Build the cache commit for a `registry:<name>@<version>` source: the pulled
+ * archive's manifest, models and files flattened next to the manifest (its
+ * paths.base), committed with a fixed identity and date. Returns the SHA.
+ */
+async function buildRegistrySource(
+  src: Source,
+  cache: string,
+  identity: { name: string; email: string },
+  swamp: string,
+): Promise<string> {
+  const spec = src.source.slice("registry:".length);
+  const at = spec.lastIndexOf("@");
+  const name = spec.slice(0, at), version = spec.slice(at + 1);
+  if (!src.published) {
+    throw new Error(
+      `${src.short}: registry source needs published: <ISO date>`,
+    );
+  }
+  const env = { DENO_TLS_CA_STORE: "mozilla" };
+  const repo = await Deno.makeTempDir({ prefix: `registry-${src.short}-` });
+  const work = await Deno.makeTempDir({ prefix: `registry-src-${src.short}-` });
+  try {
+    for (
+      const args of [["repo", "init", "--json"], [
+        "extension",
+        "pull",
+        `${name}@${version}`,
+        "--yes",
+        "--json",
+      ]]
+    ) {
+      const out = await new Deno.Command(swamp, {
+        args,
+        cwd: repo,
+        env,
+        stdout: "piped",
+        stderr: "piped",
+      }).output();
+      if (!out.success) {
+        throw new Error(
+          `${src.short}: swamp ${args.slice(0, 2).join(" ")} failed: ${
+            new TextDecoder().decode(out.stderr).trim().slice(0, 200)
+          }`,
+        );
+      }
+      const so = new TextDecoder().decode(out.stdout);
+      if (args[1] === "pull" && !/"integrity":\s*"verified"/.test(so)) {
+        throw new Error(
+          `${src.short}: registry archive integrity not verified`,
+        );
+      }
+    }
+    const pulled = `${repo}/.swamp/pulled-extensions/${name}`;
+    const dest = `${work}/extensions/models/${src.short}`;
+    await Deno.mkdir(dest, { recursive: true });
+    const manifest = (await Deno.readTextFile(`${pulled}/manifest.yaml`))
+      .replace(/^# Read-only; regenerate via 'swamp extension pull'\n/, "");
+    if (readManifestFields(manifest).version !== version) {
+      throw new Error(`${src.short}: pulled version is not ${version}`);
+    }
+    await Deno.writeTextFile(`${dest}/manifest.yaml`, manifest);
+    for (const sub of ["models", "files", "workflows"]) {
+      if (!await exists(`${pulled}/${sub}`)) continue;
+      await run(["cp", "-R", `${pulled}/${sub}/.`, `${dest}/`]);
+    }
+    await run(["git", "init", "-q", "-b", "registry", work]);
+    await run(["git", "-C", work, "add", "-A"]);
+    const env2 = {
+      GIT_AUTHOR_NAME: identity.name,
+      GIT_AUTHOR_EMAIL: identity.email,
+      GIT_AUTHOR_DATE: src.published,
+      GIT_COMMITTER_NAME: identity.name,
+      GIT_COMMITTER_EMAIL: identity.email,
+      GIT_COMMITTER_DATE: src.published,
+    };
+    const msg =
+      `Registry build of ${name} ${version}\n\nReconstructed from the integrity-verified registry archive; the\npublished files are byte-identical, the manifest without its pull header.\n`;
+    const commit = await new Deno.Command("git", {
+      args: ["-C", work, "commit", "-q", "--no-gpg-sign", "-m", msg],
+      env: env2,
+      stderr: "piped",
+    }).output();
+    if (!commit.success) {
+      throw new Error(
+        `${src.short}: registry commit failed: ${
+          new TextDecoder().decode(commit.stderr)
+        }`,
+      );
+    }
+    await run([
+      "git",
+      "-C",
+      cache,
+      "fetch",
+      "-q",
+      "--no-tags",
+      work,
+      "registry",
+    ]);
+    return (await run(["git", "-C", work, "rev-parse", "HEAD"])).trim();
+  } finally {
+    await Deno.remove(repo, { recursive: true }).catch(() => {});
+    await Deno.remove(work, { recursive: true }).catch(() => {});
+  }
+}
+
+/** The personal identity the mailmap maps to: its first `Name <email> <old>` line. */
+async function mailmapIdentity(
+  mailmap: string | null,
+): Promise<{ name: string; email: string }> {
+  if (!mailmap) {
+    throw new Error("registry sources need --mailmap for the commit identity");
+  }
+  const line = (await Deno.readTextFile(mailmap)).split("\n").find((l) =>
+    /^[^#].*<[^>]+>/.test(l)
+  );
+  const m = line && /^(.+?)\s*<([^>]+)>/.exec(line);
+  if (!m) throw new Error("no identity line in the mailmap");
+  return { name: m[1], email: m[2] };
 }
 
 const root = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
-async function run(args: string[], opts: { cwd?: string; allowFail?: boolean } = {}): Promise<string> {
+async function run(
+  args: string[],
+  opts: { cwd?: string; allowFail?: boolean } = {},
+): Promise<string> {
   const out = await new Deno.Command(args[0], {
     args: args.slice(1),
     cwd: opts.cwd,
@@ -65,7 +224,11 @@ async function run(args: string[], opts: { cwd?: string; allowFail?: boolean } =
   }).output();
   const so = new TextDecoder().decode(out.stdout);
   if (!out.success && !opts.allowFail) {
-    throw new Error(`${args.join(" ")} failed: ${new TextDecoder().decode(out.stderr).trim()}`);
+    throw new Error(
+      `${args.join(" ")} failed: ${
+        new TextDecoder().decode(out.stderr).trim()
+      }`,
+    );
   }
   return so;
 }
@@ -79,33 +242,83 @@ async function exists(p: string): Promise<boolean> {
   return await Deno.stat(p).then(() => true, () => false);
 }
 
-export async function importPackage(short: string, stateDir: string, opts: ImportOptions = {}): Promise<number> {
+export async function importPackage(
+  short: string,
+  stateDir: string,
+  opts: ImportOptions = {},
+): Promise<number> {
   const mailmap = opts.mailmap ?? null;
-  const sources = parse(await Deno.readTextFile(`${root}/tools/sources.yaml`)) as { packages: Source[] };
+  const sources = parse(
+    await Deno.readTextFile(`${root}/tools/sources.yaml`),
+  ) as { packages: Source[] };
   const src = sources.packages.find((p) => p.short === short);
   if (!src) throw new Error(`no entry for ${short} in tools/sources.yaml`);
-  if (!/^[0-9a-f]{40}$/.test(src.ref)) throw new Error(`${short}: ref must be a full commit SHA`);
+  if (!/^[0-9a-f]{40}$/.test(src.ref)) {
+    throw new Error(`${short}: ref must be a full commit SHA`);
+  }
   const pkgDir = `packages/${short}`;
 
   // Idempotency: look for an existing import commit for this package.
-  const prior = (await run(["git", "-C", root, "log", "--format=%H%x00%(trailers:key=Imported-Ref,valueonly)", `--grep=^Imported-Package: ${short}$`, "HEAD"], { allowFail: true })).trim();
+  const prior = (await run([
+    "git",
+    "-C",
+    root,
+    "log",
+    "--format=%H%x00%(trailers:key=Imported-Ref,valueonly)",
+    `--grep=^Imported-Package: ${short}$`,
+    "HEAD",
+  ], { allowFail: true })).trim();
   if (prior) {
     const ref = prior.split("\0")[1]?.trim();
     if (ref === src.ref) {
-      console.log(`${short}: already imported at ${src.ref.slice(0, 12)}; nothing to do`);
+      console.log(
+        `${short}: already imported at ${src.ref.slice(0, 12)}; nothing to do`,
+      );
       return 0;
     }
-    throw new Error(`${short}: already imported at ${ref}; refusing to re-import at ${src.ref}`);
+    throw new Error(
+      `${short}: already imported at ${ref}; refusing to re-import at ${src.ref}`,
+    );
   }
-  if (await exists(`${root}/${pkgDir}`)) throw new Error(`${pkgDir} exists without an import commit; refusing`);
-  if ((await run(["git", "-C", root, "status", "--porcelain"])).trim()) throw new Error("monorepo worktree is dirty; commit or stash first");
+  if (await exists(`${root}/${pkgDir}`)) {
+    throw new Error(`${pkgDir} exists without an import commit; refusing`);
+  }
+  if ((await run(["git", "-C", root, "status", "--porcelain"])).trim()) {
+    throw new Error("monorepo worktree is dirty; commit or stash first");
+  }
 
   // 1. Cache repo keyed by source URL; fetch only the pinned ref.
   const cacheKey = src.source.replace(/[^A-Za-z0-9]+/g, "_");
   const cache = `${stateDir}/cache/${cacheKey}.git`;
   if (!await exists(cache)) await run(["git", "init", "-q", "--bare", cache]);
-  const hasRef = (await new Deno.Command("git", { args: ["-C", cache, "cat-file", "-e", `${src.ref}^{commit}`], stderr: "null" }).output()).success;
-  if (!hasRef) await run(["git", "-C", cache, "fetch", "-q", "--no-tags", src.source, src.ref]);
+  const hasRef = (await new Deno.Command("git", {
+    args: ["-C", cache, "cat-file", "-e", `${src.ref}^{commit}`],
+    stderr: "null",
+  }).output()).success;
+  if (!hasRef && src.source.startsWith("registry:")) {
+    const built = await buildRegistrySource(
+      src,
+      cache,
+      await mailmapIdentity(mailmap),
+      opts.swamp ?? `${Deno.env.get("HOME")}/.local/bin/swamp`,
+    );
+    if (built !== src.ref) {
+      throw new Error(
+        `${short}: registry build is ${built}, sources.yaml pins ${src.ref}; pin the new SHA only after reviewing why it changed`,
+      );
+    }
+  } else if (!hasRef) {
+    await run([
+      "git",
+      "-C",
+      cache,
+      "fetch",
+      "-q",
+      "--no-tags",
+      src.source,
+      src.ref,
+    ]);
+  }
 
   // 2. Fresh staging repo containing only the pinned ref, then filter.
   const staging = `${stateDir}/staging/${short}`;
@@ -114,29 +327,78 @@ export async function importPackage(short: string, stateDir: string, opts: Impor
   await run(["git", "init", "-q", "-b", "import", staging]);
   await run(["git", "-C", staging, "fetch", "-q", "--no-tags", cache, src.ref]);
   await run(["git", "-C", staging, "update-ref", "refs/heads/import", src.ref]);
-  const filterArgs = ["git", "filter-repo", "--force", "--quiet", "--refs", "refs/heads/import"];
+  const filterArgs = [
+    "git",
+    "filter-repo",
+    "--force",
+    "--quiet",
+    "--refs",
+    "refs/heads/import",
+  ];
   for (const p of src.paths) filterArgs.push("--path", p.from);
-  for (const p of src.paths) filterArgs.push("--path-rename", `${p.from}:${pkgDir}/${p.to}`);
+  for (const p of src.paths) {
+    filterArgs.push("--path-rename", `${p.from}:${pkgDir}/${p.to}`);
+  }
   // Optional identity rewrite. The mailmap must live outside this public repo
   // because it names the identities being replaced; only its hash is recorded.
   let mailmapHash: string | null = null;
   if (mailmap) {
     filterArgs.push("--mailmap", mailmap);
-    const d = await crypto.subtle.digest("SHA-256", await Deno.readFile(mailmap));
-    mailmapHash = "sha256:" + [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+    const d = await crypto.subtle.digest(
+      "SHA-256",
+      await Deno.readFile(mailmap),
+    );
+    mailmapHash = "sha256:" +
+      [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join(
+        "",
+      ).slice(0, 16);
+  }
+  const rewriteHashes: string[] = [];
+  if (src.rewrite) {
+    const dir = opts.rewriteDir ??
+      `${Deno.env.get("HOME")}/.config/swamp-extensions/rewrites`;
+    const textFile = `${dir}/${short}.text`,
+      msgFile = `${dir}/${short}.message`;
+    if (!await exists(textFile)) {
+      throw new Error(`${short}: rewrite: true but ${textFile} is missing`);
+    }
+    filterArgs.push("--replace-text", textFile);
+    rewriteHashes.push(`text ${await sha16(textFile)}`);
+    if (await exists(msgFile)) {
+      filterArgs.push("--replace-message", msgFile);
+      rewriteHashes.push(`message ${await sha16(msgFile)}`);
+    }
   }
   await run(filterArgs, { cwd: staging });
-  const head = (await run(["git", "-C", staging, "rev-parse", "--verify", "-q", "refs/heads/import"], { allowFail: true })).trim();
-  if (!head) throw new Error(`${short}: filtered history is empty; check paths in tools/sources.yaml`);
+  const head = (await run([
+    "git",
+    "-C",
+    staging,
+    "rev-parse",
+    "--verify",
+    "-q",
+    "refs/heads/import",
+  ], { allowFail: true })).trim();
+  if (!head) {
+    throw new Error(
+      `${short}: filtered history is empty; check paths in tools/sources.yaml`,
+    );
+  }
 
   // 3. Privacy scan over the full filtered history.
-  const rules: RuleSet = JSON.parse(await Deno.readTextFile(`${root}/tools/privacy-rules.json`));
-  const allow: AllowEntry[] = await Deno.readTextFile(`${root}/tools/privacy-allowlist.json`).then((t) => JSON.parse(t).entries ?? [], () => []);
+  const rules: RuleSet = JSON.parse(
+    await Deno.readTextFile(`${root}/tools/privacy-rules.json`),
+  );
+  const allow: AllowEntry[] = await Deno.readTextFile(
+    `${root}/tools/privacy-allowlist.json`,
+  ).then((t) => JSON.parse(t).entries ?? [], () => []);
   const scan = await scanHistory(staging, pkgDir, rules);
   const hits = applyAllowlist(scan.hits, allow);
   // Map rewritten commits back to source commits for the report.
   const map = new Map<string, string>();
-  const commitMap = await Deno.readTextFile(`${staging}/.git/filter-repo/commit-map`).catch(() => "");
+  const commitMap = await Deno.readTextFile(
+    `${staging}/.git/filter-repo/commit-map`,
+  ).catch(() => "");
   for (const line of commitMap.split("\n").slice(1)) {
     const [oldC, newC] = line.split(" ");
     if (oldC && newC) map.set(newC.slice(0, 12), oldC.slice(0, 12));
@@ -150,42 +412,128 @@ export async function importPackage(short: string, stateDir: string, opts: Impor
     blobsScanned: scan.blobs,
     gitleaks: scan.gitleaks,
     status: hits.length ? "blocked" : "clean",
-    hits: hits.map((h) => ({ ...h, path: h.path.startsWith(`${pkgDir}/`) ? h.path.slice(pkgDir.length + 1) : h.path, sourceCommit: map.get(h.commit) ?? null })),
+    hits: hits.map((h) => ({
+      ...h,
+      path: h.path.startsWith(`${pkgDir}/`)
+        ? h.path.slice(pkgDir.length + 1)
+        : h.path,
+      sourceCommit: map.get(h.commit) ?? null,
+    })),
   };
   await Deno.mkdir(`${stateDir}/reports`, { recursive: true });
-  await Deno.writeTextFile(`${stateDir}/reports/${short}.json`, JSON.stringify(report, null, 2) + "\n");
+  await Deno.writeTextFile(
+    `${stateDir}/reports/${short}.json`,
+    JSON.stringify(report, null, 2) + "\n",
+  );
   if (hits.length) {
     const byRule = new Map<string, number>();
-    for (const h of hits) byRule.set(`${h.category}/${h.rule}`, (byRule.get(`${h.category}/${h.rule}`) ?? 0) + 1);
-    console.log(`${short}: BLOCKED by privacy scan (${hits.length} hits; ${[...byRule].map(([k, n]) => `${k}×${n}`).join(", ")}). Not merged. Report: ${stateDir}/reports/${short}.json`);
+    for (const h of hits) {
+      byRule.set(
+        `${h.category}/${h.rule}`,
+        (byRule.get(`${h.category}/${h.rule}`) ?? 0) + 1,
+      );
+    }
+    console.log(
+      `${short}: BLOCKED by privacy scan (${hits.length} hits; ${
+        [...byRule].map(([k, n]) => `${k}×${n}`).join(", ")
+      }). Not merged. Report: ${stateDir}/reports/${short}.json`,
+    );
     return 1;
   }
 
   // Manifest present and named right at the filtered head, before any merge.
-  const manifestAtHead = (await run(["git", "-C", staging, "show", `import:${pkgDir}/${src.manifest}`], { allowFail: true }));
-  if (!manifestAtHead) throw new Error(`${short}: manifest ${src.manifest} missing at ${src.ref.slice(0, 12)}; imported nothing`);
+  const manifestAtHead = await run([
+    "git",
+    "-C",
+    staging,
+    "show",
+    `import:${pkgDir}/${src.manifest}`,
+  ], { allowFail: true });
+  if (!manifestAtHead) {
+    throw new Error(
+      `${short}: manifest ${src.manifest} missing at ${
+        src.ref.slice(0, 12)
+      }; imported nothing`,
+    );
+  }
   const headFields = readManifestFields(manifestAtHead);
-  if (headFields.name !== src.name) throw new Error(`${short}: manifest name ${headFields.name} != ${src.name}`);
+  if (headFields.name !== src.name) {
+    throw new Error(
+      `${short}: manifest name ${headFields.name} != ${src.name}`,
+    );
+  }
   if (opts.requireCurrent) {
     const swamp = opts.swamp ?? `${Deno.env.get("HOME")}/.local/bin/swamp`;
-    const info = await new Deno.Command(swamp, { args: ["extension", "info", src.name, "--json"], stdout: "piped", stderr: "null", env: { DENO_TLS_CA_STORE: "mozilla" } }).output();
-    if (!info.success) throw new Error(`${short}: registry lookup failed; cannot check --require-current`);
-    const latest = JSON.parse(new TextDecoder().decode(info.stdout)).latestVersion as string | null;
-    if (latest && headFields.version && compareCalVer(headFields.version, latest) < 0) {
-      await Deno.writeTextFile(`${stateDir}/reports/${short}.json`, JSON.stringify({ ...report, status: "drift", sourceVersion: headFields.version, registryLatest: latest }, null, 2) + "\n");
-      console.log(`${short}: DRIFT source ${headFields.version} < registry ${latest}. Not merged.`);
+    const info = await new Deno.Command(swamp, {
+      args: ["extension", "info", src.name, "--json"],
+      stdout: "piped",
+      stderr: "null",
+      env: { DENO_TLS_CA_STORE: "mozilla" },
+    }).output();
+    if (!info.success) {
+      throw new Error(
+        `${short}: registry lookup failed; cannot check --require-current`,
+      );
+    }
+    const latest = JSON.parse(new TextDecoder().decode(info.stdout))
+      .latestVersion as string | null;
+    if (
+      latest && headFields.version &&
+      compareCalVer(headFields.version, latest) < 0
+    ) {
+      await Deno.writeTextFile(
+        `${stateDir}/reports/${short}.json`,
+        JSON.stringify(
+          {
+            ...report,
+            status: "drift",
+            sourceVersion: headFields.version,
+            registryLatest: latest,
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+      console.log(
+        `${short}: DRIFT source ${headFields.version} < registry ${latest}. Not merged.`,
+      );
       return 3;
     }
   }
 
   // 4. Merge clean history and add the catalog entry in one commit.
-  await run(["git", "-C", root, "fetch", "-q", "--no-tags", staging, "refs/heads/import"]);
-  await run(["git", "-C", root, "merge", "-q", "--no-ff", "--no-commit", "--allow-unrelated-histories", "FETCH_HEAD"]);
+  await run([
+    "git",
+    "-C",
+    root,
+    "fetch",
+    "-q",
+    "--no-tags",
+    staging,
+    "refs/heads/import",
+  ]);
+  await run([
+    "git",
+    "-C",
+    root,
+    "merge",
+    "-q",
+    "--no-ff",
+    "--no-commit",
+    "--allow-unrelated-histories",
+    "FETCH_HEAD",
+  ]);
   const manifestPath = `${pkgDir}/${src.manifest}`;
-  const manifestText = await Deno.readTextFile(`${root}/${manifestPath}`).catch(() => null);
+  const manifestText = await Deno.readTextFile(`${root}/${manifestPath}`).catch(
+    () => null,
+  );
   if (manifestText === null) {
     await run(["git", "-C", root, "merge", "--abort"]);
-    throw new Error(`${short}: manifest ${src.manifest} missing at ${src.ref.slice(0, 12)}; imported nothing`);
+    throw new Error(
+      `${short}: manifest ${src.manifest} missing at ${
+        src.ref.slice(0, 12)
+      }; imported nothing`,
+    );
   }
   const m = readManifestFields(manifestText);
   if (m.name !== src.name) {
@@ -193,7 +541,8 @@ export async function importPackage(short: string, stateDir: string, opts: Impor
     throw new Error(`${short}: manifest name ${m.name} != ${src.name}`);
   }
   const catalog = await readCatalog(root);
-  const files = (await run(["git", "-C", root, "ls-files", "--", pkgDir])).split("\n");
+  const files = (await run(["git", "-C", root, "ls-files", "--", pkgDir]))
+    .split("\n");
   catalog.packages = catalog.packages.filter((p) => p.name !== src.name);
   catalog.packages.push({
     name: src.name,
@@ -211,7 +560,10 @@ export async function importPackage(short: string, stateDir: string, opts: Impor
     `Filtered from ${src.source} at ${src.ref} (${scan.commits} commits).\n` +
     `Privacy scan clean over full history (rules ${rules.rulesVersion}).\n\n` +
     `Imported-Package: ${short}\nImported-From: ${src.source}\nImported-Ref: ${src.ref}\nPrivacy-Rules: ${rules.rulesVersion}\n` +
-    (mailmapHash ? `Identity-Rewrite: mailmap ${mailmapHash}\n` : "");
+    (mailmapHash ? `Identity-Rewrite: mailmap ${mailmapHash}\n` : "") +
+    (rewriteHashes.length
+      ? `Content-Rewrite: ${rewriteHashes.join(", ")}\n`
+      : "");
   await run(["git", "-C", root, "commit", "-q", "-m", msg]);
   if (opts.repoint) {
     const text = await Deno.readTextFile(`${root}/${manifestPath}`);
@@ -221,26 +573,45 @@ export async function importPackage(short: string, stateDir: string, opts: Impor
       : text.replace(/^(version:.*)$/m, `$1\n${line}`);
     if (next !== text) {
       await Deno.writeTextFile(`${root}/${manifestPath}`, next);
-      await run(["git", "-C", root, "commit", "-q", "-m", `chore(${short}): point repository at the monorepo`, "--", manifestPath]);
+      await run([
+        "git",
+        "-C",
+        root,
+        "commit",
+        "-q",
+        "-m",
+        `chore(${short}): point repository at the monorepo`,
+        "--",
+        manifestPath,
+      ]);
     }
   }
-  console.log(`${short}: imported ${scan.commits} commits, clean, catalog version ${m.version}`);
+  console.log(
+    `${short}: imported ${scan.commits} commits, clean, catalog version ${m.version}`,
+  );
   return 0;
 }
 
 if (import.meta.main) {
-  const valued = ["--state-dir", "--mailmap"];
-  const short = Deno.args.find((a, i) => !a.startsWith("--") && !valued.includes(Deno.args[i - 1]));
+  const valued = ["--state-dir", "--mailmap", "--rewrite-dir"];
+  const short = Deno.args.find((a, i) =>
+    !a.startsWith("--") && !valued.includes(Deno.args[i - 1])
+  );
   if (!short) {
-    console.error("usage: import-package.ts <short> [--state-dir dir] [--mailmap file] [--require-current] [--repoint]");
+    console.error(
+      "usage: import-package.ts <short> [--state-dir dir] [--mailmap file] [--require-current] [--repoint]",
+    );
     Deno.exit(2);
   }
   try {
-    Deno.exit(await importPackage(short, argValue("--state-dir", "/tmp/ext-import"), {
-      mailmap: argValue("--mailmap", "") || null,
-      requireCurrent: Deno.args.includes("--require-current"),
-      repoint: Deno.args.includes("--repoint"),
-    }));
+    Deno.exit(
+      await importPackage(short, argValue("--state-dir", "/tmp/ext-import"), {
+        mailmap: argValue("--mailmap", "") || null,
+        rewriteDir: argValue("--rewrite-dir", "") || undefined,
+        requireCurrent: Deno.args.includes("--require-current"),
+        repoint: Deno.args.includes("--repoint"),
+      }),
+    );
   } catch (e) {
     console.error(`import error: ${(e as Error).message}`);
     Deno.exit(2);

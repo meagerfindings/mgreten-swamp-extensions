@@ -137,6 +137,8 @@ packages:
     short: code-review-rubric
     source: git@github.com:meagerfindings/swamp-code-review-rubric.git
     ref: f79e67ffd646574c743fec6c62940a4b1f1c722a
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: extensions/models/manifest.yaml
     paths:
       - { from: extensions/, to: extensions/ }
@@ -165,6 +167,8 @@ packages:
     short: datadog-readonly
     source: git@github.com:meagerfindings/swamp-datadog-readonly.git
     ref: cf981e973db9f9e42dd63f04bded3427d7d1d75d
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: extensions/models/manifest.yaml
     paths:
       - { from: extensions/, to: extensions/ }
@@ -179,6 +183,8 @@ packages:
     short: frigate-timelapse
     source: git@github.com:meagerfindings/frigate-timelapse.git
     ref: 312c630151e74ec98b362956ddaf1e12886e0fb3
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: manifest.yaml
     paths:
       - { from: LICENSE.txt, to: LICENSE.txt }
@@ -295,6 +301,8 @@ packages:
     short: linear
     source: git@github.com:meagerfindings/swamp-linear.git
     ref: 9e323e3a6296da8a3624096a128e97102734a37c
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: extensions/models/manifest.yaml
     paths:
       - { from: extensions/, to: extensions/ }
@@ -364,6 +372,8 @@ packages:
     short: openai-decision-tools
     source: git@github.com:meagerfindings/swamp-openai-decision-tools.git
     ref: 49f9ddc5a36d331f8e0361736165bbb4d01a5b04
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: manifest.yaml
     paths:
       - { from: LICENSE.txt, to: LICENSE.txt }
@@ -374,6 +384,8 @@ packages:
     short: packet-certifier
     source: git@github.com:meagerfindings/swamp-packet-certifier.git
     ref: b95ca705cc078c20e1435f7588fce407e385de5e
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: extensions/models/manifest.yaml
     paths:
       - { from: extensions/, to: extensions/ }
@@ -388,6 +400,8 @@ packages:
     short: pr-watcher
     source: git@github.com:meagerfindings/swamp-pr-watcher.git
     ref: 4274c137cc3f5d3c78468a1c084248b6c18536ea
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: extensions/models/manifest.yaml
     paths:
       - { from: extensions/, to: extensions/ }
@@ -531,6 +545,8 @@ packages:
     short: swamp-club-score
     source: git@github.com:meagerfindings/swamp-club-score.git
     ref: 6b298395c9ba85b63ebb0f77d9bd6c6e6fda1afe
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: manifest.yaml
     paths:
       - { from: LICENSE.txt, to: LICENSE.txt }
@@ -570,7 +586,10 @@ packages:
   - name: "@mgreten/unifi"
     short: unifi
     source: git@github.com:meagerfindings/swamp-unifi.git
-    ref: ad06370796e8825b0c0ef388a96c54fdae1d0851
+    # Mat's current source (adds the read-only client inspect method)
+    ref: 09661c8a30cd123e7bfdde50333502a5a54835a4
+    # content removed at import; expressions live outside this repo
+    rewrite: true
     manifest: extensions/models/manifest.yaml
     paths:
       - { from: extensions/, to: extensions/ }
@@ -1184,3 +1203,26 @@ packages:
     manifest: extensions/models/zernio/manifest.yaml
     paths:
       - { from: "extensions/models/zernio/", to: "extensions/models/zernio/" }
+  # Registry builds: no current git source holds this content, so the
+  # integrity-verified published archive is the source (tools/import-package.ts
+  # builds one deterministic commit from it).
+  - name: "@mgreten/unifi-cve-watcher"
+    short: unifi-cve-watcher
+    # Created 2026-05-31 by @mgreten with no repository; its files are in no
+    # GitHub history. Current registry build 2026.10.14.1.
+    source: "registry:@mgreten/unifi-cve-watcher@2026.10.14.1"
+    published: "2026-10-14T23:42:05.037Z"
+    ref: 1c2f177debfe6c93efb167bf2da2be549795ee50
+    manifest: extensions/models/unifi-cve-watcher/manifest.yaml
+    paths:
+      - { from: extensions/models/unifi-cve-watcher/, to: extensions/models/unifi-cve-watcher/ }
+  - name: "@mgreten/frigate-footage-export"
+    short: frigate-footage-export
+    # GitHub HEAD (meagerfindings/swamp-frigate-footage-export) is at
+    # 2026.07.19.2, behind the registry; import the registry build instead.
+    source: "registry:@mgreten/frigate-footage-export@2026.10.14.1"
+    published: "2026-10-14T22:49:06.326Z"
+    ref: 282811844a23fdbc03591e056e227950ea400654
+    manifest: extensions/models/frigate-footage-export/manifest.yaml
+    paths:
+      - { from: extensions/models/frigate-footage-export/, to: extensions/models/frigate-footage-export/ }
