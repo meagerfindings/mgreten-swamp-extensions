@@ -664,6 +664,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-pimoroni-explorer.git'
       ref: b1800071f5aa160ce856c637c1d394bfabc7b4b4
+  - name: '@mgreten/post-release-measurement'
+    path: packages/post-release-measurement
+    manifest: packages/post-release-measurement/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:cbcbbd01775974c20ac11735b9196f1bc9b9d79b640ed833e83a5a178a95677a'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-post-release-measurement.git'
+      ref: fe9d565f81ceedfe6d735dd40fdf0e26a2f81387
   - name: '@mgreten/pyannote-diarizer'
     path: packages/pyannote-diarizer
     manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
