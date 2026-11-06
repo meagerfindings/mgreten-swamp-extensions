@@ -26,6 +26,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-agent-provider-catalog.git'
       ref: d3bff92b9d9a957b03e6f6c7f866eafd9844df96
+  - name: '@mgreten/agent-system-review'
+    path: packages/agent-system-review
+    manifest: packages/agent-system-review/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:91bb5246780461d7d7ee00fba3fe4db5335b0034e10145a0b2dadaac168e9af4'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-agent-system-review.git'
+      ref: 3703849b374883136efcd1d373bb1dc8911383c6
   - name: '@mgreten/aws/s3-site-deploy'
     path: packages/s3-site-deploy
     manifest: packages/s3-site-deploy/manifest.yaml
