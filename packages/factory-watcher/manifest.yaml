@@ -4,7 +4,7 @@ version: 2026.10.14.1
 description: >
   Deterministic, decision-only analysis of caller-supplied factory observations.
   Produces persisted recommendations and never mutates a factory or calls a provider.
-repository: "https://github.com/meagerfindings/swamp-factory-watcher"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - factory_watcher.ts
