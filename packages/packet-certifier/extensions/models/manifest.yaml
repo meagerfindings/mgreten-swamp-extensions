@@ -5,7 +5,7 @@ description: >
   Certify that an agent implementation packet changed only approved Git paths,
   stayed within file and line budgets, and preserved ignored runtime state.
 
-repository: https://github.com/meagerfindings/swamp-packet-certifier
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
