@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/factory-watcher"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Deterministic, decision-only analysis of caller-supplied factory observations.
   Produces persisted recommendations and never mutates a factory or calls a provider.

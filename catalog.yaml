@@ -282,8 +282,8 @@ packages:
   - name: '@mgreten/factory-watcher'
     path: packages/factory-watcher
     manifest: packages/factory-watcher/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:00e327330080e532da30fa75514e34404ac490d1e3a7f613763b21223cde5b7f'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ea49faa2de0d779ea5835c11fffad2f200b0e74c8224d9c81ad300b1f6539ef4'
     tests: deterministic
     dependsOn: []
     source:
