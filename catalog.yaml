@@ -77,6 +77,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-bounded-context-workflows.git'
       ref: 064eb3d5a5ae889b8d22936b90bb2c9f285c63db
+  - name: '@mgreten/bounded-experiment'
+    path: packages/bounded-experiment
+    manifest: packages/bounded-experiment/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:9a7421f41bedea3c9bb0d117f8b6740b0b2517c715b6251ef2f976326580ecf9'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-bounded-experiment.git'
+      ref: 29a676e2b0fab99a74564c70c69fa9c2f4581385
   - name: '@mgreten/brief-sanitize'
     path: packages/brief-sanitize
     manifest: packages/brief-sanitize/extensions/models/manifest.yaml
