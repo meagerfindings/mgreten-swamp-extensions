@@ -810,6 +810,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-road-trip-risk-watch.git'
       ref: 071f6df0b1a499c4774489d395407bfdad238921
+  - name: '@mgreten/s3-backup-retention'
+    path: packages/s3-backup-retention
+    manifest: packages/s3-backup-retention/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:1440ac4fb76cbf41c3da5fdc0ceb9924c7a2fc0c1c86e41342be7a73fa17f6e3'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-s3-backup-retention.git'
+      ref: 458150ca3358aad5d81fde1847124a5e36e68229
   - name: '@mgreten/slack-blocks'
     path: packages/slack-blocks
     manifest: packages/slack-blocks/extensions/models/manifest.yaml
