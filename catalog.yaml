@@ -813,8 +813,8 @@ packages:
   - name: '@mgreten/s3-object-read'
     path: packages/s3-object-read
     manifest: packages/s3-object-read/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:bb9fc69e7a7643f075950caebaf161237621a1078eba1926ec1f36a83cc668a1'
+    version: 2026.11.06.1
+    contentHash: 'sha256:b54ef0057140dc5c724e163a1cdc368446ce33d835351adb467e2c61294df624'
     tests: deterministic
     dependsOn: []
     source:
