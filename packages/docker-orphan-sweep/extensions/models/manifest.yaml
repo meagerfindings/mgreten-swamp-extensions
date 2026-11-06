@@ -7,7 +7,7 @@ description: >
   directory no longer exists. Cross-references live compose projects against
   git worktree paths. Works with any repo that uses worktrees + compose.
 
-repository: https://github.com/meagerfindings/swamp-docker-orphan-sweep
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - docker_orphan_sweep.ts
