@@ -322,8 +322,8 @@ packages:
   - name: '@mgreten/feedback-triage'
     path: packages/feedback-triage
     manifest: packages/feedback-triage/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:1196d857c4e476fc715c10619c5e2141b1f192dfb81fd2bfbbd80b3172093a40'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ab3f2c250b24e674f8cfdadc78d55e07838dce0a7d6dcbde30af0ea8d2eb18d8'
     tests: deterministic
     dependsOn: []
     source:

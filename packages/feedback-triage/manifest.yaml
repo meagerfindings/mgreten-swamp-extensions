@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/feedback-triage"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Privacy-hardened deterministic feedback normalization, bounded triage-request
   preparation, and fail-closed validation of recommendation-only triage output.
