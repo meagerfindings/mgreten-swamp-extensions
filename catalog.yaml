@@ -726,8 +726,8 @@ packages:
   - name: '@mgreten/notification-outbox'
     path: packages/notification-outbox
     manifest: packages/notification-outbox/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:d36483bb5aff30f4afe92740c8001c89249bdda459e554345db99d1d98327c88'
+    version: 2026.11.06.1
+    contentHash: 'sha256:f4d1d59f6c248016d48d6c42fd94463083e6823473918206e5e9fc60e19dcb22'
     tests: deterministic
     dependsOn: []
     source:
