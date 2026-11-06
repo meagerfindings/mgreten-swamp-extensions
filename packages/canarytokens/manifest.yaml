@@ -6,7 +6,7 @@ description: >
   deduplication, and optionally create preview-confirmed web tokens against one
   pinned self-hosted server through a separate creator model.
 license: MIT
-repository: https://github.com/meagerfindings/swamp-canarytokens
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 additionalFiles:
