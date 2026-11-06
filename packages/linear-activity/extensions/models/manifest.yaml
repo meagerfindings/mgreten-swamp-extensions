@@ -7,7 +7,7 @@ description: >
   to configurable team keys. Designed as a data source for EOD reports and
   standup summaries.
 
-repository: https://github.com/meagerfindings/swamp-linear-activity
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
