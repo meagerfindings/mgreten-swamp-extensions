@@ -820,6 +820,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-s3-backup-retention.git'
       ref: 458150ca3358aad5d81fde1847124a5e36e68229
+  - name: '@mgreten/s3-object-read'
+    path: packages/s3-object-read
+    manifest: packages/s3-object-read/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:bb9fc69e7a7643f075950caebaf161237621a1078eba1926ec1f36a83cc668a1'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-s3-object-read.git'
+      ref: 0f1ecc2f24ec899e56f1663077e85b9f8a36b5ca
   - name: '@mgreten/slack-blocks'
     path: packages/slack-blocks
     manifest: packages/slack-blocks/extensions/models/manifest.yaml
