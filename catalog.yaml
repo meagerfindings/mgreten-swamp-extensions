@@ -384,8 +384,8 @@ packages:
   - name: '@mgreten/frigate-footage-export'
     path: packages/frigate-footage-export
     manifest: packages/frigate-footage-export/extensions/models/frigate-footage-export/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:b64432c2732ad7bbb7582b0f5132c047f26a5beb0cb6c8cf1338ab48c4e25459'
+    version: 2026.11.06.1
+    contentHash: 'sha256:6e71309b124f407684824728e83a49b4e2262d7d55b1e5a307662820d31b9f49'
     tests: deterministic
     dependsOn: []
     source:
