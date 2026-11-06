@@ -59,8 +59,8 @@ packages:
   - name: '@mgreten/bottleneck-ranking'
     path: packages/bottleneck-ranking
     manifest: packages/bottleneck-ranking/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:c10c981910a892e53fa3f8a6d8eb0e1b768be8c7f9f78da172380aba7f83bace'
+    version: 2026.11.06.1
+    contentHash: 'sha256:8f7d42dedf8c1553bb2500ca65e21505738bf9eecd7e2a66fabccb508b69b1be'
     tests: deterministic
     dependsOn: []
     source:

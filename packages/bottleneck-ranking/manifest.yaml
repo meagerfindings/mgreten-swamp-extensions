@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/bottleneck-ranking"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: "Deterministically ranks caller-supplied bottleneck candidates with explicit scales, weights, normalization, evidence, and missing-data policy."
 repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
