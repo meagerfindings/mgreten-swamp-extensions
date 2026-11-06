@@ -7,7 +7,7 @@ description: >
   snippet) via the Gmail REST API using a vault-wired OAuth refresh token. No
   write methods by design.
 
-repository: https://github.com/meagerfindings/swamp-gmail-read
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - gmail_read.ts
