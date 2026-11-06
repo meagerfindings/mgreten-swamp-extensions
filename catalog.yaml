@@ -386,7 +386,7 @@ packages:
     manifest: packages/frigate-footage-export/extensions/models/frigate-footage-export/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:b64432c2732ad7bbb7582b0f5132c047f26a5beb0cb6c8cf1338ab48c4e25459'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'registry:@mgreten/frigate-footage-export@2026.10.14.1'
@@ -396,7 +396,7 @@ packages:
     manifest: packages/frigate-timelapse/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:b2c98d2e7e83638f78b9609b1ac1c7850857d4207bb47ec2a32bd9c36eea36a9'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/frigate-timelapse.git'
@@ -526,7 +526,7 @@ packages:
     manifest: packages/hermes-config/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:4221e9181a5a455af9a87372b8eec479dbf6d9db16de06d78ac71a579d88f7c6'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-hermes-config.git'
@@ -1229,7 +1229,7 @@ packages:
     manifest: packages/unifi-cve-watcher/extensions/models/unifi-cve-watcher/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:727ed4d5d3f6c43f833deb4538016a586a1dd5917dba92afe0bbfe3a8cafc114'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'registry:@mgreten/unifi-cve-watcher@2026.10.14.1'
