@@ -790,6 +790,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-release-adoption.git'
       ref: 6e94b1a4851973d279b66a3ccac9b6138ae449fe
+  - name: '@mgreten/response-quality'
+    path: packages/response-quality
+    manifest: packages/response-quality/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:6171f9c65e688c629262ce0a9be8bda3c1ffd8b22614db40983bca49d621067f'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-response-quality.git'
+      ref: 8c4fbc41de88042c23b0f99ccb736840e7bc7a4b
   - name: '@mgreten/road-trip-risk-watch'
     path: packages/road-trip-risk-watch
     manifest: packages/road-trip-risk-watch/extensions/models/@mgreten/road-trip-risk-watch/manifest.yaml
