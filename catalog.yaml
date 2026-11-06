@@ -501,6 +501,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-grist.git'
       ref: 4b79f7b3d2f585707208bb11dc63bd308e25342d
+  - name: '@mgreten/hermes-config'
+    path: packages/hermes-config
+    manifest: packages/hermes-config/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:4221e9181a5a455af9a87372b8eec479dbf6d9db16de06d78ac71a579d88f7c6'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-hermes-config.git'
+      ref: 6c454df991c69abd1925773cc0e28a55cb56f9ef
   - name: '@mgreten/hermes-interest-signals'
     path: packages/hermes-interest-signals
     manifest: packages/hermes-interest-signals/manifest.yaml
