@@ -8,7 +8,7 @@
 
 // deno-lint-ignore no-import-prefix
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
-import { model } from "./storage_health.ts";
+import { model, shellQuote } from "./storage_health.ts";
 
 type Invocation = { cmd: string; args: string[] };
 type Reply = { code?: number; stdout?: string; stderr?: string };
@@ -46,8 +46,16 @@ async function withFakeCommand<T>(
   }
 }
 
-/** The shell command string actually executed (last arg for sh -c and ssh). */
-const shellText = (inv: Invocation) => inv.args[inv.args.length - 1];
+/** The argv run on the target: direct locally, unquoted from ssh's command string remotely. */
+function argvOf(inv: Invocation): string[] {
+  if (inv.cmd !== "ssh") return [inv.cmd, ...inv.args];
+  const quoted = inv.args[inv.args.length - 1].match(/'(?:[^']|'\\'')*'/g) ??
+    [];
+  return quoted.map((q) => q.slice(1, -1).replaceAll(`'\\''`, "'"));
+}
+
+const DF_HEADER =
+  "Filesystem 1048576-blocks Used Available Capacity Mounted on";
 
 function makeContext(globalArgs: Record<string, unknown>) {
   const written: Written[] = [];
@@ -63,23 +71,26 @@ function makeContext(globalArgs: Record<string, unknown>) {
   return { context, written };
 }
 
-/** Reply with a df line per mount (as produced by the model's awk filter). */
-function dfReplies(byMount: Record<string, string>, find: Record<string, Reply> = {}) {
+/** Reply with POSIX df output (header + one row) per mount, and find output per path. */
+function dfReplies(
+  byMount: Record<string, string>,
+  find: Record<string, Reply> = {},
+) {
   return (inv: Invocation): Reply => {
-    const text = shellText(inv);
-    const df = text.match(/^df -Pm "([^"]+)"/);
-    if (df) {
-      const line = byMount[df[1]];
-      if (line === undefined) throw new Error(`unexpected df for ${df[1]}`);
-      return { stdout: `${line}\n` };
+    const argv = argvOf(inv);
+    if (argv[0] === "df") {
+      const line = byMount[argv[3]];
+      if (line === undefined) {
+        throw new Error(`unexpected df ${argv.join(" ")}`);
+      }
+      return { stdout: `${DF_HEADER}\n${line} ${argv[3]}\n` };
     }
-    const fd = text.match(/^find "([^"]+)"/);
-    if (fd) {
-      const reply = find[fd[1]];
-      if (!reply) throw new Error(`unexpected find for ${fd[1]}`);
+    if (argv[0] === "find") {
+      const reply = find[argv[1]];
+      if (!reply) throw new Error(`unexpected find for ${argv[1]}`);
       return reply;
     }
-    throw new Error(`unexpected command ${text}`);
+    throw new Error(`unexpected command ${argv.join(" ")}`);
   };
 }
 
@@ -111,15 +122,9 @@ Deno.test("scan classifies usage at the warn/critical boundaries and recommends 
       });
       const result = await model.methods.scan.execute({}, context);
 
-      // Local execution goes through /bin/sh -c with the df|awk pipeline.
+      // Local execution runs df directly, with no shell in between.
       assertEquals(calls.length, 3);
-      assertEquals(calls[1], {
-        cmd: "/bin/sh",
-        args: [
-          "-c",
-          `df -Pm "/mnt/data" | awk 'NR==2 {print $1, $2, $3, $4, $5}'`,
-        ],
-      });
+      assertEquals(calls[1], { cmd: "df", args: ["-Pm", "--", "/mnt/data"] });
 
       const mounts = byName(written, "mountStatus");
       assertEquals(
@@ -169,7 +174,10 @@ Deno.test("custom thresholds change classification", async () => {
       });
       await model.methods.scan.execute({}, context);
       assertEquals(byName(written, "mountStatus")[0].data.status, "critical");
-      assertEquals(byName(written, "storageReport")[0].data.overallStatus, "critical");
+      assertEquals(
+        byName(written, "storageReport")[0].data.overallStatus,
+        "critical",
+      );
     },
   );
 });
@@ -180,9 +188,10 @@ Deno.test("backup inventory reports snapshot range and keep-target compliance", 
       { "/": "/dev/sda1 100000 10000 90000 10%" },
       {
         "/mnt/backup/snapshots": {
-          stdout: "/mnt/backup/snapshots/2026-01-01\n" +
-            "/mnt/backup/snapshots/2026-02-01\n" +
-            "/mnt/backup/snapshots/2026-03-01\n",
+          // unsorted, as find returns it; the model sorts
+          stdout: "/mnt/backup/snapshots/2026-02-01\n" +
+            "/mnt/backup/snapshots/2026-03-01\n" +
+            "/mnt/backup/snapshots/2026-01-01\n",
         },
         "/mnt/missing": { code: 1, stderr: "No such file or directory" },
       },
@@ -194,10 +203,16 @@ Deno.test("backup inventory reports snapshot range and keep-target compliance", 
       });
       await model.methods.scan.execute({}, context);
 
-      assertEquals(
-        shellText(calls[1]),
-        `find "/mnt/backup/snapshots" -maxdepth 1 -type d -name '20*' | sort`,
-      );
+      assertEquals(argvOf(calls[1]), [
+        "find",
+        "/mnt/backup/snapshots",
+        "-maxdepth",
+        "1",
+        "-type",
+        "d",
+        "-name",
+        "20*",
+      ]);
 
       const inventories = byName(written, "backupInventory");
       assertEquals(inventories.map((i) => i.name), [
@@ -246,8 +261,10 @@ Deno.test("healthy scan with keepTarget 0 is ok with a single all-clear recommen
       { "/": "/dev/sda1 100000 10000 90000 10%" },
       {
         "/mnt/backup": {
-          stdout: Array.from({ length: 40 }, (_, i) =>
-            `/mnt/backup/2026-01-${String(i + 1).padStart(2, "0")}`).join("\n"),
+          stdout: Array.from(
+            { length: 40 },
+            (_, i) => `/mnt/backup/2026-01-${String(i + 1).padStart(2, "0")}`,
+          ).join("\n"),
         },
       },
     ),
@@ -273,20 +290,84 @@ Deno.test("remote hosts are inspected over ssh in batch mode; localhost stays lo
       const { context, written } = makeContext({ sshHost: "nas.example.com" });
       await model.methods.scan.execute({}, context);
       assertEquals(calls[0].cmd, "ssh");
-      assertEquals(calls[0].args.slice(0, 5), [
+      assertEquals(calls[0].args, [
         "-o",
         "ConnectTimeout=10",
         "-o",
         "BatchMode=yes",
+        "--",
         "nas.example.com",
+        "'df' '-Pm' '--' '/'",
       ]);
-      assertEquals(byName(written, "storageReport")[0].name, "storageReport-nas.example.com");
-      assertEquals(byName(written, "storageReport")[0].data.host, "nas.example.com");
+      assertEquals(
+        byName(written, "storageReport")[0].name,
+        "storageReport-nas.example.com",
+      );
+      assertEquals(
+        byName(written, "storageReport")[0].data.host,
+        "nas.example.com",
+      );
 
       calls.length = 0;
       const local = makeContext({ sshHost: "localhost" });
       await model.methods.scan.execute({}, local.context);
-      assertEquals(calls[0].cmd, "/bin/sh");
+      assertEquals(calls[0].cmd, "df");
+    },
+  );
+});
+
+Deno.test("mount and backup paths with shell metacharacters reach df/find as one argument", async () => {
+  const evil = `/mnt/a"; touch /tmp/pwned; echo "$(id)'b`;
+  await withFakeCommand(
+    dfReplies({ [evil]: "/dev/sda1 1000 100 900 10%" }, {
+      [evil]: { stdout: "" },
+    }),
+    async (calls) => {
+      const { context } = makeContext({ mounts: evil, backupPaths: evil });
+      await model.methods.scan.execute({}, context);
+      assertEquals(calls.map((c) => c.cmd), ["df", "find"]);
+      assertEquals(calls[0].args, ["-Pm", "--", evil]);
+      assertEquals(calls[1].args[0], evil);
+
+      calls.length = 0;
+      const remote = makeContext({
+        sshHost: "nas.example.com",
+        mounts: evil,
+        backupPaths: evil,
+      });
+      await model.methods.scan.execute({}, remote.context);
+      assertEquals(calls.map((c) => c.cmd), ["ssh", "ssh"]);
+      assertEquals(argvOf(calls[0]), ["df", "-Pm", "--", evil]);
+    },
+  );
+  // A real POSIX shell reads each quoted word back as exactly the original argument.
+  const words = [evil, "it's", "", "a b", "$HOME", "`id`", "\\"];
+  const out = await new Deno.Command("/bin/sh", {
+    args: ["-c", `printf '%s\\0' ${words.map(shellQuote).join(" ")}`],
+    stdout: "piped",
+  }).output();
+  assertEquals(
+    new TextDecoder().decode(out.stdout).split("\0").slice(0, -1),
+    words,
+  );
+});
+
+Deno.test("relative or option-like paths are rejected before anything runs", async () => {
+  await withFakeCommand(
+    () => {
+      throw new Error("no command may run");
+    },
+    async (calls) => {
+      for (const args of [{ mounts: "-h" }, { mounts: "data" }]) {
+        const { context, written } = makeContext(args);
+        await assertRejects(
+          () => model.methods.scan.execute({}, context),
+          Error,
+          "must be an absolute path",
+        );
+        assertEquals(written, []);
+      }
+      assertEquals(calls, []);
     },
   );
 });
@@ -306,28 +387,78 @@ Deno.test("a failing df aborts the scan with the host, exit code, and stderr", a
   );
 });
 
-Deno.test("listMounts parses every df row into typed mount entries", async () => {
+Deno.test("listMounts uses POSIX df -PTm (GNU rejects -P with --output) and parses every row", async () => {
   await withFakeCommand(
     () => ({
-      stdout: "/dev/sda1      /           ext4    100000  42000  42%\n" +
-        "tmpfs          /run        tmpfs   1600    2      1%\n" +
-        "192.0.2.10:/vol /mnt/nfs   nfs4    500000  499000 100%\n",
+      stdout:
+        "Filesystem     Type  1048576-blocks   Used Available Capacity Mounted on\n" +
+        "/dev/sda1      ext4          100000  42000     58000      42% /\n" +
+        "tmpfs          tmpfs           1600      2      1598       1% /run\n" +
+        "192.0.2.10:/vol nfs4         500000 499000      1000     100% /mnt/nfs\n",
     }),
     async (calls) => {
       const { context, written } = makeContext({});
       const result = await model.methods.listMounts.execute({}, context);
-      assertEquals(calls.length, 1);
-      assertEquals(calls[0].cmd, "/bin/sh");
+      assertEquals(calls, [{ cmd: "df", args: ["-PTm"] }]);
       assertEquals(written.length, 1);
       assertEquals(written[0].spec, "mountList");
       assertEquals(written[0].name, "mountList-local");
       assertEquals(written[0].data.mounts, [
-        { device: "/dev/sda1", mount: "/", fstype: "ext4", sizeMb: 100000, usedMb: 42000, usePercent: 42 },
-        { device: "tmpfs", mount: "/run", fstype: "tmpfs", sizeMb: 1600, usedMb: 2, usePercent: 1 },
-        { device: "192.0.2.10:/vol", mount: "/mnt/nfs", fstype: "nfs4", sizeMb: 500000, usedMb: 499000, usePercent: 100 },
+        {
+          device: "/dev/sda1",
+          mount: "/",
+          fstype: "ext4",
+          sizeMb: 100000,
+          usedMb: 42000,
+          usePercent: 42,
+        },
+        {
+          device: "tmpfs",
+          mount: "/run",
+          fstype: "tmpfs",
+          sizeMb: 1600,
+          usedMb: 2,
+          usePercent: 1,
+        },
+        {
+          device: "192.0.2.10:/vol",
+          mount: "/mnt/nfs",
+          fstype: "nfs4",
+          sizeMb: 500000,
+          usedMb: 499000,
+          usePercent: 100,
+        },
       ]);
       model.resources.mountList.schema.parse(written[0].data);
       assertEquals(result, { dataHandles: ["mountList/mountList-local"] });
+    },
+  );
+});
+
+Deno.test("listMounts falls back to df -Pm without a type column and keeps mount points with spaces", async () => {
+  await withFakeCommand(
+    (inv) =>
+      inv.args[0] === "-PTm"
+        ? { code: 1, stderr: "df: invalid option -- T" }
+        : {
+          stdout:
+            "Filesystem 1048576-blocks Used Available Capacity Mounted on\n" +
+            "/dev/disk3s1 476000 120000 356000 26% /Volumes/My Disk\n",
+        },
+    async (calls) => {
+      const { context, written } = makeContext({});
+      await model.methods.listMounts.execute({}, context);
+      assertEquals(calls.map((c) => c.args), [["-PTm"], ["-Pm"]]);
+      assertEquals(written[0].data.mounts, [
+        {
+          device: "/dev/disk3s1",
+          mount: "/Volumes/My Disk",
+          fstype: "",
+          sizeMb: 476000,
+          usedMb: 120000,
+          usePercent: 26,
+        },
+      ]);
     },
   );
 });

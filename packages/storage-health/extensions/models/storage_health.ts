@@ -195,12 +195,31 @@ const MountListSchema: z.ZodObject<{
 // Exec helper — local or SSH
 // ---------------------------------------------------------------------------
 
-/** Run a shell command either locally or over SSH and return trimmed stdout. */
-async function exec(host: string, command: string): Promise<string> {
+/** POSIX single-quote one argument for the remote shell that ssh runs. */
+export function shellQuote(arg: string): string {
+  return `'${arg.replaceAll("'", `'\\''`)}'`;
+}
+
+/** Paths come from configuration; only absolute paths are accepted so none can be read as an option. */
+function requireAbsolute(kind: string, path: string): string {
+  if (!path.startsWith("/")) {
+    throw new Error(
+      `${kind} must be an absolute path: ${JSON.stringify(path)}`,
+    );
+  }
+  return path;
+}
+
+/**
+ * Run a command (argv, never a shell string) locally or over SSH and return
+ * trimmed stdout. Locally there is no shell at all; over SSH every argument
+ * is single-quoted, because ssh always hands the remote side a shell string.
+ */
+async function exec(host: string, argv: string[]): Promise<string> {
   const isLocal = host === "local" || host === "" || host === "localhost";
   const cmd = isLocal
-    ? new Deno.Command("/bin/sh", {
-      args: ["-c", command],
+    ? new Deno.Command(argv[0], {
+      args: argv.slice(1),
       stdout: "piped",
       stderr: "piped",
     })
@@ -210,8 +229,9 @@ async function exec(host: string, command: string): Promise<string> {
         "ConnectTimeout=10",
         "-o",
         "BatchMode=yes",
+        "--",
         host,
-        command,
+        argv.map(shellQuote).join(" "),
       ],
       stdout: "piped",
       stderr: "piped",
@@ -249,12 +269,14 @@ async function inspectMount(
   warnPct: number,
   critPct: number,
 ): Promise<z.infer<typeof MountStatusSchema>> {
-  // df -Pm gives Posix output in MiB blocks
-  const raw = await exec(
-    host,
-    `df -Pm "${mount}" | awk 'NR==2 {print $1, $2, $3, $4, $5}'`,
-  );
-  const parts = raw.split(/\s+/);
+  // df -Pm gives Posix output in MiB blocks; row 2 is the mount's line
+  const raw = await exec(host, [
+    "df",
+    "-Pm",
+    "--",
+    requireAbsolute("mount", mount),
+  ]);
+  const parts = (raw.split("\n")[1] ?? "").trim().split(/\s+/);
   const device = parts[0] ?? "unknown";
   const sizeMb = parseInt(parts[1] ?? "0", 10);
   const usedMb = parseInt(parts[2] ?? "0", 10);
@@ -280,12 +302,19 @@ async function inventoryBackup(
   keepTarget: number,
 ): Promise<z.infer<typeof BackupInventorySchema>> {
   // List only timestamp-style subdirectories (start with 20)
+  requireAbsolute("backup path", path);
   let listing = "";
   try {
-    listing = await exec(
-      host,
-      `find "${path}" -maxdepth 1 -type d -name '20*' | sort`,
-    );
+    listing = (await exec(host, [
+      "find",
+      path,
+      "-maxdepth",
+      "1",
+      "-type",
+      "d",
+      "-name",
+      "20*",
+    ])).split("\n").filter(Boolean).sort().join("\n");
   } catch {
     listing = "";
   }
@@ -555,22 +584,33 @@ export const model = {
 
         context.logger.info("Listing mounts on {host}", { host: sshHost });
 
-        const raw = await exec(
-          sshHost,
-          `df -Pm --output=source,target,fstype,size,used,pcent | tail -n +2`,
-        );
+        // GNU df rejects -P with --output, so use POSIX columns: -PTm adds
+        // the filesystem type on GNU; BSD/macOS df has no type column.
+        let raw: string;
+        let typed = true;
+        try {
+          raw = await exec(sshHost, ["df", "-PTm"]);
+        } catch {
+          typed = false;
+          raw = await exec(sshHost, ["df", "-Pm"]);
+        }
 
-        const mountEntries = raw.split("\n").filter(Boolean).map((line) => {
-          const parts = line.trim().split(/\s+/);
-          return {
-            device: parts[0] ?? "",
-            mount: parts[1] ?? "",
-            fstype: parts[2] ?? "",
-            sizeMb: parseInt(parts[3] ?? "0", 10),
-            usedMb: parseInt(parts[4] ?? "0", 10),
-            usePercent: parseInt((parts[5] ?? "0").replace("%", ""), 10),
-          };
-        });
+        const mountEntries = raw.split("\n").slice(1).filter((l) => l.trim())
+          .map((line) => {
+            const p = line.trim().split(/\s+/);
+            const [device, fstype, size, used, , pcent] = typed
+              ? p
+              : [p[0], "", p[1], p[2], p[3], p[4]];
+            return {
+              device: device ?? "",
+              // the mount point is the last column and may contain spaces
+              mount: p.slice(typed ? 6 : 5).join(" "),
+              fstype: fstype ?? "",
+              sizeMb: parseInt(size ?? "0", 10),
+              usedMb: parseInt(used ?? "0", 10),
+              usePercent: parseInt((pcent ?? "0").replace("%", ""), 10),
+            };
+          });
 
         const handle = await context.writeResource(
           "mountList",
