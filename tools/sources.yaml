@@ -408,7 +408,8 @@ packages:
   - name: "@mgreten/public-draft-check"
     short: public-draft-check
     source: git@github.com:meagerfindings/swamp-public-draft-check.git
-    ref: ed8e6e8bd783e0b8125a350ac1b6f18cef671f61
+    # main (f16d7fc) matches the registry 2026.10.14.1 build byte-for-byte; master is stale
+    ref: f16d7fc75df595696c3d5d066decca58c6d5b0ae
     manifest: manifest.yaml
     paths:
       - { from: LICENSE.md, to: LICENSE.md }
