@@ -460,6 +460,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-candidate-researcher.git'
       ref: 16a4d88cb262fceab94d9d8fd837eb74dcec58fe
+  - name: '@mgreten/swamp-candidate-researcher-federal'
+    path: packages/swamp-candidate-researcher-federal
+    manifest: packages/swamp-candidate-researcher-federal/extensions/federal-candidate/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:66990fe91140f6c525af372e855af0fb2e8a30eef85dd1835c573c94d9f81ef1'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-candidate-researcher.git'
+      ref: 16a4d88cb262fceab94d9d8fd837eb74dcec58fe
   - name: '@mgreten/task-skill-router'
     path: packages/task-skill-router
     manifest: packages/task-skill-router/extensions/models/manifest.yaml

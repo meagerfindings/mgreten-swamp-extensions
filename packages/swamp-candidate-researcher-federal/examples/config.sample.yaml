@@ -1,0 +1,16 @@
+jurisdiction: colorado
+officeType: candidate
+audience: informed-voter
+reportTone: neutral
+freshnessDays: 30
+issueLenses:
+  - abortion
+  - homeschooling
+  - second amendment
+  - free speech
+sourcePriority:
+  - official
+  - neutral
+  - news
+  - advocacy
+includeJudgeSignals: true
