@@ -394,8 +394,8 @@ packages:
   - name: '@mgreten/frigate-timelapse'
     path: packages/frigate-timelapse
     manifest: packages/frigate-timelapse/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:b2c98d2e7e83638f78b9609b1ac1c7850857d4207bb47ec2a32bd9c36eea36a9'
+    version: 2026.11.06.1
+    contentHash: 'sha256:0c7118926af3104ad1e4ebf690cf7970f4a77ed04fea4fa5dc98efe05a5cb031'
     tests: deterministic
     dependsOn: []
     source:
