@@ -18,7 +18,7 @@ the legacy Network API exposes.
 | ------------------------------- | -------------------------------------- | ------------------------------------ |
 | `@mgreten/unifi/firewall-group` | IPv4/IPv6 address and port groups      | `sync` (factory), `set-members`      |
 | `@mgreten/unifi/firewall-rule`  | LAN/WAN/GUEST firewall rules           | `sync`, `create`, `delete`, `toggle-enabled` |
-| `@mgreten/unifi/client`         | Known clients and wired PoE devices    | `sync` (factory), `power-cycle-poe`  |
+| `@mgreten/unifi/client`         | Known clients, diagnostics, PoE devices | `sync` (factory), `inspect`, `power-cycle-poe` |
 | `@mgreten/unifi/network`        | Configured networks (VLANs / subnets)  | `sync` (factory)                     |
 
 ## Authentication
@@ -112,6 +112,22 @@ device connected to it. Each controller-accepted command is recorded as a
 and acknowledgment timestamp. Acceptance does not independently prove physical
 power loss or completion; verify the device reconnects when that distinction
 matters.
+
+## Client roaming snapshots
+
+The `@mgreten/unifi/client` model includes a read-only `inspect` method for
+point-in-time Wi-Fi diagnostics. It captures the active station record, current
+AP, AP inventory, controller health, and hints for comparing repeated snapshots.
+
+```bash
+swamp model method run my-clients inspect \
+  --input mac=3c:07:d7:9f:db:08
+```
+
+`inspect` is a snapshot, not historical event reconstruction. On some UniFi
+Network versions, event history endpoints are not exposed through the local API;
+compare repeated inspections over time to detect AP changes, association time
+changes, or uptime resets that may indicate roaming or reassociation.
 
 ## TLS notes
 

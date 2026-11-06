@@ -9,6 +9,9 @@ import {
   UnifiGlobalArgsSchema,
 } from "./_lib/unifi.ts";
 
+const RawRecordSchema = z.record(z.string(), z.unknown());
+const NumberOrStringSchema = z.union([z.number(), z.string()]);
+
 const ClientSchema = z.object({
   _id: z.string().optional(),
   mac: z.string(),
@@ -88,8 +91,8 @@ type PowerCycleTarget = {
 };
 
 /** Normalize a MAC address for format-independent exact comparison. */
-export function normalizeMac(value: string): string {
-  return value.toLowerCase().replace(/[^0-9a-f]/g, "");
+export function normalizeMac(value: unknown): string {
+  return String(value ?? "").toLowerCase().replace(/[^0-9a-f]/g, "");
 }
 
 function normalizeName(value: string): string {
@@ -261,6 +264,86 @@ export function resolvePowerCycleTarget(
   };
 }
 
+const InspectionSummarySchema = z.object({
+  mac: z.string().optional(),
+  ip: z.string().optional(),
+  hostname: z.string().optional(),
+  name: z.string().optional(),
+  ssid: z.string().optional(),
+  network: z.string().optional(),
+  network_id: z.string().optional(),
+  ap_mac: z.string().optional(),
+  ap_name: z.string().optional(),
+  radio: z.string().optional(),
+  radio_proto: z.string().optional(),
+  channel: NumberOrStringSchema.optional(),
+  signal: z.number().optional(),
+  rssi: z.number().optional(),
+  noise: z.number().optional(),
+  snr: z.number().optional(),
+  tx_rate: NumberOrStringSchema.optional(),
+  rx_rate: NumberOrStringSchema.optional(),
+  uptime: z.number().optional(),
+  assoc_time: z.number().optional(),
+  latest_assoc_time: z.number().optional(),
+  last_seen: z.number().optional(),
+  is_wired: z.boolean().optional(),
+}).passthrough();
+
+const AccessPointSummarySchema = z.object({
+  mac: z.string().optional(),
+  name: z.string().optional(),
+  ip: z.string().optional(),
+  model: z.string().optional(),
+  type: z.string().optional(),
+  state: NumberOrStringSchema.optional(),
+  version: z.string().optional(),
+}).passthrough();
+
+const ClientInspectionSchema = z.object({
+  captured_at: z.string().datetime(),
+  site: z.string(),
+  target: z.object({
+    mac: z.string().optional(),
+    ip: z.string().optional(),
+  }),
+  found: z.boolean(),
+  summary: InspectionSummarySchema.optional(),
+  station: RawRecordSchema.optional(),
+  current_ap: RawRecordSchema.optional(),
+  access_points: z.array(AccessPointSummarySchema),
+  health: z.array(RawRecordSchema),
+  sysinfo: RawRecordSchema.optional(),
+  hints: z.array(z.string()),
+}).passthrough();
+
+const InspectArgsSchema = z.object({
+  mac: z.string().optional().describe("Client MAC address, preferred."),
+  ip: z.string().optional().describe("Client IP address, used as fallback."),
+}).refine((args) => args.mac || args.ip, {
+  message: "Provide either mac or ip.",
+});
+
+type RawRecord = Record<string, unknown>;
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function numberOrStringValue(value: unknown): number | string | undefined {
+  return typeof value === "number" || typeof value === "string"
+    ? value
+    : undefined;
+}
+
 /**
  * Swamp model for UniFi clients (known devices on the controller).
  *
@@ -271,6 +354,8 @@ export function resolvePowerCycleTarget(
  *   (falling back to `_id` or a generated UUID when MAC is absent).
  * - `power-cycle-poe` — resolves an active wired client by name, hostname, or
  *   MAC and restarts it by power-cycling its live UniFi switch PoE port.
+ * - `inspect` — captures a read-only point-in-time roaming, AP, and health
+ *   snapshot for one active client.
  */
 export const model = {
   type: "@mgreten/unifi/client",
@@ -296,6 +381,13 @@ export const model = {
       schema: PowerCycleResultSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
+    },
+    inspection: {
+      description:
+        "A point-in-time read-only client roaming and health inspection snapshot.",
+      schema: ClientInspectionSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
     },
   },
   methods: {
@@ -468,6 +560,139 @@ export const model = {
               port: target.port.port_idx,
             },
           );
+          return { dataHandles: [handle] };
+        } finally {
+          await client.cleanup();
+        }
+      },
+    },
+    inspect: {
+      description:
+        "Capture a read-only point-in-time roaming, AP, and health snapshot for one active client.",
+      arguments: InspectArgsSchema,
+      execute: async (
+        args: z.infer<typeof InspectArgsSchema>,
+        context: {
+          globalArgs: z.infer<typeof UnifiGlobalArgsSchema>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<unknown>;
+          logger: { info: (msg: string, props?: unknown) => void };
+        },
+      ) => {
+        const client = await login(context.globalArgs);
+        try {
+          const [stations, devices, health, sysinfoRows] = await Promise.all([
+            list<RawRecord>(client, "/stat/sta"),
+            list<RawRecord>(client, "/stat/device"),
+            list<RawRecord>(client, "/stat/health"),
+            list<RawRecord>(client, "/stat/sysinfo"),
+          ]);
+
+          const targetMac = args.mac ? normalizeMac(args.mac) : undefined;
+          const station = stations.find((s) => {
+            if (targetMac && normalizeMac(s.mac) === targetMac) return true;
+            return !targetMac && args.ip ? s.ip === args.ip : false;
+          });
+
+          const stationApMac = station ? normalizeMac(station.ap_mac) : "";
+          const currentAp = stationApMac
+            ? devices.find((d) => normalizeMac(d.mac) === stationApMac)
+            : undefined;
+
+          const accessPoints = devices
+            .filter((d) => d.type === "uap")
+            .map((d) => ({
+              mac: stringValue(d.mac),
+              name: stringValue(d.name),
+              ip: stringValue(d.ip),
+              model: stringValue(d.model),
+              type: stringValue(d.type),
+              state: numberOrStringValue(d.state),
+              version: stringValue(d.version),
+            }));
+
+          const hints: string[] = [];
+          if (!station) {
+            hints.push(
+              "Client was not found in /stat/sta; this endpoint only shows currently active clients.",
+            );
+          } else {
+            if (station.is_wired === true) {
+              hints.push(
+                "Client appears wired; Wi-Fi roaming fields may not apply.",
+              );
+            }
+            if (!station.ap_mac) {
+              hints.push("No ap_mac was present on the station record.");
+            }
+            if (station.ap_mac && !currentAp) {
+              hints.push(
+                "Station has ap_mac, but no matching AP was found in /stat/device. UniFi may be reporting a radio or BSSID MAC instead of the device MAC.",
+              );
+            }
+          }
+          hints.push(
+            "This is a current snapshot only. Compare repeated inspections: ap_mac changes, assoc_time changes, or uptime resets may indicate roaming or reassociation.",
+          );
+
+          const capturedAt = new Date().toISOString();
+          const inspection = {
+            captured_at: capturedAt,
+            site: context.globalArgs.site,
+            target: { mac: args.mac, ip: args.ip },
+            found: Boolean(station),
+            summary: station
+              ? {
+                mac: stringValue(station.mac),
+                ip: stringValue(station.ip),
+                hostname: stringValue(station.hostname),
+                name: stringValue(station.name),
+                ssid: stringValue(station.essid),
+                network: stringValue(station.network),
+                network_id: stringValue(station.network_id),
+                ap_mac: stringValue(station.ap_mac),
+                ap_name: stringValue(currentAp?.name),
+                radio: stringValue(station.radio),
+                radio_proto: stringValue(station.radio_proto),
+                channel: numberOrStringValue(station.channel),
+                signal: numberValue(station.signal),
+                rssi: numberValue(station.rssi),
+                noise: numberValue(station.noise),
+                snr: numberValue(station.snr),
+                tx_rate: numberOrStringValue(station.tx_rate),
+                rx_rate: numberOrStringValue(station.rx_rate),
+                uptime: numberValue(station.uptime),
+                assoc_time: numberValue(station.assoc_time),
+                latest_assoc_time: numberValue(station.latest_assoc_time),
+                last_seen: numberValue(station.last_seen),
+                is_wired: booleanValue(station.is_wired),
+              }
+              : undefined,
+            station,
+            current_ap: currentAp,
+            access_points: accessPoints,
+            health,
+            sysinfo: sysinfoRows[0],
+            hints,
+          };
+
+          const instanceBase = targetMac || args.ip || crypto.randomUUID();
+          const instance = `${instanceBase}-${
+            capturedAt.replace(/[:.]/g, "-")
+          }`;
+          const handle = await context.writeResource(
+            "inspection",
+            instance,
+            inspection,
+          );
+          context.logger.info("Captured client inspection", {
+            found: Boolean(station),
+            mac: args.mac,
+            ip: args.ip,
+          });
           return { dataHandles: [handle] };
         } finally {
           await client.cleanup();
