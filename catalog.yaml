@@ -459,6 +459,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-implementer-benchmark.git'
       ref: 7852d8712e26f709879281ee8cc9f07232be08b4
+  - name: '@mgreten/incident-communication'
+    path: packages/incident-communication
+    manifest: packages/incident-communication/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:3df1b13772914185468a8575dbb25821d405a9caa13879fb827d652a9a24acbb'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-incident-communication.git'
+      ref: 68e4bfc09560459c70d0b5be145988390b9d99c0
   - name: '@mgreten/jev-agent-tools'
     path: packages/jev-agent-tools
     manifest: packages/jev-agent-tools/manifest.yaml
