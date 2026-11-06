@@ -551,6 +551,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-markdown-corpus.git'
       ref: 15cccff8fac31724800b44aa1962ea3e186e16bf
+  - name: '@mgreten/marketing-orchestration'
+    path: packages/marketing-orchestration
+    manifest: packages/marketing-orchestration/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:3d8433c1fe2c9d5c5839ddbf16ca6f27ae7a64b2f2a6d8d82325789e3d0416c0'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-marketing-orchestration.git'
+      ref: e28ad4f3c91687844312c95cf4f8635f97f3f540
   - name: '@mgreten/meeting-summarizer'
     path: packages/meeting-summarizer
     manifest: packages/meeting-summarizer/extensions/models/meeting-summarizer/manifest.yaml
