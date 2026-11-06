@@ -361,6 +361,16 @@ packages:
     source:
       repo: 'registry:@mgreten/frigate-footage-export@2026.10.14.1'
       ref: 282811844a23fdbc03591e056e227950ea400654
+  - name: '@mgreten/frigate-timelapse'
+    path: packages/frigate-timelapse
+    manifest: packages/frigate-timelapse/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:b2c98d2e7e83638f78b9609b1ac1c7850857d4207bb47ec2a32bd9c36eea36a9'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/frigate-timelapse.git'
+      ref: 312c630151e74ec98b362956ddaf1e12886e0fb3
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
