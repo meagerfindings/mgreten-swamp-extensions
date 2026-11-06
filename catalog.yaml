@@ -221,6 +221,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-daily-operational-digest.git'
       ref: 5f6a9346ebfa56fa53fa42795303305283318e49
+  - name: '@mgreten/datadog-readonly'
+    path: packages/datadog-readonly
+    manifest: packages/datadog-readonly/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:8d3e203752000cf82d17ffc2ef1f3569bb0741912049ec1e2001d6186bf338e2'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-datadog-readonly.git'
+      ref: cf981e973db9f9e42dd63f04bded3427d7d1d75d
   - name: '@mgreten/decision-context'
     path: packages/decision-context
     manifest: packages/decision-context/manifest.yaml
