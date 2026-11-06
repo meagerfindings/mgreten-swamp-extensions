@@ -1000,3 +1000,13 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-trip-packing.git'
       ref: fae1f9043275756deff7c60bd26bef6041369bee
+  - name: '@mgreten/unifi-release-safety'
+    path: packages/unifi-release-safety
+    manifest: packages/unifi-release-safety/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:64bb2898f01c78f86521730e0f9eb3a9ed9d2454c4acee4461b9e068d22c298c'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-unifi-release-safety.git'
+      ref: 6708ae85dcca6f5e2ced08622ce0935bba57d0e0
