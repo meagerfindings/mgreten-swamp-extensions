@@ -172,8 +172,8 @@ packages:
   - name: '@mgreten/context-conflict-detector'
     path: packages/context-conflict-detector
     manifest: packages/context-conflict-detector/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:db72b5e70648d00a91d93a0844342cead7ffca92e6796c5b1ae86890437ce434'
+    version: 2026.11.06.1
+    contentHash: 'sha256:1d6ba42e83b0bcf56d27baca41a5c98507392beef5cb9860dc36e25361cf0feb'
     tests: deterministic
     dependsOn: []
     source:
