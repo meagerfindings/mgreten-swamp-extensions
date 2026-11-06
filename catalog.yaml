@@ -657,8 +657,8 @@ packages:
   - name: '@mgreten/post-release-measurement'
     path: packages/post-release-measurement
     manifest: packages/post-release-measurement/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:cbcbbd01775974c20ac11735b9196f1bc9b9d79b640ed833e83a5a178a95677a'
+    version: 2026.11.06.1
+    contentHash: 'sha256:39425dab800e4eb34c789374ef68dc39386c392eb717dd76b297fa773792f3d8'
     tests: deterministic
     dependsOn: []
     source:
