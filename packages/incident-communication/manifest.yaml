@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/incident-communication"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Persist validated, explicitly unapproved incident communication drafts without
   collecting evidence, approving content, delivering messages, publishing, or

@@ -462,8 +462,8 @@ packages:
   - name: '@mgreten/incident-communication'
     path: packages/incident-communication
     manifest: packages/incident-communication/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:3df1b13772914185468a8575dbb25821d405a9caa13879fb827d652a9a24acbb'
+    version: 2026.11.06.1
+    contentHash: 'sha256:d6a7947121419d75acc1ba7ae807d4fe0dedc5b48d9f6ad3ed0ee45e1dd85847'
     tests: deterministic
     dependsOn: []
     source:
