@@ -859,6 +859,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-product-lineage.git'
       ref: 207fe5ecdb24484bef4634f7fde5288ac4f16937
+  - name: '@mgreten/public-draft-check'
+    path: packages/public-draft-check
+    manifest: packages/public-draft-check/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:b260bc3784cdea3397a0728c2893a9b4775a46b3da25ff0086fe4801bd5b1d13'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-public-draft-check.git'
+      ref: f16d7fc75df595696c3d5d066decca58c6d5b0ae
   - name: '@mgreten/pyannote-diarizer'
     path: packages/pyannote-diarizer
     manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
