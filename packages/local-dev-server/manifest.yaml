@@ -3,7 +3,7 @@ name: "@mgreten/local-dev-server"
 license: MIT
 version: "2026.10.14.1"
 description: "A local-only development server controller with configurable lifecycle commands and loopback health checks."
-repository: https://github.com/meagerfindings/swamp-local-dev-server
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - dev_server.ts
