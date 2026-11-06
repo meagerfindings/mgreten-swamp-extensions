@@ -656,8 +656,8 @@ packages:
   - name: '@mgreten/markdown-blog'
     path: packages/markdown-blog
     manifest: packages/markdown-blog/extensions/models/markdown-blog/manifest.yaml
-    version: 2026.10.15.2
-    contentHash: 'sha256:bdd9151e02212ba354c53c4d319682576bf3151fdfc59e2bfaf45f72d72c974d'
+    version: 2026.11.06.1
+    contentHash: 'sha256:8093b1fc4efe22ddc9b0b10ed93a612921a2637bdf34033d60c13fa83af8cded'
     tests: deterministic
     dependsOn: []
     source:
