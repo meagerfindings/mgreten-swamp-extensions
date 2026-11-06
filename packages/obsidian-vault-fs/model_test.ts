@@ -6,6 +6,8 @@
 // deno-lint-ignore no-import-prefix
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { model } from "./model.ts";
+// deno-lint-ignore no-import-prefix
+import { parse as parseYaml } from "jsr:@std/yaml@1.0.5";
 
 interface Written {
   spec: string;
@@ -438,5 +440,44 @@ Deno.test("stat reports existing files, directories, and missing paths", async (
     assertEquals(ctx.written[2].name, "vault-root");
     assertEquals(ctx.written[2].data.absolutePath, vault);
     assertEquals(ctx.written[2].data.isDirectory, true);
+  });
+});
+
+Deno.test("setProperties quotes every value YAML would misread and round-trips it", async () => {
+  await withVault(async (vault, ctx) => {
+    const tricky: Record<string, string> = {
+      colon: "A: B",
+      hash: "topic #1",
+      lead_hash: "#tag",
+      lead_dash: "- item",
+      trailing: "todo:",
+      t: "true",
+      yes: "yes",
+      num: "123",
+      neg: "-4.5",
+      nul: "null",
+      dq: 'say "hi"',
+      sq: "it's",
+      back: "a\\b",
+      at: "@home",
+      plain: "Widget Sync",
+    };
+    await Deno.writeTextFile(`${vault}/n.md`, "Body\n");
+    await run(ctx, "setProperties", {
+      file: "n.md",
+      properties: { ...tricky, flag: true, n: 2 },
+    });
+    const text = await Deno.readTextFile(`${vault}/n.md`);
+    assert(text.includes("plain: Widget Sync\n"), "safe strings stay plain");
+    // A strict YAML parser reads the frontmatter back as the same strings.
+    const fm = parseYaml(text.split("---\n")[1]) as Record<string, unknown>;
+    assertEquals(fm, { ...tricky, flag: true, n: 2 });
+    // And so does the model's own reader.
+    await run(ctx, "properties", { file: "n.md" });
+    assertEquals(ctx.written.at(-1)!.data.properties, {
+      ...tricky,
+      flag: true,
+      n: 2,
+    });
   });
 });

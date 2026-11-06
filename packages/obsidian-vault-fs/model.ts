@@ -245,10 +245,29 @@ function scalarToYaml(value: Scalar): string {
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
-  if (/^[A-Za-z0-9_./:@# -]+$/.test(value) && value.trim() === value) {
-    return value;
+  // Plain only when YAML (and parseFrontmatter) read it back as this exact
+  // string: no ": " or " #", no leading indicator, nothing that looks like a
+  // bool, null or number. Everything else is a JSON (= YAML double-quoted) string.
+  const plain = /^[A-Za-z0-9_./][A-Za-z0-9_./:@# -]*$/.test(value) &&
+    value.trim() === value &&
+    !value.includes(": ") && !value.includes(" #") && !value.endsWith(":") &&
+    !/^(?:true|false|yes|no|on|off|y|n|null|~)$/i.test(value) &&
+    !/^[-+]?(?:\d|\.\d)/.test(value);
+  return plain ? value : JSON.stringify(value);
+}
+
+/** Read a plain, "double-quoted" (JSON escapes) or 'single-quoted' YAML scalar. */
+function unquoteScalar(value: string): string {
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    try {
+      return JSON.parse(value);
+    } catch { /* not JSON-escaped; fall through */ }
+    return value.slice(1, -1);
   }
-  return JSON.stringify(value);
+  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replaceAll("''", "'");
+  }
+  return value;
 }
 
 function parseFrontmatter(content: string): {
@@ -273,7 +292,7 @@ function parseFrontmatter(content: string): {
     else if (value === "false") properties[key] = false;
     else if (value === "null") properties[key] = null;
     else if (/^-?\d+(?:\.\d+)?$/.test(value)) properties[key] = Number(value);
-    else properties[key] = value.replace(/^['\"]|['\"]$/g, "");
+    else properties[key] = unquoteScalar(value);
   }
   return { properties, body, hasFrontmatter: true };
 }
