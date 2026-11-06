@@ -4,7 +4,7 @@ version: "2026.10.14.1"
 description: >
   Deterministically groups caller-supplied friction signals into a bounded,
   recommendation-only evidence queue without external side effects.
-repository: "https://github.com/meagerfindings/swamp-repeated-friction"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - repeated_friction.ts
