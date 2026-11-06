@@ -718,8 +718,8 @@ packages:
   - name: '@mgreten/pyannote-diarizer'
     path: packages/pyannote-diarizer
     manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:cab208e85bd4e6c33ed14b2cf1acaf4cc2150a9d3ba991cc79c053bebb5003bc'
+    version: 2026.11.06.1
+    contentHash: 'sha256:07178cca33bb2e2f4a53bb9c3b0fb0760036cafdbff85bc49770c5fc67e0e9c4'
     tests: deterministic
     dependsOn: []
     source:
