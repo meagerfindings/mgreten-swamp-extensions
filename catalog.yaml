@@ -501,6 +501,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-linear-activity.git'
       ref: 108baaa88fb1229f6e64cb8be9acc8f35131a0ae
+  - name: '@mgreten/local-safety-watch'
+    path: packages/local-safety-watch
+    manifest: packages/local-safety-watch/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:75687407d3f6d5b7fe524fcaa47136bf5b099b1ce30c4b5e7f398552711c980c'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-local-safety-watch.git'
+      ref: 5408331f552c0698f8e4dc4d2f50449a20cac1f8
   - name: '@mgreten/macos-say-tts'
     path: packages/macos-say-tts
     manifest: packages/macos-say-tts/extensions/models/manifest.yaml
