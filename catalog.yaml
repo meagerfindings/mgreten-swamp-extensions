@@ -362,8 +362,8 @@ packages:
   - name: '@mgreten/github-pr-feedback'
     path: packages/github-pr-feedback
     manifest: packages/github-pr-feedback/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:5ff76ac5314e4f435c267e0ec6e066c6f1b7f83684a1f835245a6e224193df64'
+    version: 2026.11.06.1
+    contentHash: 'sha256:0fa63e598e0d400e5884b9fb050ba72b089713d0074c1c55c4f184aa0695fdd6'
     tests: deterministic
     dependsOn: []
     source:
