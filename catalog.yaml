@@ -748,8 +748,8 @@ packages:
   - name: '@mgreten/read-only-trial'
     path: packages/read-only-trial
     manifest: packages/read-only-trial/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:f82abec530cd79bdbb5c0ce639c488976b21fbd0f2f0a70e5c9d2053eead1b0d'
+    version: 2026.11.06.1
+    contentHash: 'sha256:64601fabc407b5eb693ae5b12158cfe2d77db9672f8713ebb87eeb4e0c67c4f8'
     tests: deterministic
     dependsOn: []
     source:
