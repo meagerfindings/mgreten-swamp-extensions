@@ -902,8 +902,8 @@ packages:
   - name: '@mgreten/public-draft-check'
     path: packages/public-draft-check
     manifest: packages/public-draft-check/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:b260bc3784cdea3397a0728c2893a9b4775a46b3da25ff0086fe4801bd5b1d13'
+    version: 2026.11.06.1
+    contentHash: 'sha256:ba3d79d7f73036e213ad3f93f62e81d416a7671afd26983964dca7c9033de23d'
     tests: deterministic
     dependsOn: []
     source:
