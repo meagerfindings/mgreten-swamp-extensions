@@ -26,6 +26,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-agent-provider-catalog.git'
       ref: d3bff92b9d9a957b03e6f6c7f866eafd9844df96
+  - name: '@mgreten/aws/s3-site-deploy'
+    path: packages/s3-site-deploy
+    manifest: packages/s3-site-deploy/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:34284cfc22d26aa6de46ae799e47053f2fcc0b96f46b4f503d1e841d90c9ded5'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-s3-site-deploy.git'
+      ref: c08aade3b873de052fc858c502c7544428161cd1
   - name: '@mgreten/brief-sanitize'
     path: packages/brief-sanitize
     manifest: packages/brief-sanitize/extensions/models/manifest.yaml
