@@ -5,7 +5,7 @@ version: "2026.10.14.1"
 description: >-
   Generic, bounded, recommendation-only Swamp workflows for decision review,
   feedback triage, cross-source evidence, and quarterly idea gates.
-repository: "https://github.com/meagerfindings/swamp-readonly-assessment-workflows"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models: []
 workflows:
   - workflow-readonly-decision-review.yaml
