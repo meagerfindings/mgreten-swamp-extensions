@@ -195,15 +195,19 @@ export const model = {
             continue;
           }
 
-          const mimeType = contentType(relativePath) ??
-            "application/octet-stream";
+          // contentType() takes an extension (".css"), not a path.
+          const base = relativePath.split("/").pop() ?? "";
+          const dot = base.lastIndexOf(".");
+          const mimeType =
+            (dot > 0 ? contentType(base.slice(dot)) : undefined) ??
+              "application/octet-stream";
           const cacheControl = relativePath.endsWith(".html")
             ? "no-cache"
             : "public, max-age=86400";
 
           context.logger.debug(
             remoteMd5 ? "Updating {key}" : "Uploading {key}",
-            { key, contentType },
+            { key, contentType: mimeType },
           );
 
           await s3.send(

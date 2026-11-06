@@ -3,9 +3,6 @@
  * The model talks to S3 only through `S3Client#send`, so these tests replace
  * `S3Client.prototype.send` with an in-memory fake bucket and restore it
  * afterwards. No network or AWS credentials are used.
- *
- * Content-Type mapping is intentionally not asserted: the model passes the
- * whole relative path to `contentType()` (see the package test report).
  */
 
 // deno-lint-ignore no-import-prefix
@@ -17,7 +14,7 @@ import {
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
-// deno-lint-ignore no-import-prefix
+  // deno-lint-ignore no-import-prefix
 } from "npm:@aws-sdk/client-s3@3.600.0";
 import { model } from "./s3_site_deploy.ts";
 
@@ -196,7 +193,10 @@ Deno.test("deploy uploads new and changed files, skips unchanged, deletes stale"
         deletedFiles: 2,
         bucket: "example-site",
       });
-      assertMatch(String(deployedAt), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      assertMatch(
+        String(deployedAt),
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+      );
       model.resources.deployment.schema.parse(written[0].data);
       assertEquals(result, {
         dataHandles: [{ spec: "deployment", name: "current" }],
@@ -250,7 +250,10 @@ Deno.test("stale object deletion is chunked at the 1000-key S3 limit", async () 
   try {
     const stale = Array.from(
       { length: 1001 },
-      (_, i) => ({ Key: `stale/${String(i).padStart(4, "0")}.html`, ETag: '"x"' }),
+      (_, i) => ({
+        Key: `stale/${String(i).padStart(4, "0")}.html`,
+        ETag: '"x"',
+      }),
     );
     await withFakeS3([{ Contents: stale }], async (sent) => {
       const { context, written } = makeContext(dir, { bucket: "example-site" });
@@ -309,4 +312,37 @@ Deno.test("deployment resource schema rejects incomplete records", () => {
       bucket: "example-site",
     })
   );
+});
+
+Deno.test("Content-Type comes from the file extension at any depth", async () => {
+  const dir = await writeSite({
+    "index.html": "<h1>home</h1>",
+    "css/site.css": "body{}",
+    "js/deep/app.js": "1;",
+    "img/logo.svg": "<svg/>",
+    "files/LICENSE": "no extension",
+  });
+  try {
+    await withFakeS3([{ Contents: [] }], async (sent) => {
+      const { context } = makeContext(dir, {
+        bucket: "example-site",
+        region: "us-west-2",
+      });
+      await model.methods.deploy.execute({}, context);
+      const types = Object.fromEntries(
+        sent.filter((c) => c.kind === "put").map((
+          c,
+        ) => [c.input.Key, c.input.ContentType]),
+      );
+      assertEquals(types, {
+        "index.html": "text/html; charset=UTF-8",
+        "css/site.css": "text/css; charset=UTF-8",
+        "js/deep/app.js": "text/javascript; charset=UTF-8",
+        "img/logo.svg": "image/svg+xml",
+        "files/LICENSE": "application/octet-stream",
+      });
+    });
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });
