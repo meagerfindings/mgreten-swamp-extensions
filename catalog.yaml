@@ -66,6 +66,17 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-bottleneck-ranking.git'
       ref: 99ac06424a1a00a7c2bbaba30e3b5a778191e896
+  - name: '@mgreten/bounded-context-workflows'
+    path: packages/bounded-context-workflows
+    manifest: packages/bounded-context-workflows/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:268e2a9155b02cc7d92f31e849da0a138897bfdd6a73e29f1bb92a50a8bf4b40'
+    tests: deterministic
+    dependsOn:
+      - '@mgreten/context-compiler'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-bounded-context-workflows.git'
+      ref: 064eb3d5a5ae889b8d22936b90bb2c9f285c63db
   - name: '@mgreten/brief-sanitize'
     path: packages/brief-sanitize
     manifest: packages/brief-sanitize/extensions/models/manifest.yaml

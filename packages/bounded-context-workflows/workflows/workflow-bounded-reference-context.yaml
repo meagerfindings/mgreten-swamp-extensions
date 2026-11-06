@@ -1,0 +1,135 @@
+id: 5182399c-5f44-4e2e-9078-db1dbc70dbf6
+name: "@mgreten/bounded-reference-context"
+description: >-
+  Compile a fresh, role-bounded context manifest from registry metadata and
+  candidate references only. It does not invoke providers, read source content,
+  call the network, or take an external side effect.
+tags:
+  capability: bounded-reference-context
+  boundary: reference-only-no-provider-no-side-effect
+inputs:
+  type: object
+  additionalProperties: false
+  properties:
+    manifestId: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$' }
+    packId: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$' }
+    purpose: { type: string, minLength: 1, maxLength: 500 }
+    role: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$' }
+    roleTaxonomy:
+      type: array
+      minItems: 1
+      maxItems: 100
+      uniqueItems: true
+      items: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$' }
+    evaluatedAt: { type: string, format: date-time }
+    freshnessMaxAgeSeconds: { type: integer, minimum: 1 }
+    maxTokens: { type: integer, minimum: 1, maximum: 100000 }
+    sourceRegistryModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$' }
+    sourceRegistryMethod: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]{0,99}$' }
+    sourceRegistryRecordName: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$' }
+    contextCompilerModel: { type: string, pattern: '^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$' }
+    replayPolicy: { const: reject-conflicting-replay }
+    authorityAttestation: { const: reference-only-advisory-no-authority }
+    candidates:
+      type: array
+      minItems: 1
+      maxItems: 100
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          sourceId: { type: string, minLength: 1, maxLength: 200 }
+          sourceVersion: { type: string, minLength: 1, maxLength: 2000 }
+          tokenEstimate: { type: integer, minimum: 1 }
+          evidence:
+            type: object
+            additionalProperties: false
+            properties:
+              reference: { type: string, minLength: 1, maxLength: 2000 }
+              observedAt: { type: string, format: date-time }
+              expiresAt: { type: string, format: date-time }
+              cited: { const: true }
+              minimized: { const: true }
+            required: [reference, observedAt, expiresAt, cited, minimized]
+        required: [sourceId, sourceVersion, tokenEstimate, evidence]
+  required: [manifestId, packId, purpose, role, roleTaxonomy, evaluatedAt, freshnessMaxAgeSeconds, maxTokens, sourceRegistryModel, sourceRegistryMethod, sourceRegistryRecordName, contextCompilerModel, replayPolicy, authorityAttestation, candidates]
+jobs:
+  - name: compile-context
+    description: Validate role membership, catalog reference metadata, then compile one bounded context manifest.
+    steps:
+      - name: validate-dynamic-identifiers
+        description: Reject identifiers containing whitespace, traversal, or expression syntax before method dispatch.
+        task:
+          type: assert
+          expr: inputs.sourceRegistryModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$') && inputs.sourceRegistryMethod.matches('^[A-Za-z][A-Za-z0-9_]{0,99}$') && inputs.sourceRegistryRecordName.matches('^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$') && inputs.contextCompilerModel.matches('^[A-Za-z0-9@][A-Za-z0-9._/@:-]{0,199}$')
+          message: Dynamic model, method, and record identifiers must use the bounded safe identifier syntax.
+          severity: high
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: validate-role
+        description: Require the requested role to be present in the caller-supplied taxonomy.
+        task:
+          type: assert
+          expr: inputs.roleTaxonomy.exists(item, item == inputs.role)
+          message: The requested role must belong to roleTaxonomy.
+          severity: high
+        dependsOn:
+          - step: validate-dynamic-identifiers
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+      - name: catalog-registry
+        description: Read the configured metadata-only source registry; the registry must contain no source content or credentials.
+        task:
+          type: model_method
+          modelIdOrName: '${{ inputs.sourceRegistryModel }}'
+          methodName: '${{ inputs.sourceRegistryMethod }}'
+          inputs: {}
+        dependsOn:
+          - step: validate-candidate-chronology
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+      - name: validate-candidate-chronology
+        description: Require cited, minimized evidence to be fresh at evaluation.
+        task:
+          type: assert
+          expr: inputs.candidates.all(item, item.evidence.cited && item.evidence.minimized && timestamp(item.evidence.observedAt) <= timestamp(inputs.evaluatedAt) && timestamp(inputs.evaluatedAt) < timestamp(item.evidence.expiresAt) && timestamp(inputs.evaluatedAt) - timestamp(item.evidence.observedAt) <= duration(string(inputs.freshnessMaxAgeSeconds) + "s"))
+          message: Every candidate must be minimized, cited, observed by evaluatedAt, and unexpired.
+          severity: high
+        dependsOn:
+          - step: validate-role
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+      - name: compile
+        description: Ask the compatible compiler to enforce provenance, freshness, eligibility, stable ordering, and the token budget using references only.
+        task:
+          type: model_method
+          modelIdOrName: '${{ inputs.contextCompilerModel }}'
+          methodName: compileRegistered
+          inputs:
+            manifestId: '${{ inputs.manifestId }}'
+            packId: '${{ inputs.packId }}'
+            purpose: '${{ inputs.purpose }}'
+            role: '${{ inputs.role }}'
+            roleTaxonomy: '${{ inputs.roleTaxonomy }}'
+            evaluatedAt: '${{ inputs.evaluatedAt }}'
+            freshnessMaxAgeSeconds: '${{ inputs.freshnessMaxAgeSeconds }}'
+            maxTokens: '${{ inputs.maxTokens }}'
+            registryRecordName: '${{ inputs.sourceRegistryRecordName }}'
+            registrySourceIds: '${{ data.latest(inputs.sourceRegistryModel, inputs.sourceRegistryRecordName).attributes.sourceIds }}'
+            registryGeneratedAt: '${{ data.latest(inputs.sourceRegistryModel, inputs.sourceRegistryRecordName).attributes.generatedAt }}'
+            registryProvenance: '${{ data.latest(inputs.sourceRegistryModel, inputs.sourceRegistryRecordName).attributes.provenance }}'
+            candidates: '${{ inputs.candidates }}'
+            replayPolicy: '${{ inputs.replayPolicy }}'
+            authorityAttestation: '${{ inputs.authorityAttestation }}'
+        dependsOn:
+          - step: catalog-registry
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1
