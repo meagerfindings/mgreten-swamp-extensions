@@ -6,7 +6,7 @@ description: >-
   mlx_whisper CLI, captures the JSON output, and stores the full transcript
   (segments + language) as a swamp resource for downstream pipeline steps.
   Requires mlx_whisper installed (pip install mlx-whisper).
-repository: "https://github.com/meagerfindings/swamp-meeting-transcriber"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 paths:
   base: manifest
