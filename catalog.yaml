@@ -494,8 +494,8 @@ packages:
   - name: '@mgreten/linear-activity'
     path: packages/linear-activity
     manifest: packages/linear-activity/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:de95e7dc0f913ebde70a4c74055a90286bf4ed74a41c146f5ff3f4bfa272f986'
+    version: 2026.11.06.1
+    contentHash: 'sha256:77d8d087aa43d6b9a1058cff6963e2c97212f138b991dca63991206535f30c47'
     tests: deterministic
     dependsOn: []
     source:
