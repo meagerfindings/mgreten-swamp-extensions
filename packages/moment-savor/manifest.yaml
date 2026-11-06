@@ -8,7 +8,7 @@ description: >-
   CEL queries. Supports full CRUD for memories, API token lifecycle
   (create/revoke/rotate), family member management, and sending invitations.
   Authenticate with a Bearer token from https://momentsavor.app/api_tokens.
-repository: 'https://github.com/meagerfindings/swamp-moment-savor'
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 models:
