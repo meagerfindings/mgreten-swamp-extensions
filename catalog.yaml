@@ -783,8 +783,8 @@ packages:
   - name: '@mgreten/response-quality'
     path: packages/response-quality
     manifest: packages/response-quality/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:6171f9c65e688c629262ce0a9be8bda3c1ffd8b22614db40983bca49d621067f'
+    version: 2026.11.06.1
+    contentHash: 'sha256:c9f98bbf7eb5baf56fd2c34de66177d7312b7519dbcef32333c59b4a4963676e'
     tests: deterministic
     dependsOn: []
     source:
