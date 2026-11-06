@@ -7,7 +7,7 @@ description: >
   classify each as healthy, orphaned, zombie, or long-running, and produce
   structured snapshots. Works on macOS and Linux.
 
-repository: https://github.com/meagerfindings/swamp-cli-process-audit
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - cli_process_audit.ts
