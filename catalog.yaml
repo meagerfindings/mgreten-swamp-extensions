@@ -684,6 +684,17 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-post-release-outcome-review.git'
       ref: 831271131512b0baf6f457a90fb9d0d1601f0458
+  - name: '@mgreten/pr-browser-test-planner'
+    path: packages/pr-browser-test-planner
+    manifest: packages/pr-browser-test-planner/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:61342ed95cd10e39e8ba0e5a5495932f8bf1d0f7ae0685c9cf71308bb2abd35f'
+    tests: deterministic
+    dependsOn:
+      - '@mgreten/cli-agent'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-pr-browser-test-planner.git'
+      ref: 6d12e48fce6f7cd1043344d1b149a7cdc92ee8a2
   - name: '@mgreten/pyannote-diarizer'
     path: packages/pyannote-diarizer
     manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
