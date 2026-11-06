@@ -594,8 +594,8 @@ packages:
   - name: '@mgreten/notification-outbox-workflows'
     path: packages/notification-outbox-workflows
     manifest: packages/notification-outbox-workflows/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:7e5b469298857defca1a8964b435868048fa30472c6bc309c9a893c78f8c0fd1'
+    version: 2026.11.06.1
+    contentHash: 'sha256:35754441d4279c5d5d86b8da16856aa6853075b9f1c237f3f9fe882616cf2666'
     tests: deterministic
     dependsOn:
       - '@mgreten/notification-outbox'
