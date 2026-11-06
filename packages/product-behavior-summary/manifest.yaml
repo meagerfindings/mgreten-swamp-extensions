@@ -3,7 +3,7 @@ name: "@mgreten/product-behavior-summary"
 license: MIT
 version: "2026.10.14.1"
 description: "Validate and persist structurally aggregate-only product behavior rate summaries from a bounded consumer-declared outcome catalog."
-repository: "https://github.com/meagerfindings/swamp-product-behavior-summary"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - product_behavior_summary.ts
 additionalFiles:
