@@ -252,8 +252,8 @@ packages:
   - name: '@mgreten/docker-orphan-sweep'
     path: packages/docker-orphan-sweep
     manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:62514d96a186d1dd67537501969bd09ab26a6912115e6eec80c2f244e5b2e548'
+    version: 2026.11.06.1
+    contentHash: 'sha256:a9d08c83abe77dfb57bc6eefa28830d9a5e0194a509e12f295c45681770ba212'
     tests: deterministic
     dependsOn: []
     source:
