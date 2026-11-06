@@ -738,8 +738,8 @@ packages:
   - name: '@mgreten/read-only-investigation'
     path: packages/read-only-investigation
     manifest: packages/read-only-investigation/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:e72e3bbcceeea9f6992042906521dbf786209a867478302533dd7a4422703d26'
+    version: 2026.11.06.1
+    contentHash: 'sha256:c4dc77f9792e660acd0f166cc852de8e8da37190315cf6d948c170115a69f19e'
     tests: deterministic
     dependsOn: []
     source:
