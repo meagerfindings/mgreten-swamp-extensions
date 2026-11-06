@@ -627,8 +627,8 @@ packages:
   - name: '@mgreten/observation-record'
     path: packages/observation-record
     manifest: packages/observation-record/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:2a52c62d92e289818deb8534b77f574326f1a274be13394d51b39d1dce37dc99'
+    version: 2026.11.06.1
+    contentHash: 'sha256:03d135e9b8cda1d39f8c4be131671ed18aaba2337eb023afcd3808c76a176491'
     tests: deterministic
     dependsOn: []
     source:
