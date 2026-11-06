@@ -3,7 +3,7 @@ name: "@mgreten/notification-outbox-workflows"
 license: MIT
 version: "2026.10.14.1"
 description: "Transport-neutral workflow patterns for atomically enqueuing, exactly scoped dispatching, and explicitly draining notification outbox records."
-repository: https://github.com/meagerfindings/swamp-notification-outbox-workflows
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 workflows:
