@@ -3,7 +3,7 @@ name: "@mgreten/swamp-candidate-researcher-federal"
 version: "2026.10.14.1"
 license: MIT
 description: "Federal candidate research extension for neutral voter briefing."
-repository: https://github.com/meagerfindings/swamp-candidate-researcher
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 paths:
   base: manifest
 models:
