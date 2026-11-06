@@ -59,8 +59,8 @@ packages:
   - name: '@mgreten/better-stack-read'
     path: packages/better-stack-read
     manifest: packages/better-stack-read/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:60cc51b4e24f1ea30d8b24f8c933d105d85209dada0920bf1a821d82723983a7'
+    version: 2026.11.06.1
+    contentHash: 'sha256:fef8b1f5476fb4d559f4e926a0b46032a02624ddaabbdea3b5e8333b104648cc'
     tests: deterministic
     dependsOn: []
     source:
