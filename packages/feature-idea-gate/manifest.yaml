@@ -4,7 +4,7 @@ version: 2026.10.14.1
 description: >
   A generic, deterministic, evidence-gated feature-idea recommendation model.
   It is read-only and never approves, plans, executes, invokes tools, or creates side effects.
-repository: "https://github.com/meagerfindings/swamp-feature-idea-gate"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - feature_idea_gate.ts
