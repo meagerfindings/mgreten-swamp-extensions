@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/unifi-release-safety"
-version: "2026.10.14.1"
+version: "2026.11.06.1"
 description: >
   Read-only UniFi firmware release observation through an optional Home
   Assistant collector or caller-supplied model/version observations.

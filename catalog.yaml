@@ -993,8 +993,8 @@ packages:
   - name: '@mgreten/unifi-release-safety'
     path: packages/unifi-release-safety
     manifest: packages/unifi-release-safety/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:64bb2898f01c78f86521730e0f9eb3a9ed9d2454c4acee4461b9e068d22c298c'
+    version: 2026.11.06.1
+    contentHash: 'sha256:e1e54b14f8d79de0b0ca1a2cbd2f813ae46307ba1ba935d11a3cfeccd834d7f4'
     tests: deterministic
     dependsOn: []
     source:
