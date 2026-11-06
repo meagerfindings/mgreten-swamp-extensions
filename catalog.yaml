@@ -1003,8 +1003,8 @@ packages:
   - name: '@mgreten/weekly-decision-queue'
     path: packages/weekly-decision-queue
     manifest: packages/weekly-decision-queue/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:2847ccaf68fabfe6d38d97ab82ff65150baca38af221827e5cc7014cc077f3b1'
+    version: 2026.11.06.1
+    contentHash: 'sha256:4b6046f8649aadd68115924e297bd0008b1e6503123bb53e1803a8c46aca8282'
     tests: deterministic
     dependsOn: []
     source:
