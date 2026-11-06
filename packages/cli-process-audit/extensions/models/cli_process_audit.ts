@@ -117,16 +117,19 @@ const PROVIDER_PATTERNS: Record<string, RegExp> = {
   gemini: /(?:^|\/)gemini(?:\s|$)/,
 };
 
-/** Parse ps TIME format (M:SS or H:MM:SS) into minutes. */
-function parseCpuTime(timeStr: string): number {
-  const parts = timeStr.split(":").map(Number);
+/** Parse ps TIME format (M:SS, H:MM:SS or D-HH:MM:SS) into minutes; unparseable input is 0. */
+export function parseCpuTime(timeStr: string): number {
+  const dash = timeStr.indexOf("-");
+  const days = dash > 0 ? Number(timeStr.slice(0, dash)) : 0;
+  const parts = timeStr.slice(dash + 1).split(":").map(Number);
+  let minutes = 0;
   if (parts.length === 3) {
-    return parts[0] * 60 + parts[1] + parts[2] / 60;
+    minutes = parts[0] * 60 + parts[1] + parts[2] / 60;
+  } else if (parts.length === 2) {
+    minutes = parts[0] + parts[1] / 60;
   }
-  if (parts.length === 2) {
-    return parts[0] + parts[1] / 60;
-  }
-  return 0;
+  const total = days * 1440 + minutes;
+  return Number.isFinite(total) ? total : 0;
 }
 
 /**
