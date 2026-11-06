@@ -51,7 +51,7 @@ packages:
     manifest: packages/s3-site-deploy/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:34284cfc22d26aa6de46ae799e47053f2fcc0b96f46b4f503d1e841d90c9ded5'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-s3-site-deploy.git'
@@ -122,7 +122,7 @@ packages:
     manifest: packages/cli-process-audit/extensions/models/manifest.yaml
     version: 2026.10.14.2
     contentHash: 'sha256:8a5ed16f5e87631679ad576919da9df2170054f7dddb467078ceb68ad39f97d7'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-cli-process-audit.git'
@@ -184,7 +184,7 @@ packages:
     manifest: packages/cron-builder/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:cf45c5024948941403a7461c8e1603969fff1611898950b221096e644ae39b2f'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/cron-builder.git'
@@ -254,7 +254,7 @@ packages:
     manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:62514d96a186d1dd67537501969bd09ab26a6912115e6eec80c2f244e5b2e548'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-docker-orphan-sweep.git'
@@ -334,7 +334,7 @@ packages:
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:183579fa90b194205f3ff8d4aa76e03eb8ae3a9139265b8e8b3b7ec0ce7b9731'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-git-worktree-doctor.git'
@@ -424,7 +424,7 @@ packages:
     manifest: packages/grist/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:1ded9e0b90adeac02b699ce23bd2fe46a0b8f86f3381cf4cb49d71c9913df024'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-grist.git'
@@ -444,7 +444,7 @@ packages:
     manifest: packages/hermes-review-kit/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:f4910d7c2a07395bef52d0dcc974f00ee420bf966c10f2f1b9b84d9d9f12a10b'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/hermes-review-kit.git'
@@ -496,7 +496,7 @@ packages:
     manifest: packages/linear-activity/extensions/models/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:de95e7dc0f913ebde70a4c74055a90286bf4ed74a41c146f5ff3f4bfa272f986'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-linear-activity.git'
@@ -526,27 +526,17 @@ packages:
     manifest: packages/manyfold-importer/extensions/models/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:38fb8ad999721b1face3345d97b416e18664c9474a55d7d3bfa4268bc0a1308a'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-manyfold-importer.git'
       ref: 3739eeb5f6b340fdb00ffa16881962a5d17ae34a
-  - name: '@mgreten/markdown-blog'
-    path: packages/markdown-blog
-    manifest: packages/markdown-blog/extensions/models/markdown-blog/manifest.yaml
-    version: 2026.10.15.2
-    contentHash: 'sha256:bdd9151e02212ba354c53c4d319682576bf3151fdfc59e2bfaf45f72d72c974d'
-    tests: deterministic
-    dependsOn: []
-    source:
-      repo: 'git@github.com:meagerfindings/swamp-markdown-blog.git'
-      ref: 7a8647f9ad20fdb327548d0fa27cdd0fdc450609
   - name: '@mgreten/markdown-corpus'
     path: packages/markdown-corpus
     manifest: packages/markdown-corpus/extensions/models/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:2a9c6d036bd5692e65a91b4cd72257352b89fd7021b194a644bd57f32fb68641'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-markdown-corpus.git'
@@ -566,7 +556,7 @@ packages:
     manifest: packages/meeting-summarizer/extensions/models/meeting-summarizer/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:03e1282235a9388109b730601142ffa642dd5d5d33fba3dbbed8b6a091151238'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
@@ -586,7 +576,7 @@ packages:
     manifest: packages/mlx-whisper/extensions/models/mlx-whisper/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:8d9d56bca396b490aa6044ebc46dde1399d0eee482bf8bc5b90ae9247c445035'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
@@ -596,7 +586,7 @@ packages:
     manifest: packages/moment-savor/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:6238a08d20445d19a97356ea2424415c7293ad1dce5ab7ec6ebdc3370ca40b89'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-moment-savor.git'
@@ -606,7 +596,7 @@ packages:
     manifest: packages/notification-outbox-workflows/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:7e5b469298857defca1a8964b435868048fa30472c6bc309c9a893c78f8c0fd1'
-    tests: none
+    tests: deterministic
     dependsOn:
       - '@mgreten/notification-outbox'
     source:
@@ -627,7 +617,7 @@ packages:
     manifest: packages/observability-workflows/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:fa5689143ecc7276c9b07ee00fde75bf7053ffba2367b4d05076654f556473c1'
-    tests: none
+    tests: deterministic
     dependsOn:
       - '@mgreten/notification-outbox'
       - '@mgreten/notification-outbox-workflows'
@@ -649,7 +639,7 @@ packages:
     manifest: packages/obsidian-vault-fs/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:9946f765852b3007d20e0e61dc6b282f6b35af0aa2aa0b7dd41515527a2406c9'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-obsidian-vault-fs.git'
@@ -730,7 +720,7 @@ packages:
     manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:cab208e85bd4e6c33ed14b2cf1acaf4cc2150a9d3ba991cc79c053bebb5003bc'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
@@ -895,7 +885,7 @@ packages:
     manifest: packages/storage-health/extensions/models/manifest.yaml
     version: 2026.10.14.1
     contentHash: 'sha256:89036aba5a42494eaac99f58be5d2349b7b433b1a2519d634f3f015fe90b0f37'
-    tests: none
+    tests: deterministic
     dependsOn: []
     source:
       repo: 'git@github.com:meagerfindings/swamp-storage-health.git'

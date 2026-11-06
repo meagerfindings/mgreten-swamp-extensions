@@ -909,6 +909,8 @@ packages:
     manifest: extensions/models/markdown-blog/manifest.yaml
     paths:
       - { from: "extensions/models/markdown-blog/", to: "extensions/models/markdown-blog/" }
+      # manifest workflows: resolve from the repo-root workflows/ directory
+      - { from: workflows/, to: workflows/ }
   - name: "@mgreten/marketing-orchestration"
     short: marketing-orchestration
     source: git@github.com:meagerfindings/swamp-marketing-orchestration.git
