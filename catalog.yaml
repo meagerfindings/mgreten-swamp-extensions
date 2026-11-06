@@ -534,8 +534,8 @@ packages:
   - name: '@mgreten/markdown-corpus'
     path: packages/markdown-corpus
     manifest: packages/markdown-corpus/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:2a9c6d036bd5692e65a91b4cd72257352b89fd7021b194a644bd57f32fb68641'
+    version: 2026.11.06.1
+    contentHash: 'sha256:459c0289e9f6f03a8d3965898f1888233f9a335eeb963c9e748f34c51e881916'
     tests: deterministic
     dependsOn: []
     source:
