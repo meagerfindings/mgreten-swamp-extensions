@@ -919,6 +919,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
       ref: 569409c3597b7f8ab3a1f6bc60110be401cb78b4
+  - name: '@mgreten/quality-canary-evidence'
+    path: packages/quality-canary-evidence
+    manifest: packages/quality-canary-evidence/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:3c11ded91714a0bd226b2e91994ce30b654ce290d03edad462af32c8c617eac3'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-quality-canary-evidence.git'
+      ref: 877316a19e1d62608d1f61437046c9210d7c6f64
   - name: '@mgreten/railway-read'
     path: packages/railway-read
     manifest: packages/railway-read/extensions/models/manifest.yaml
