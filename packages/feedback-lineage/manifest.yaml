@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/feedback-lineage"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Validates and immutably records source-preserving feedback lineage with
   explicit evidence freshness and recommendation-only authority.
