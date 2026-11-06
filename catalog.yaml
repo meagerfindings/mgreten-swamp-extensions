@@ -381,6 +381,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/frigate-timelapse.git'
       ref: 312c630151e74ec98b362956ddaf1e12886e0fb3
+  - name: '@mgreten/gcal-read'
+    path: packages/gcal-read
+    manifest: packages/gcal-read/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:f6b501278f428c8eb46dba51f5968c49d394336183e80c0e5c75dc779325bcc1'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-gcal-read.git'
+      ref: a13b1dac1cd026b053ab84d943d523bdb630a9d0
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
