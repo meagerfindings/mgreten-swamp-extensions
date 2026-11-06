@@ -893,8 +893,8 @@ packages:
   - name: '@mgreten/swamp-candidate-researcher-colorado'
     path: packages/swamp-candidate-researcher-colorado
     manifest: packages/swamp-candidate-researcher-colorado/extensions/colorado-candidate/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:16bbe37bce15d4c1a27a110640c4c190eb15ea3fe9ca43ace7d109d50e798d68'
+    version: 2026.11.06.1
+    contentHash: 'sha256:c9a08796f167fcdebebcbd271ba153a180a1eb2482368548ceeadbcbe8769d94'
     tests: deterministic
     dependsOn: []
     source:
