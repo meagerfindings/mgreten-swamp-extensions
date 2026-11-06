@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/implementer-benchmark"
-version: "2026.10.14.1"
+version: "2026.11.06.1"
 description: >
   Runs five deterministic, bounded synthetic JavaScript tasks to compare coding
   implementers with isolated hidden verification and durable evidence.

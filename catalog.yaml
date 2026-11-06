@@ -452,8 +452,8 @@ packages:
   - name: '@mgreten/implementer-benchmark'
     path: packages/implementer-benchmark
     manifest: packages/implementer-benchmark/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:1f8414425a4499b4631f6755f71f4ff5dda8acaf13e8874e03990c814348c409'
+    version: 2026.11.06.1
+    contentHash: 'sha256:960cb1394ef5dd1a10f6809605d3040978b80c3cf677567f4ebbdd219493ea02'
     tests: deterministic
     dependsOn: []
     source:
