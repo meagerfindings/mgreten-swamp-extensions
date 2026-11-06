@@ -212,8 +212,8 @@ packages:
   - name: '@mgreten/decision-context'
     path: packages/decision-context
     manifest: packages/decision-context/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:c946b10970ba579eea5f9269c093be2aba22d4919e02333179ee23c4344dab63'
+    version: 2026.11.06.1
+    contentHash: 'sha256:f9294bdc61d28b94e1d06b76da5fddc575c1e6d6810935d8bd64d8532cf182c6'
     tests: deterministic
     dependsOn: []
     source:
