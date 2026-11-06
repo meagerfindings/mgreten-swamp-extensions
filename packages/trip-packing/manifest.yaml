@@ -2,7 +2,7 @@ manifestVersion: 1
 name: "@mgreten/trip-packing"
 version: "2026.10.14.1"
 description: "Deterministically plans trip packing lists and, after explicit confirmation, creates an idempotent Todoist project."
-repository: https://github.com/meagerfindings/swamp-trip-packing
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 paths:
