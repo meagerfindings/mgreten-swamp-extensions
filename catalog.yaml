@@ -169,6 +169,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-context-compiler.git'
       ref: ee4f4ca20a9494af7b9db631a7b9dd21337b00b3
+  - name: '@mgreten/context-conflict-detector'
+    path: packages/context-conflict-detector
+    manifest: packages/context-conflict-detector/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:db72b5e70648d00a91d93a0844342cead7ffca92e6796c5b1ae86890437ce434'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-context-conflict-detector.git'
+      ref: 07cace8f2dbdc4cbf37e99087338301ac68be77d
   - name: '@mgreten/cron-builder'
     path: packages/cron-builder
     manifest: packages/cron-builder/manifest.yaml
