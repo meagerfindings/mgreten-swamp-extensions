@@ -987,8 +987,8 @@ packages:
   - name: '@mgreten/repeated-friction'
     path: packages/repeated-friction
     manifest: packages/repeated-friction/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:ee7ca1892c9635e4a43171e18d8f1f3a4c253f978b609b0a2cdeaf7d316ce647'
+    version: 2026.11.06.1
+    contentHash: 'sha256:6f6753097015450d71ae8fc2e22cb65d844f420c44c557d5682048a0264c740e'
     tests: deterministic
     dependsOn: []
     source:
