@@ -290,6 +290,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/moment-savor.git'
       ref: 4dcdf0498c737c4eb1bbac2ca4f80a42e4d93d97
+  - name: '@mgreten/mlx-whisper'
+    path: packages/mlx-whisper
+    manifest: packages/mlx-whisper/extensions/models/mlx-whisper/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:8d9d56bca396b490aa6044ebc46dde1399d0eee482bf8bc5b90ae9247c445035'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
+      ref: 569409c3597b7f8ab3a1f6bc60110be401cb78b4
   - name: '@mgreten/ntfy-notify'
     path: packages/ntfy-notify
     manifest: packages/ntfy-notify/extensions/models/manifest.yaml
