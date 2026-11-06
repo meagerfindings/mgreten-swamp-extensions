@@ -97,6 +97,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-brief-sanitize.git'
       ref: 5fb640aa86eac63f48b6382425177517fd45331b
+  - name: '@mgreten/campaign-outcome'
+    path: packages/campaign-outcome
+    manifest: packages/campaign-outcome/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:538244eaa1d4a8cb71f759e83ae4498d72c1245bdc1ff881b7f51939a509c942'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-campaign-outcome.git'
+      ref: 6d6320f579a8c54fb2bf0cf401dd6d871456e1f4
   - name: '@mgreten/canva'
     path: packages/canva
     manifest: packages/canva/extensions/models/canva/manifest.yaml
