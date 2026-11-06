@@ -1000,6 +1000,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-trip-packing.git'
       ref: fae1f9043275756deff7c60bd26bef6041369bee
+  - name: '@mgreten/unifi-cve-watcher'
+    path: packages/unifi-cve-watcher
+    manifest: packages/unifi-cve-watcher/extensions/models/unifi-cve-watcher/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:727ed4d5d3f6c43f833deb4538016a586a1dd5917dba92afe0bbfe3a8cafc114'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'registry:@mgreten/unifi-cve-watcher@2026.10.14.1'
+      ref: 1c2f177debfe6c93efb167bf2da2be549795ee50
   - name: '@mgreten/unifi-release-safety'
     path: packages/unifi-release-safety
     manifest: packages/unifi-release-safety/manifest.yaml
