@@ -270,6 +270,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-markdown-corpus.git'
       ref: 15cccff8fac31724800b44aa1962ea3e186e16bf
+  - name: '@mgreten/meeting-summarizer'
+    path: packages/meeting-summarizer
+    manifest: packages/meeting-summarizer/extensions/models/meeting-summarizer/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:03e1282235a9388109b730601142ffa642dd5d5d33fba3dbbed8b6a091151238'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-meeting-transcriber.git'
+      ref: 569409c3597b7f8ab3a1f6bc60110be401cb78b4
   - name: '@mgreten/meta-publishing'
     path: packages/meta-publishing
     manifest: packages/meta-publishing/extensions/models/meta-publishing/manifest.yaml
