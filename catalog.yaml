@@ -449,6 +449,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/hermes-review-kit.git'
       ref: e7048c7549943c0d440af3d1e9e44ce632006ff9
+  - name: '@mgreten/implementer-benchmark'
+    path: packages/implementer-benchmark
+    manifest: packages/implementer-benchmark/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:1f8414425a4499b4631f6755f71f4ff5dda8acaf13e8874e03990c814348c409'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-implementer-benchmark.git'
+      ref: 7852d8712e26f709879281ee8cc9f07232be08b4
   - name: '@mgreten/jev-agent-tools'
     path: packages/jev-agent-tools
     manifest: packages/jev-agent-tools/manifest.yaml
