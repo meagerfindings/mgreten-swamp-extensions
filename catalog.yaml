@@ -189,6 +189,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/cron-builder.git'
       ref: 559205034e299577ee6de95589a10d4ea2880a1e
+  - name: '@mgreten/cross-source-evidence'
+    path: packages/cross-source-evidence
+    manifest: packages/cross-source-evidence/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:5feb54e57a17a8f2a42493b4568f133dcbb357f4cdef0e04e72299b7a9241d44'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-cross-source-evidence.git'
+      ref: e3b3d3740a05347ddf5822f50f066d040bab1637
   - name: '@mgreten/docker-orphan-sweep'
     path: packages/docker-orphan-sweep
     manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml
