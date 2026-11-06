@@ -2,7 +2,7 @@ manifestVersion: 1
 name: "@mgreten/post-release-measurement"
 version: 2026.10.14.1
 description: "Records human-controlled, zero-authority post-release measurement plans."
-repository: "https://github.com/meagerfindings/swamp-post-release-measurement"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - post_release_measurement.ts
