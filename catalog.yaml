@@ -983,8 +983,8 @@ packages:
   - name: '@mgreten/trip-packing'
     path: packages/trip-packing
     manifest: packages/trip-packing/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:a2e996a5c0be46b4000ede2f1c58c21a8ae4d782077f5edc18cb05e687b910a0'
+    version: 2026.11.06.1
+    contentHash: 'sha256:aba11b1d20da63ae7c38bf412d24920d3620c5e4c02516a1036354272b5a53e4'
     tests: deterministic
     dependsOn: []
     source:
