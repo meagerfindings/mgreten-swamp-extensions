@@ -2,7 +2,7 @@ manifestVersion: 1
 name: "@mgreten/decision-review"
 version: 2026.10.14.1
 description: "A bounded, auditable three-lens decision review that produces recommendations without authority or side effects."
-repository: "https://github.com/meagerfindings/swamp-decision-review"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - decision_review.ts
