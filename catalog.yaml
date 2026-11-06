@@ -450,6 +450,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-candidate-researcher.git'
       ref: 16a4d88cb262fceab94d9d8fd837eb74dcec58fe
+  - name: '@mgreten/swamp-candidate-researcher-colorado-judge'
+    path: packages/swamp-candidate-researcher-colorado-judge
+    manifest: packages/swamp-candidate-researcher-colorado-judge/extensions/colorado-judge/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:fe1822ca443c4ad350aa57965a374f46d328d49a8d98e79b88d60b265df1748d'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-candidate-researcher.git'
+      ref: 16a4d88cb262fceab94d9d8fd837eb74dcec58fe
   - name: '@mgreten/task-skill-router'
     path: packages/task-skill-router
     manifest: packages/task-skill-router/extensions/models/manifest.yaml
