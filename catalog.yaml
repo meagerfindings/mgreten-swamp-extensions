@@ -922,8 +922,8 @@ packages:
   - name: '@mgreten/quality-canary-evidence'
     path: packages/quality-canary-evidence
     manifest: packages/quality-canary-evidence/extensions/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:3c11ded91714a0bd226b2e91994ce30b654ce290d03edad462af32c8c617eac3'
+    version: 2026.11.06.1
+    contentHash: 'sha256:f5382ac248a1ec6706a9cd357e870000f721d5f935fb009eb50afce973490b3c'
     tests: deterministic
     dependsOn: []
     source:
