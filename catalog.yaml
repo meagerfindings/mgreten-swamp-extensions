@@ -533,6 +533,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-jev-agent-tools.git'
       ref: 8e3c7287b2c2e3d718c4bd7a0b343930798b1728
+  - name: '@mgreten/linear'
+    path: packages/linear
+    manifest: packages/linear/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:859fbd2122ac6ab9fa087ae1dfe0eb4d7977e893afc40e7b24e18db2e9cb6a89'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-linear.git'
+      ref: 9e323e3a6296da8a3624096a128e97102734a37c
   - name: '@mgreten/linear-activity'
     path: packages/linear-activity
     manifest: packages/linear-activity/extensions/models/manifest.yaml

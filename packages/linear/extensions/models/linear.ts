@@ -1,0 +1,673 @@
+/**
+ * @mgreten/linear — Linear project management integration for swamp.
+ *
+ * Provides issue CRUD, viewer resolution, label management, comment threads,
+ * documents, project resources, and team/project/state listing via the
+ * official `@linear/sdk`. All data is written as swamp resources for
+ * downstream CEL access and workflow chaining.
+ *
+ * Client abstraction pattern derived from `@hivemq/linear` by HiveMQ.
+ *
+ * @module
+ */
+import { z } from "npm:zod@4";
+import { LinearClient as LinearSDKClient } from "npm:@linear/sdk@80.0.0";
+import { buildLinearClient } from "./linear/client.ts";
+import type { LinearSDKLike } from "./linear/client.ts";
+import type { MethodContext, MethodResult } from "./linear/methods.ts";
+import {
+  addLabels,
+  createComment,
+  createEpic,
+  createIssue,
+  createMyIssue,
+  deleteIssue,
+  getDocument,
+  getIssue,
+  getViewer,
+  listComments,
+  listIssues,
+  listLabels,
+  listProjectResources,
+  listProjects,
+  listStates,
+  listTeams,
+  updateIssue,
+} from "./linear/methods.ts";
+
+/**
+ * Shared field shape for an issue created as part of an epic (parent or
+ * child). `parentId` is intentionally absent — `createEpic` sets it on
+ * children automatically from the parent it creates.
+ */
+const epicIssueFields: z.ZodObject<{
+  title: z.ZodString;
+  description: z.ZodOptional<z.ZodString>;
+  teamId: z.ZodOptional<z.ZodString>;
+  projectId: z.ZodOptional<z.ZodString>;
+  priority: z.ZodOptional<z.ZodNumber>;
+  stateId: z.ZodOptional<z.ZodString>;
+  assigneeId: z.ZodOptional<z.ZodString>;
+  estimate: z.ZodOptional<z.ZodNumber>;
+}> = z.object({
+  title: z.string().describe("Issue title"),
+  description: z.string().optional().describe("Issue description (Markdown)"),
+  teamId: z.string().optional().describe("Team ID (defaults to defaultTeamId)"),
+  projectId: z.string().optional().describe("Project ID"),
+  priority: z
+    .number()
+    .min(0)
+    .max(4)
+    .optional()
+    .describe("Priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low"),
+  stateId: z.string().optional().describe("Workflow state ID"),
+  assigneeId: z.string().optional().describe("Assignee user ID"),
+  estimate: z
+    .number()
+    .optional()
+    .describe("Story-point estimate on the team's estimation scale"),
+});
+
+/** Field shape for one issue within a {@link createEpic} call. */
+type EpicIssueFields = z.infer<typeof epicIssueFields>;
+
+const GlobalArgsSchema = z.object({
+  apiKey: z
+    .string()
+    .describe("Linear personal API key")
+    .meta({ sensitive: true }),
+  defaultTeamId: z
+    .string()
+    .optional()
+    .describe("Default team ID used when no teamId is specified"),
+  defaultProjectId: z
+    .string()
+    .optional()
+    .describe("Default project ID for createMyIssue"),
+});
+
+const IssueSchema = z.object({
+  id: z.string(),
+  identifier: z.string(),
+  title: z.string(),
+  description: z.string(),
+  url: z.string(),
+  priority: z.number(),
+  stateId: z.string(),
+  stateName: z.string(),
+  stateType: z.string(),
+  teamId: z.string(),
+  teamKey: z.string(),
+  projectId: z.string(),
+  projectName: z.string(),
+  assigneeId: z.string(),
+  assigneeName: z.string(),
+  labelNames: z.string(),
+  syncedAt: z.string(),
+});
+
+const TeamSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  key: z.string(),
+  syncedAt: z.string(),
+});
+
+const ProjectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  state: z.string(),
+  syncedAt: z.string(),
+});
+
+const DocumentSchema = z.object({
+  id: z.string(),
+  slugId: z.string(),
+  title: z.string(),
+  content: z.string(),
+  url: z.string(),
+  sortOrder: z.number(),
+  projectId: z.string(),
+  projectName: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  syncedAt: z.string(),
+});
+
+const ProjectExternalLinkSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  url: z.string(),
+  sortOrder: z.number(),
+  projectId: z.string(),
+  projectName: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  syncedAt: z.string(),
+});
+
+const WorkflowStateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  color: z.string(),
+  syncedAt: z.string(),
+});
+
+const ViewerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  syncedAt: z.string(),
+});
+
+const LabelSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+  syncedAt: z.string(),
+});
+
+const CommentSchema = z.object({
+  id: z.string(),
+  body: z.string(),
+  authorName: z.string(),
+  authorId: z.string(),
+  isBot: z.boolean(),
+  createdAt: z.string(),
+});
+
+const CommentThreadSchema = z.object({
+  issueId: z.string(),
+  identifier: z.string(),
+  comments: z.array(CommentSchema),
+  count: z.number(),
+});
+
+const IssueDeletionSchema = z.object({
+  id: z.string().min(1),
+  identifier: z.string().min(1),
+  title: z.string().min(1),
+  teamKey: z.string().min(1),
+  deleted: z.literal(true),
+  deletedAt: z.string().min(1),
+});
+
+function getClient(
+  context: MethodContext,
+): ReturnType<typeof buildLinearClient> {
+  const sdk = new LinearSDKClient({
+    apiKey: context.globalArgs.apiKey,
+  }) as unknown as LinearSDKLike;
+  return buildLinearClient(sdk);
+}
+
+/**
+ * Linear project management model for swamp.
+ *
+ * Provides 17 methods for managing Linear issues and reading teams, projects,
+ * documents, project resources, labels, comments, and workflow states.
+ * Supports auto-assignment via viewer resolution, label attachment by name,
+ * and full comment-thread sync.
+ */
+export const model = {
+  type: "@mgreten/linear",
+  version: "2026.08.25.1",
+  globalArguments: GlobalArgsSchema,
+  // Additive releases leave globalArguments unchanged, so existing instances
+  // migrate with their configuration untouched.
+  upgrades: [
+    {
+      toVersion: "2026.08.19.2",
+      description:
+        "Resource naming fix (issue-/thread-<identifier>); config unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Add verified issue deletion and immutable deletion evidence; config unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description:
+        "Add read-only Linear document and project-resource retrieval; config unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old }),
+    },
+  ],
+  resources: {
+    issue: {
+      description: "A Linear issue with resolved relations",
+      schema: IssueSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 200,
+    },
+    team: {
+      description: "A Linear team",
+      schema: TeamSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 50,
+    },
+    project: {
+      description: "A Linear project",
+      schema: ProjectSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 100,
+    },
+    document: {
+      description: "A Linear document with Markdown content",
+      schema: DocumentSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 200,
+    },
+    projectExternalLink: {
+      description: "An external link in a Linear project's Resources section",
+      schema: ProjectExternalLinkSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 200,
+    },
+    workflowState: {
+      description: "A Linear workflow state (e.g. Backlog, In Progress, Done)",
+      schema: WorkflowStateSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 50,
+    },
+    viewer: {
+      description: "The authenticated Linear user",
+      schema: ViewerSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 5,
+    },
+    label: {
+      description: "A Linear issue label",
+      schema: LabelSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 100,
+    },
+    commentThread: {
+      description: "The full comment thread on a Linear issue",
+      schema: CommentThreadSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 200,
+    },
+    issueDeletion: {
+      description: "Audit record for a verified Linear issue deletion",
+      schema: IssueDeletionSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 50,
+    },
+  },
+  methods: {
+    getViewer: {
+      description: "Resolve the authenticated user's ID, name, and email",
+      arguments: z.object({}),
+      execute: (_args: unknown, context: unknown): Promise<MethodResult> =>
+        getViewer(
+          getClient(context as MethodContext),
+          context as MethodContext,
+        ),
+    },
+
+    createMyIssue: {
+      description:
+        "Create an issue auto-assigned to the authenticated user with team/project defaults",
+      arguments: z.object({
+        title: z.string().describe("Issue title"),
+        description: z
+          .string()
+          .optional()
+          .describe("Issue description (Markdown)"),
+        priority: z
+          .number()
+          .min(0)
+          .max(4)
+          .optional()
+          .describe("Priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low"),
+        projectId: z
+          .string()
+          .optional()
+          .describe("Override project ID (defaults to defaultProjectId)"),
+        labels: z
+          .string()
+          .optional()
+          .describe("Comma-separated label names to attach"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        createMyIssue(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            title: string;
+            description?: string;
+            priority?: number;
+            projectId?: string;
+            labels?: string;
+          },
+        ),
+    },
+
+    getIssue: {
+      description: "Fetch a single issue by identifier (e.g. ENG-123) or UUID",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .describe("Issue identifier (e.g. ENG-123) or UUID"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        getIssue(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { identifier: string },
+        ),
+    },
+
+    updateIssue: {
+      description: "Update fields on an existing issue",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .describe("Issue identifier (e.g. ENG-123) or UUID"),
+        title: z.string().optional().describe("New title"),
+        description: z.string().optional().describe("New description"),
+        stateId: z.string().optional().describe("New workflow state ID"),
+        priority: z
+          .number()
+          .min(0)
+          .max(4)
+          .optional()
+          .describe("New priority"),
+        assigneeId: z.string().optional().describe("New assignee user ID"),
+        projectId: z.string().optional().describe("New project ID"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        updateIssue(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            identifier: string;
+            title?: string;
+            description?: string;
+            stateId?: string;
+            priority?: number;
+            assigneeId?: string;
+            projectId?: string;
+          },
+        ),
+    },
+
+    deleteIssue: {
+      description:
+        "Permanently delete one issue only after its live identifier and team match the caller's expectations",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .regex(/^[A-Z][A-Z0-9]*-[1-9][0-9]*$/)
+          .describe("Exact issue identifier, such as ENG-123"),
+        expectedTeamKey: z
+          .string()
+          .regex(/^[A-Z][A-Z0-9]*$/)
+          .describe("Team key that the live issue must belong to"),
+        confirm: z.literal("delete").describe(
+          'Explicit destructive-action confirmation; must be "delete"',
+        ),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        deleteIssue(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            identifier: string;
+            expectedTeamKey: string;
+            confirm: "delete";
+          },
+        ),
+    },
+
+    listIssues: {
+      description: "Query issues with filters",
+      arguments: z.object({
+        teamId: z
+          .string()
+          .optional()
+          .describe("Filter by team ID (defaults to defaultTeamId)"),
+        assignedToMe: z
+          .boolean()
+          .optional()
+          .describe("Only show issues assigned to the authenticated user"),
+        stateType: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by state type: backlog, unstarted, started, completed, canceled",
+          ),
+        projectId: z.string().optional().describe("Filter by project ID"),
+        labelName: z.string().optional().describe("Filter by label name"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listIssues(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            teamId?: string;
+            assignedToMe?: boolean;
+            stateType?: string;
+            projectId?: string;
+            labelName?: string;
+          },
+        ),
+    },
+
+    addLabels: {
+      description:
+        "Attach labels to an issue by name (additive — preserves existing labels)",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .describe("Issue identifier (e.g. ENG-123) or UUID"),
+        labels: z.string().describe("Comma-separated label names to add"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        addLabels(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { identifier: string; labels: string },
+        ),
+    },
+
+    listLabels: {
+      description: "List available labels for a team",
+      arguments: z.object({
+        teamId: z
+          .string()
+          .optional()
+          .describe("Team ID (defaults to defaultTeamId)"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listLabels(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { teamId?: string },
+        ),
+    },
+
+    createIssue: {
+      description: "Create an issue with full control over all fields",
+      arguments: z.object({
+        title: z.string().describe("Issue title"),
+        description: z
+          .string()
+          .optional()
+          .describe("Issue description (Markdown)"),
+        teamId: z
+          .string()
+          .optional()
+          .describe("Team ID (defaults to defaultTeamId)"),
+        projectId: z.string().optional().describe("Project ID"),
+        priority: z
+          .number()
+          .min(0)
+          .max(4)
+          .optional()
+          .describe("Priority: 0=none, 1=urgent, 2=high, 3=medium, 4=low"),
+        stateId: z.string().optional().describe("Workflow state ID"),
+        assigneeId: z.string().optional().describe("Assignee user ID"),
+        parentId: z
+          .string()
+          .optional()
+          .describe("Parent issue ID — creates this as a sub-issue"),
+        estimate: z
+          .number()
+          .optional()
+          .describe("Story-point estimate on the team's estimation scale"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        createIssue(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            title: string;
+            description?: string;
+            teamId?: string;
+            projectId?: string;
+            priority?: number;
+            stateId?: string;
+            assigneeId?: string;
+            parentId?: string;
+            estimate?: number;
+          },
+        ),
+    },
+
+    createEpic: {
+      description:
+        "Create an epic: a parent issue plus N child sub-issues linked to " +
+        "it. Children are created after the parent and inherit its teamId " +
+        "unless they set their own.",
+      arguments: z.object({
+        parent: epicIssueFields.describe("The parent (epic) issue"),
+        children: z
+          .array(epicIssueFields)
+          .describe("Child issues, each created as a sub-issue of the parent"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        createEpic(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as {
+            parent: EpicIssueFields;
+            children: EpicIssueFields[];
+          },
+        ),
+    },
+
+    listTeams: {
+      description: "List all Linear teams and sync them as resources",
+      arguments: z.object({}),
+      execute: (_args: unknown, context: unknown): Promise<MethodResult> =>
+        listTeams(
+          getClient(context as MethodContext),
+          context as MethodContext,
+        ),
+    },
+
+    listProjects: {
+      description:
+        "List Linear projects, optionally filtered by team or name substring",
+      arguments: z.object({
+        teamId: z
+          .string()
+          .optional()
+          .describe("Filter by team ID (defaults to defaultTeamId)"),
+        filter: z
+          .string()
+          .optional()
+          .describe("Only include projects whose name contains this string"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listProjects(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { teamId?: string; filter?: string },
+        ),
+    },
+
+    getDocument: {
+      description:
+        "Fetch a Linear document by UUID, slug ID, or canonical document URL",
+      arguments: z.object({
+        idOrUrl: z
+          .string()
+          .min(1)
+          .describe("Document UUID, slug ID, or linear.app document URL"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        getDocument(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { idOrUrl: string },
+        ),
+    },
+
+    listProjectResources: {
+      description:
+        "Fetch all documents and external links in a Linear project's Resources section",
+      arguments: z.object({
+        projectId: z.string().min(1).describe("Linear project UUID"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listProjectResources(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { projectId: string },
+        ),
+    },
+
+    listStates: {
+      description: "List workflow states for a team and sync them as resources",
+      arguments: z.object({
+        teamId: z
+          .string()
+          .optional()
+          .describe("Team ID (defaults to defaultTeamId)"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listStates(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { teamId?: string },
+        ),
+    },
+
+    listComments: {
+      description: "Fetch all comments on an issue as a single thread resource",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .describe("Issue identifier (e.g. ENG-123) or UUID"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        listComments(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { identifier: string },
+        ),
+    },
+
+    createComment: {
+      description: "Post a markdown comment on an issue",
+      arguments: z.object({
+        identifier: z
+          .string()
+          .describe("Issue identifier (e.g. ENG-123) or UUID"),
+        body: z.string().describe("Comment body (Markdown)"),
+      }),
+      execute: (args: unknown, context: unknown): Promise<MethodResult> =>
+        createComment(
+          getClient(context as MethodContext),
+          context as MethodContext,
+          args as { identifier: string; body: string },
+        ),
+    },
+  },
+};

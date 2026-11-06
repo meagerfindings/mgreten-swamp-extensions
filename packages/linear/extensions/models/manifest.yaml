@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: "@mgreten/linear"
+version: "2026.10.14.1"
+description: >
+  Linear project management integration for swamp — issue CRUD with
+  fail-closed verified deletion,
+  sub-issue (parent) and estimate support, single-call epic creation
+  (parent + child sub-issues), viewer auto-assignment, label management by
+  name, comment threads, document and project-resource retrieval, and
+  team/project/state listing via the official @linear/sdk.
+
+repository: https://github.com/meagerfindings/swamp-linear
+license: MIT
+
+models:
+  - linear.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+platforms: []

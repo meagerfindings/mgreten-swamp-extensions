@@ -1,0 +1,766 @@
+/**
+ * Method implementations for the Linear swamp model.
+ *
+ * Each exported function receives a {@link LinearClient}, a swamp
+ * {@link MethodContext}, and method-specific arguments. Returns a
+ * {@link MethodResult} containing data handles for all written resources.
+ * @module
+ */
+
+import type { IssueFilter, LinearClient } from "./client.ts";
+
+/** Global arguments available to all methods. */
+export interface GlobalArgs {
+  apiKey: string;
+  defaultTeamId?: string;
+  defaultProjectId?: string;
+}
+
+/** Opaque handle returned by `context.writeResource`. */
+export interface DataHandle {
+  spec: string;
+  instance: string;
+  data: Record<string, unknown>;
+}
+
+/** Swamp method execution context. */
+export interface MethodContext {
+  globalArgs: GlobalArgs;
+  logger: { info: (msg: string) => void };
+  readResource?: (
+    instance: string,
+  ) => Promise<Record<string, unknown> | null>;
+  writeResource: (
+    spec: string,
+    instance: string,
+    data: Record<string, unknown>,
+  ) => Promise<DataHandle>;
+}
+
+/** Return type for all method implementations. */
+export interface MethodResult {
+  dataHandles: DataHandle[];
+}
+
+/** Map an {@link IssueData} to the flat resource shape for `writeResource`. */
+function issueResourceData(
+  issue: Awaited<ReturnType<LinearClient["getIssue"]>>,
+): Record<string, unknown> {
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    description: issue.description,
+    url: issue.url,
+    priority: issue.priority,
+    stateId: issue.state?.id ?? "",
+    stateName: issue.state?.name ?? "",
+    stateType: issue.state?.type ?? "",
+    teamId: issue.team?.id ?? "",
+    teamKey: issue.team?.key ?? "",
+    projectId: issue.project?.id ?? "",
+    projectName: issue.project?.name ?? "",
+    assigneeId: issue.assignee?.id ?? "",
+    assigneeName: issue.assignee?.name ?? "",
+    labelNames: issue.labels.map((l) => l.name).join(", "),
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+/** Build the flat `commentThread` resource shape for `writeResource`. */
+function commentThreadResourceData(
+  issueId: string,
+  identifier: string,
+  comments: Awaited<ReturnType<LinearClient["listComments"]>>,
+): Record<string, unknown> {
+  return {
+    issueId,
+    identifier,
+    comments: comments.map((c) => ({
+      id: c.id,
+      body: c.body,
+      authorName: c.authorName,
+      authorId: c.authorId,
+      isBot: c.isBot,
+      createdAt: c.createdAt,
+    })),
+    count: comments.length,
+  };
+}
+
+/** Map a Linear document to the flat `document` resource shape. */
+function documentResourceData(
+  document: Awaited<ReturnType<LinearClient["getDocument"]>>,
+): Record<string, unknown> {
+  return {
+    id: document.id,
+    slugId: document.slugId,
+    title: document.title,
+    content: document.content,
+    url: document.url,
+    sortOrder: document.sortOrder,
+    projectId: document.project?.id ?? "",
+    projectName: document.project?.name ?? "",
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+/** Resolve the authenticated user's ID, name, and email. */
+export async function getViewer(
+  client: LinearClient,
+  context: MethodContext,
+): Promise<MethodResult> {
+  context.logger.info("Resolving authenticated viewer");
+  const viewer = await client.getViewer();
+  const handle = await context.writeResource("viewer", "me", {
+    id: viewer.id,
+    name: viewer.name,
+    email: viewer.email,
+    syncedAt: new Date().toISOString(),
+  });
+  return { dataHandles: [handle] };
+}
+
+/** Create an issue auto-assigned to the authenticated user. */
+export async function createMyIssue(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    title: string;
+    description?: string;
+    priority?: number;
+    projectId?: string;
+    labels?: string;
+  },
+): Promise<MethodResult> {
+  const teamId = context.globalArgs.defaultTeamId;
+  if (!teamId) {
+    throw new Error("defaultTeamId is required for createMyIssue");
+  }
+
+  const viewer = await client.getViewer();
+  context.logger.info(
+    `Creating issue "${args.title}" assigned to ${viewer.name}`,
+  );
+
+  const projectId = args.projectId || context.globalArgs.defaultProjectId ||
+    undefined;
+
+  let labelIds: string[] | undefined;
+  if (args.labels) {
+    const labelNames = args.labels.split(",").map((s) => s.trim());
+    const allLabels = await client.listLabels(teamId);
+    labelIds = [];
+    for (const name of labelNames) {
+      const found = allLabels.find(
+        (l) => l.name.toLowerCase() === name.toLowerCase(),
+      );
+      if (!found) {
+        throw new Error(
+          `Label "${name}" not found in team. Available: ${
+            allLabels.map((l) => l.name).join(", ")
+          }`,
+        );
+      }
+      labelIds.push(found.id);
+    }
+  }
+
+  const issue = await client.createIssue({
+    title: args.title,
+    description: args.description,
+    teamId,
+    projectId,
+    priority: args.priority,
+    assigneeId: viewer.id,
+    labelIds,
+  });
+
+  const handle = await context.writeResource(
+    "issue",
+    issue.id,
+    issueResourceData(issue),
+  );
+  return { dataHandles: [handle] };
+}
+
+/**
+ * Fetch a single issue by identifier or UUID.
+ *
+ * The resource is keyed by `issue-<identifier>` (e.g. `issue-ENG-742`), not by
+ * the issue UUID, so consumers can address it deterministically from the
+ * human-facing identifier via `data.latest(model, "issue-" + identifier)`.
+ * Keying by identifier also keeps this resource distinct from the
+ * `commentThread` resource for the same issue (see {@link listComments}), which
+ * previously collided when both were keyed by `issue.id`.
+ */
+export async function getIssue(
+  client: LinearClient,
+  context: MethodContext,
+  args: { identifier: string },
+): Promise<MethodResult> {
+  context.logger.info(`Fetching issue ${args.identifier}`);
+  const issue = await client.getIssue(args.identifier);
+  const handle = await context.writeResource(
+    "issue",
+    `issue-${issue.identifier}`,
+    issueResourceData(issue),
+  );
+  return { dataHandles: [handle] };
+}
+
+/** Update fields on an existing issue. */
+export async function updateIssue(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    identifier: string;
+    title?: string;
+    description?: string;
+    stateId?: string;
+    priority?: number;
+    assigneeId?: string;
+    projectId?: string;
+  },
+): Promise<MethodResult> {
+  context.logger.info(`Updating issue ${args.identifier}`);
+
+  const existing = await client.getIssue(args.identifier);
+
+  const input: Record<string, unknown> = {};
+  if (args.title !== undefined) input.title = args.title;
+  if (args.description !== undefined) input.description = args.description;
+  if (args.stateId !== undefined) input.stateId = args.stateId;
+  if (args.priority !== undefined) input.priority = args.priority;
+  if (args.assigneeId !== undefined) input.assigneeId = args.assigneeId;
+  if (args.projectId !== undefined) input.projectId = args.projectId;
+
+  const updated = await client.updateIssue(existing.id, input);
+  const handle = await context.writeResource(
+    "issue",
+    updated.id,
+    issueResourceData(updated),
+  );
+  return { dataHandles: [handle] };
+}
+
+/**
+ * Permanently delete an issue after verifying its live identifier and team.
+ */
+export async function deleteIssue(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    identifier: string;
+    expectedTeamKey: string;
+    confirm: "delete";
+  },
+): Promise<MethodResult> {
+  const evidenceName = `deletion-${args.identifier}`;
+  const existing = await context.readResource?.(evidenceName);
+  if (existing) {
+    if (
+      existing.identifier !== args.identifier ||
+      existing.teamKey !== args.expectedTeamKey ||
+      existing.deleted !== true ||
+      typeof existing.id !== "string" ||
+      typeof existing.title !== "string" ||
+      typeof existing.deletedAt !== "string"
+    ) {
+      throw new Error(
+        `Refusing deletion replay for ${args.identifier}: stored evidence does not match the requested issue and team`,
+      );
+    }
+    context.logger.info(`Issue ${args.identifier} was already deleted`);
+    const handle = await context.writeResource(
+      "issueDeletion",
+      evidenceName,
+      existing,
+    );
+    return { dataHandles: [handle] };
+  }
+
+  context.logger.info(`Verifying issue ${args.identifier} for deletion`);
+  const issue = await client.getIssue(args.identifier);
+  if (issue.identifier !== args.identifier) {
+    throw new Error(
+      `Refusing deletion: requested ${args.identifier}, resolved ${issue.identifier}`,
+    );
+  }
+  if (issue.team.key !== args.expectedTeamKey) {
+    throw new Error(
+      `Refusing deletion of ${args.identifier}: expected team ${args.expectedTeamKey}, found ${issue.team.key}`,
+    );
+  }
+
+  await client.deleteIssue(issue.id);
+  const deletedAt = new Date().toISOString();
+  const handle = await context.writeResource(
+    "issueDeletion",
+    evidenceName,
+    {
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      teamKey: issue.team.key,
+      deleted: true,
+      deletedAt,
+    },
+  );
+  context.logger.info(`Deleted issue ${issue.identifier}`);
+  return { dataHandles: [handle] };
+}
+
+/** Query issues with filters. */
+export async function listIssues(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    teamId?: string;
+    assignedToMe?: boolean;
+    stateType?: string;
+    projectId?: string;
+    labelName?: string;
+  },
+): Promise<MethodResult> {
+  const filter: IssueFilter = {};
+
+  filter.teamId = args.teamId || context.globalArgs.defaultTeamId;
+
+  if (args.assignedToMe) {
+    const viewer = await client.getViewer();
+    filter.assigneeId = viewer.id;
+  }
+  if (args.stateType) filter.stateType = args.stateType;
+  if (args.projectId) filter.projectId = args.projectId;
+  if (args.labelName) filter.labelName = args.labelName;
+
+  context.logger.info(`Listing issues with filter: ${JSON.stringify(filter)}`);
+
+  const result = await client.listIssues(filter);
+  const handles: DataHandle[] = [];
+
+  for (const issue of result.issues) {
+    handles.push(
+      await context.writeResource("issue", issue.id, issueResourceData(issue)),
+    );
+  }
+
+  return { dataHandles: handles };
+}
+
+/** Attach labels to an issue by name (additive — preserves existing labels). */
+export async function addLabels(
+  client: LinearClient,
+  context: MethodContext,
+  args: { identifier: string; labels: string },
+): Promise<MethodResult> {
+  const teamId = context.globalArgs.defaultTeamId;
+  if (!teamId) {
+    throw new Error("defaultTeamId is required to resolve label names");
+  }
+
+  const labelNames = args.labels.split(",").map((s) => s.trim());
+  context.logger.info(
+    `Adding labels [${labelNames.join(", ")}] to ${args.identifier}`,
+  );
+
+  const existing = await client.getIssue(args.identifier);
+  const allLabels = await client.listLabels(teamId);
+
+  const existingLabelIds = existing.labels.map((l) => l.id);
+  const newLabelIds: string[] = [];
+
+  for (const name of labelNames) {
+    const found = allLabels.find(
+      (l) => l.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (!found) {
+      throw new Error(
+        `Label "${name}" not found. Available: ${
+          allLabels.map((l) => l.name).join(", ")
+        }`,
+      );
+    }
+    newLabelIds.push(found.id);
+  }
+
+  const mergedIds = [...new Set([...existingLabelIds, ...newLabelIds])];
+  const updated = await client.updateIssue(existing.id, {
+    labelIds: mergedIds,
+  });
+  const handle = await context.writeResource(
+    "issue",
+    updated.id,
+    issueResourceData(updated),
+  );
+  return { dataHandles: [handle] };
+}
+
+/** List available labels for a team. */
+export async function listLabels(
+  client: LinearClient,
+  context: MethodContext,
+  args: { teamId?: string },
+): Promise<MethodResult> {
+  const teamId = args.teamId || context.globalArgs.defaultTeamId;
+  if (!teamId) {
+    throw new Error("No teamId specified and no defaultTeamId configured");
+  }
+
+  context.logger.info(`Listing labels for team ${teamId}`);
+  const labels = await client.listLabels(teamId);
+  const handles: DataHandle[] = [];
+
+  for (const l of labels) {
+    handles.push(
+      await context.writeResource("label", l.id, {
+        id: l.id,
+        name: l.name,
+        color: l.color,
+        syncedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  return { dataHandles: handles };
+}
+
+/** Create an issue with full control over all fields. */
+export async function createIssue(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    title: string;
+    description?: string;
+    teamId?: string;
+    projectId?: string;
+    priority?: number;
+    stateId?: string;
+    assigneeId?: string;
+    parentId?: string;
+    estimate?: number;
+  },
+): Promise<MethodResult> {
+  const teamId = args.teamId || context.globalArgs.defaultTeamId;
+  if (!teamId) {
+    throw new Error("No teamId specified and no defaultTeamId configured");
+  }
+
+  const parentNote = args.parentId ? ` under parent ${args.parentId}` : "";
+  context.logger.info(
+    `Creating issue "${args.title}" in team ${teamId}${parentNote}`,
+  );
+
+  const issue = await client.createIssue({
+    title: args.title,
+    description: args.description,
+    teamId,
+    projectId: args.projectId,
+    priority: args.priority,
+    stateId: args.stateId,
+    assigneeId: args.assigneeId,
+    parentId: args.parentId,
+    estimate: args.estimate,
+  });
+
+  const handle = await context.writeResource(
+    "issue",
+    issue.id,
+    issueResourceData(issue),
+  );
+  return { dataHandles: [handle] };
+}
+
+/**
+ * Create a Linear epic: one parent issue, then N child sub-issues linked to
+ * it via `parentId`. Children are created sequentially after the parent so
+ * each can reference the parent's returned ID. Every issue (parent and each
+ * child) is written as an `issue` resource.
+ *
+ * Linear has no multi-issue transaction, so creation is not atomic: if a
+ * child fails after the parent (and some siblings) succeeded, the error names
+ * how many children were created so the caller can reconcile rather than
+ * blindly retry the whole epic.
+ */
+export async function createEpic(
+  client: LinearClient,
+  context: MethodContext,
+  args: {
+    parent: {
+      title: string;
+      description?: string;
+      teamId?: string;
+      projectId?: string;
+      priority?: number;
+      stateId?: string;
+      assigneeId?: string;
+      estimate?: number;
+    };
+    children: Array<{
+      title: string;
+      description?: string;
+      teamId?: string;
+      projectId?: string;
+      priority?: number;
+      stateId?: string;
+      assigneeId?: string;
+      estimate?: number;
+    }>;
+  },
+): Promise<MethodResult> {
+  const teamId = args.parent.teamId || context.globalArgs.defaultTeamId;
+  if (!teamId) {
+    throw new Error("No teamId specified and no defaultTeamId configured");
+  }
+
+  context.logger.info(
+    `Creating epic "${args.parent.title}" in team ${teamId} with ` +
+      `${args.children.length} child issue(s)`,
+  );
+
+  const parent = await client.createIssue({ ...args.parent, teamId });
+  const handles: DataHandle[] = [
+    await context.writeResource("issue", parent.id, issueResourceData(parent)),
+  ];
+
+  for (let i = 0; i < args.children.length; i++) {
+    const child = args.children[i];
+    try {
+      const created = await client.createIssue({
+        ...child,
+        teamId: child.teamId || teamId,
+        parentId: parent.id,
+      });
+      handles.push(
+        await context.writeResource(
+          "issue",
+          created.id,
+          issueResourceData(created),
+        ),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Epic parent ${parent.identifier} created; child ${i + 1}/` +
+          `${args.children.length} ("${child.title}") failed: ${message}. ` +
+          `${i} child issue(s) were created before the failure.`,
+      );
+    }
+  }
+
+  context.logger.info(
+    `Epic ${parent.identifier} created with ${handles.length - 1} child ` +
+      `issue(s)`,
+  );
+  return { dataHandles: handles };
+}
+
+/** List all Linear teams and sync them as resources. */
+export async function listTeams(
+  client: LinearClient,
+  context: MethodContext,
+): Promise<MethodResult> {
+  context.logger.info("Listing Linear teams");
+  const teams = await client.listTeams();
+  const handles: DataHandle[] = [];
+
+  for (const t of teams) {
+    handles.push(
+      await context.writeResource("team", t.id, {
+        id: t.id,
+        name: t.name,
+        key: t.key,
+        syncedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  return { dataHandles: handles };
+}
+
+/** List Linear projects, optionally filtered by team. */
+export async function listProjects(
+  client: LinearClient,
+  context: MethodContext,
+  args: { teamId?: string; filter?: string },
+): Promise<MethodResult> {
+  const teamId = args.teamId || context.globalArgs.defaultTeamId;
+  context.logger.info(
+    teamId ? `Listing projects for team ${teamId}` : "Listing all projects",
+  );
+
+  const projects = await client.listProjects(teamId);
+  const handles: DataHandle[] = [];
+
+  for (const p of projects) {
+    if (args.filter && !p.name.includes(args.filter)) continue;
+    handles.push(
+      await context.writeResource("project", p.id, {
+        id: p.id,
+        name: p.name,
+        state: p.state,
+        syncedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  return { dataHandles: handles };
+}
+
+/** Fetch one Linear document by UUID, slug ID, or canonical document URL. */
+export async function getDocument(
+  client: LinearClient,
+  context: MethodContext,
+  args: { idOrUrl: string },
+): Promise<MethodResult> {
+  context.logger.info(`Fetching Linear document ${args.idOrUrl}`);
+  const document = await client.getDocument(args.idOrUrl);
+  const handle = await context.writeResource(
+    "document",
+    `document-${document.slugId}`,
+    documentResourceData(document),
+  );
+  context.logger.info(`Fetched Linear document ${document.slugId}`);
+  return { dataHandles: [handle] };
+}
+
+/**
+ * List every document and external link in a Linear project's Resources.
+ *
+ * The project itself is always refreshed, even when its Resources section is
+ * empty. Documents and external links remain separate swamp resource specs to
+ * preserve Linear's entity distinction.
+ */
+export async function listProjectResources(
+  client: LinearClient,
+  context: MethodContext,
+  args: { projectId: string },
+): Promise<MethodResult> {
+  context.logger.info(`Listing Resources for Linear project ${args.projectId}`);
+  const resources = await client.listProjectResources(args.projectId);
+  const syncedAt = new Date().toISOString();
+  const handles: DataHandle[] = [
+    await context.writeResource("project", resources.project.id, {
+      id: resources.project.id,
+      name: resources.project.name,
+      state: resources.project.state,
+      syncedAt,
+    }),
+  ];
+
+  for (const document of resources.documents) {
+    handles.push(
+      await context.writeResource(
+        "document",
+        `document-${document.slugId}`,
+        documentResourceData(document),
+      ),
+    );
+  }
+
+  for (const link of resources.externalLinks) {
+    handles.push(
+      await context.writeResource(
+        "projectExternalLink",
+        `project-link-${link.id}`,
+        {
+          id: link.id,
+          label: link.label,
+          url: link.url,
+          sortOrder: link.sortOrder,
+          projectId: link.project.id,
+          projectName: link.project.name,
+          createdAt: link.createdAt,
+          updatedAt: link.updatedAt,
+          syncedAt,
+        },
+      ),
+    );
+  }
+
+  context.logger.info(
+    `Fetched ${resources.documents.length} document(s) and ` +
+      `${resources.externalLinks.length} external link(s) for Linear project ` +
+      `${resources.project.id}`,
+  );
+  return { dataHandles: handles };
+}
+
+/** List workflow states for a team and sync them as resources. */
+export async function listStates(
+  client: LinearClient,
+  context: MethodContext,
+  args: { teamId?: string },
+): Promise<MethodResult> {
+  const teamId = args.teamId || context.globalArgs.defaultTeamId;
+  if (!teamId) {
+    throw new Error("No teamId specified and no defaultTeamId configured");
+  }
+
+  context.logger.info(`Listing workflow states for team ${teamId}`);
+  const states = await client.listStates(teamId);
+  const handles: DataHandle[] = [];
+
+  for (const s of states) {
+    handles.push(
+      await context.writeResource("workflowState", s.id, {
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        color: s.color,
+        syncedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  return { dataHandles: handles };
+}
+
+/**
+ * Fetch all comments on an issue as a single thread resource.
+ *
+ * Keyed by `thread-<identifier>` (e.g. `thread-ENG-742`) so it is addressable
+ * from the human-facing identifier and stays distinct from the `issue-`
+ * resource — both used to collide when keyed by `issue.id`.
+ */
+export async function listComments(
+  client: LinearClient,
+  context: MethodContext,
+  args: { identifier: string },
+): Promise<MethodResult> {
+  context.logger.info(`Listing comments for issue ${args.identifier}`);
+
+  const issue = await client.getIssue(args.identifier);
+  const comments = await client.listComments(issue.id);
+
+  const handle = await context.writeResource(
+    "commentThread",
+    `thread-${issue.identifier}`,
+    commentThreadResourceData(issue.id, issue.identifier, comments),
+  );
+  return { dataHandles: [handle] };
+}
+
+/** Post a markdown comment on an issue, then refresh the full thread. */
+export async function createComment(
+  client: LinearClient,
+  context: MethodContext,
+  args: { identifier: string; body: string },
+): Promise<MethodResult> {
+  context.logger.info(`Posting comment on issue ${args.identifier}`);
+
+  const issue = await client.getIssue(args.identifier);
+  const created = await client.createComment(issue.id, args.body);
+  context.logger.info(`Created comment ${created.id}`);
+
+  const comments = await client.listComments(issue.id);
+  const handle = await context.writeResource(
+    "commentThread",
+    `thread-${issue.identifier}`,
+    commentThreadResourceData(issue.id, issue.identifier, comments),
+  );
+  return { dataHandles: [handle] };
+}
