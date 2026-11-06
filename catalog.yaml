@@ -1184,6 +1184,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-unifi-release-safety.git'
       ref: 6708ae85dcca6f5e2ced08622ce0935bba57d0e0
+  - name: '@mgreten/valetudo'
+    path: packages/valetudo
+    manifest: packages/valetudo/extensions/models/valetudo/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:8c4e7e2e5378a522a296c743711ea278976ec59e8667f502665693d140dbda39'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-valetudo.git'
+      ref: 63277cb1311aafda5e4a357b085f1b8ca4c47683
   - name: '@mgreten/weekly-decision-queue'
     path: packages/weekly-decision-queue
     manifest: packages/weekly-decision-queue/manifest.yaml
