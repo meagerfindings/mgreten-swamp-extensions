@@ -637,8 +637,8 @@ packages:
   - name: '@mgreten/obsidian-vault-fs'
     path: packages/obsidian-vault-fs
     manifest: packages/obsidian-vault-fs/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:9946f765852b3007d20e0e61dc6b282f6b35af0aa2aa0b7dd41515527a2406c9'
+    version: 2026.11.06.1
+    contentHash: 'sha256:c60e89a108b2e903b79013cca64341e70bc5885f56317892c8a2764f43ad54bb'
     tests: deterministic
     dependsOn: []
     source:
