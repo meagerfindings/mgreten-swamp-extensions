@@ -422,8 +422,8 @@ packages:
   - name: '@mgreten/grist'
     path: packages/grist
     manifest: packages/grist/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:1ded9e0b90adeac02b699ce23bd2fe46a0b8f86f3381cf4cb49d71c9913df024'
+    version: 2026.11.06.1
+    contentHash: 'sha256:7eee23a0fb0e4e5a887ef27394a2b0fb44dee221ad5ed6be5617a6af152a05d7'
     tests: deterministic
     dependsOn: []
     source:
