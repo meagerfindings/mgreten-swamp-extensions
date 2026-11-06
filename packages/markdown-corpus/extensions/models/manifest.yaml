@@ -6,7 +6,7 @@ description: >
   structure — file inventory, headings, PR/ticket references, and
   signal-keyword rollups with citation lines.
 
-repository: https://github.com/meagerfindings/swamp-markdown-corpus
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
