@@ -39,8 +39,8 @@ packages:
   - name: '@mgreten/approval-gate'
     path: packages/approval-gate
     manifest: packages/approval-gate/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:40535461969f17a91701431482e97b4df648f864756a60b56f0eb1d74f011f99'
+    version: 2026.11.06.1
+    contentHash: 'sha256:6033edd6cbe0309d87fcda6b3ccd0ab0b0eadeb53dce4580e89fe3e0dd7565ec'
     tests: deterministic
     dependsOn: []
     source:
