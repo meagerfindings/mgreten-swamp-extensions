@@ -199,6 +199,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-cross-source-evidence.git'
       ref: e3b3d3740a05347ddf5822f50f066d040bab1637
+  - name: '@mgreten/daily-operational-digest'
+    path: packages/daily-operational-digest
+    manifest: packages/daily-operational-digest/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:eff843447da1f6a5384df7f0dbfadc02d72b6a205987582eb283e4587bd969a2'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-daily-operational-digest.git'
+      ref: 5f6a9346ebfa56fa53fa42795303305283318e49
   - name: '@mgreten/docker-orphan-sweep'
     path: packages/docker-orphan-sweep
     manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml
