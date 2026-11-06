@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/hermes-review-kit"
-version: "2026.10.14.1"
+version: "2026.11.06.1"
 description: "Hermes review automation kit with a local-first collector model, workflow-scope report, and nightly workflow for reviews and publishability screening."
 license: MIT
 

@@ -442,8 +442,8 @@ packages:
   - name: '@mgreten/hermes-review-kit'
     path: packages/hermes-review-kit
     manifest: packages/hermes-review-kit/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:f4910d7c2a07395bef52d0dcc974f00ee420bf966c10f2f1b9b84d9d9f12a10b'
+    version: 2026.11.06.1
+    contentHash: 'sha256:6e9e42e1e677a6436b03e5481351ede56fc79d7cc7d62b092a9e320451752a34'
     tests: deterministic
     dependsOn: []
     source:
