@@ -1,7 +1,7 @@
 import { parse } from "@std/yaml";
 import { z } from "zod";
-import { model as feedbackTriageModel } from "../../swamp-feedback-triage/extensions/models/feedback_triage.ts";
-import { model as featureIdeaGateModel } from "../../swamp-feature-idea-gate/extensions/models/feature_idea_gate.ts";
+import { model as feedbackTriageModel } from "../../feedback-triage/extensions/models/feedback_triage.ts";
+import { model as featureIdeaGateModel } from "../../feature-idea-gate/extensions/models/feature_idea_gate.ts";
 
 type Step = {
   name: string;

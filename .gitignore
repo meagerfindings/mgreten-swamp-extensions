@@ -6,3 +6,7 @@
 # Local extension sources (developer-specific, not shared)
 .swamp-sources.yaml
 # END swamp managed section
+
+# Created by deno test for packages with nodeModulesDir: auto; an untracked
+# node_modules would leave the tree dirty and stop a live ext-publish run.
+node_modules/

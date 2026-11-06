@@ -1,0 +1,23 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/yaml@1": "1.1.2",
+    "npm:zod@4": "4.6.7"
+  },
+  "jsr": {
+    "@std/yaml@1.1.2": {
+      "integrity": "de612653c036749ba2044165e316f52412b0f0698afffb7ee80b5331d6d2abae"
+    }
+  },
+  "npm": {
+    "zod@4.6.7": {
+      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@std/yaml@1",
+      "npm:zod@4"
+    ]
+  }
+}
