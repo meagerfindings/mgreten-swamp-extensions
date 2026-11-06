@@ -1,0 +1,73 @@
+id: c821554c-9ef6-426f-8a28-68aba3472511
+name: "@mgreten/deliver-thin-watchdog-alert"
+description: Enqueue a thin watchdog transition and dispatch only the fresh record emitted by this run.
+inputs:
+  type: object
+  additionalProperties: false
+  properties:
+    outboxModel: { type: string, minLength: 1 }
+    outboxModelType: { type: string, minLength: 1, default: "@mgreten/notification-outbox" }
+    dispatchWorkflow: { type: string, minLength: 1, default: "@mgreten/dispatch-enqueued-notifications" }
+    sendWorkflow: { type: string, minLength: 1, default: "@mgreten/send-one-notification" }
+    transportModel: { type: string, minLength: 1 }
+    transportMethod: { type: string, minLength: 1 }
+    transportOptions:
+      type: object
+      additionalProperties: true
+      default: {}
+      description: Non-message transport options; payload and idempotency are derived after enqueue.
+    alert:
+      type: object
+      additionalProperties: false
+      required: [incidentId, event, urgency, era]
+      properties:
+        incidentId: { type: string, minLength: 1, maxLength: 100, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$" }
+        event: { type: string, enum: [opened, resolved, failed] }
+        urgency: { type: string, enum: [low, default, high, urgent] }
+        era: { type: string, minLength: 1, maxLength: 180 }
+    outboxPayload:
+      type: object
+      additionalProperties: true
+      description: Redacted payload persisted by the outbox, normally including title and message.
+  required: [outboxModel, transportModel, transportMethod, alert, outboxPayload]
+jobs:
+  - name: enqueue-and-dispatch
+    steps:
+      - name: enqueue-alert
+        description: Let the outbox atomically deduplicate this watchdog transition before any transport attempt.
+        task:
+          type: model_method
+          modelIdOrName: "${{ inputs.outboxModel }}"
+          methodName: enqueueNotification
+          inputs:
+            workItem: "${{ inputs.alert.incidentId }}"
+            event: '${{ inputs.alert.event == "resolved" ? "completed" : "failed" }}'
+            urgency: "${{ inputs.alert.urgency }}"
+            era: "${{ inputs.alert.era }}"
+            payload: "${{ inputs.outboxPayload }}"
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: dispatch-fresh-pending
+        description: Dispatch only this run's enqueue output; pending or delivered records deduplicated by the outbox never appear.
+        task:
+          type: workflow
+          workflowIdOrName: "${{ inputs.dispatchWorkflow }}"
+          inputs:
+            sourceWorkflowRunId: "${{ run.id }}"
+            enqueueJobName: enqueue-and-dispatch
+            enqueueStepName: enqueue-alert
+            outboxModel: "${{ inputs.outboxModel }}"
+            outboxModelType: "${{ inputs.outboxModelType }}"
+            sendWorkflow: "${{ inputs.sendWorkflow }}"
+            transportModel: "${{ inputs.transportModel }}"
+            transportMethod: "${{ inputs.transportMethod }}"
+            transportOptions: "${{ inputs.transportOptions }}"
+        dependsOn:
+          - step: enqueue-alert
+            condition: { type: succeeded }
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1
