@@ -254,8 +254,8 @@ packages:
   - name: '@mgreten/datadog-readonly'
     path: packages/datadog-readonly
     manifest: packages/datadog-readonly/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:8d3e203752000cf82d17ffc2ef1f3569bb0741912049ec1e2001d6186bf338e2'
+    version: 2026.11.06.1
+    contentHash: 'sha256:d775850545c6d3948abec584a4d636fe36e9d9ef371d4674eb1ad2c45c6f3899'
     tests: deterministic
     dependsOn: []
     source:
