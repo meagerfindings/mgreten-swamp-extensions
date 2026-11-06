@@ -634,6 +634,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-observability-workflows.git'
       ref: 63616bf1aac7ec547023e68cabfe68f813ef9bdb
+  - name: '@mgreten/observation-record'
+    path: packages/observation-record
+    manifest: packages/observation-record/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:2a52c62d92e289818deb8534b77f574326f1a274be13394d51b39d1dce37dc99'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-observation-record.git'
+      ref: 008dbaf79badecb3ef769d7360ab87d34074da1b
   - name: '@mgreten/obsidian-vault-fs'
     path: packages/obsidian-vault-fs
     manifest: packages/obsidian-vault-fs/manifest.yaml
