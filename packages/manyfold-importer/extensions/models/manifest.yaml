@@ -4,7 +4,7 @@ version: "2026.10.14.1"
 description: >
   Import local 3D model files into a Manyfold-accessible library directory with reusable copy, move, hardlink, symlink, and dry-run planning modes.
 
-repository: https://github.com/meagerfindings/swamp-manyfold-importer
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
