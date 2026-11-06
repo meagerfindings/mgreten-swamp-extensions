@@ -6,7 +6,7 @@ description: >
   or the local machine. Produces typed, versioned artifacts for each mount
   point and backup directory, with configurable warning and critical thresholds.
 
-repository: https://github.com/meagerfindings/swamp-storage-health
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
