@@ -5,7 +5,7 @@ description: >
   Deterministic, recommendation-only bounded experiment proposals with
   provenance-backed fresh evidence, caller-policy downside limits, explicit
   stop-and-review conditions, and not-requested approval records.
-repository: "https://github.com/meagerfindings/swamp-bounded-experiment"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 paths:
   base: manifest
