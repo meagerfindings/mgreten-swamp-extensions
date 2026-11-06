@@ -809,8 +809,8 @@ packages:
   - name: '@mgreten/packet-certifier'
     path: packages/packet-certifier
     manifest: packages/packet-certifier/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:2fcdf80ec8bbcac5b528296ec3ee7ddb26d54df6581fe14061ed9c3f1167ca11'
+    version: 2026.11.06.1
+    contentHash: 'sha256:6cf790defb13474a6cbb7423c692af56d765a3b44677a573f22190aee34451ee'
     tests: deterministic
     dependsOn: []
     source:
