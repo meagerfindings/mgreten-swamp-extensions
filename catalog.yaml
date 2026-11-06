@@ -289,6 +289,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-factory-watcher.git'
       ref: 363ad053c18b489006fd50d2527b29c85609a654
+  - name: '@mgreten/feature-idea-gate'
+    path: packages/feature-idea-gate
+    manifest: packages/feature-idea-gate/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:7350bbca806bebe1d1cfb4afb0ec242a3fe55282d386c45fed1a88ebc5d10500'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-feature-idea-gate.git'
+      ref: 33a6033dd0f54a7700594efe6fdefd3096442f62
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
