@@ -6,7 +6,7 @@ description: >
   that enqueues deduplicated notification records and drains them through a
   caller-supplied transport, performing no transport I/O itself.
 
-repository: https://github.com/meagerfindings/swamp-notification-outbox
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 models:
