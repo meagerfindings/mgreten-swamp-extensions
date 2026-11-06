@@ -524,8 +524,8 @@ packages:
   - name: '@mgreten/manyfold-importer'
     path: packages/manyfold-importer
     manifest: packages/manyfold-importer/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:38fb8ad999721b1face3345d97b416e18664c9474a55d7d3bfa4268bc0a1308a'
+    version: 2026.11.06.1
+    contentHash: 'sha256:36ec3bf1a4cfd1406d083184bebf2cca9363536b75da1001af4e097f04cde3c9'
     tests: deterministic
     dependsOn: []
     source:
