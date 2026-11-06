@@ -9,7 +9,7 @@ description: >
   alerts, and correlate an incident window against recent deploys and merged PRs
   to rank change suspects.
 
-repository: https://github.com/meagerfindings/swamp-datadog-readonly
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - datadog.ts
