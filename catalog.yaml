@@ -1137,8 +1137,8 @@ packages:
   - name: '@mgreten/swamp-club-score'
     path: packages/swamp-club-score
     manifest: packages/swamp-club-score/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:9af2bd0ebd4e9de846145c9229a047a18bfcd9bf6d8954ffbb24daee6a8a76d2'
+    version: 2026.11.06.1
+    contentHash: 'sha256:1b70ab1b7ffdad0e961025592537684e1635a44a917e8c92e33c7520f8166140'
     tests: deterministic
     dependsOn: []
     source:
