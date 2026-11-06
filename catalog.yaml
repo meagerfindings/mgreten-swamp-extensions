@@ -615,8 +615,8 @@ packages:
   - name: '@mgreten/observability-workflows'
     path: packages/observability-workflows
     manifest: packages/observability-workflows/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:fa5689143ecc7276c9b07ee00fde75bf7053ffba2367b4d05076654f556473c1'
+    version: 2026.11.06.1
+    contentHash: 'sha256:7f4caefac5f76bf2f73cea2249a072732e58112bae0ea0b6ba91f053e3d09891'
     tests: deterministic
     dependsOn:
       - '@mgreten/notification-outbox'
