@@ -1,0 +1,45 @@
+{
+  "config": {
+    "projects": [
+      {
+        "name": "chromium-mobile",
+        "metadata": {
+          "browserEngine": "chromium",
+          "viewportProfile": "mobile",
+          "viewport": "390x844"
+        }
+      }
+    ]
+  },
+  "stats": {
+    "startTime": "2026-08-23T10:00:00.000Z"
+  },
+  "suites": [
+    {
+      "specs": [
+        {
+          "title": "sign in @smoke",
+          "tags": ["smoke"],
+          "tests": [
+            {
+              "projectName": "chromium-mobile",
+              "annotations": [
+                {
+                  "type": "cleanup",
+                  "description": "completed"
+                }
+              ],
+              "results": [
+                {
+                  "status": "passed",
+                  "duration": 250,
+                  "retry": 0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -107,6 +107,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-brief-sanitize.git'
       ref: 5fb640aa86eac63f48b6382425177517fd45331b
+  - name: '@mgreten/browser-test-evidence'
+    path: packages/browser-test-evidence
+    manifest: packages/browser-test-evidence/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:45e646a9a2e80f687864c777eff81d031c7abf4ed9484f481fb36197e66ed3c9'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-browser-test-evidence.git'
+      ref: 2fcf68c692e95fcccb768270aed3e0914e89c296
   - name: '@mgreten/campaign-outcome'
     path: packages/campaign-outcome
     manifest: packages/campaign-outcome/extensions/manifest.yaml
