@@ -4,7 +4,7 @@ version: 2026.10.14.1
 description: >
   Deterministically ranks bounded, caller-supplied agent-system evidence into
   recommendation-only proposals that always require separate human approval.
-repository: "https://github.com/meagerfindings/swamp-agent-system-review"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 models:
   - agent_system_review.ts
