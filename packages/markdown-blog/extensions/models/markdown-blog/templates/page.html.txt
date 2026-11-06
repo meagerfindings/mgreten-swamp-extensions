@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{excerpt}}">
+  <title>{{title}} — {{siteTitle}}</title>
+</head>
+<body>
+  <header><p>{{siteTitle}}</p></header>
+  <main>
+    <article>
+      <h1>{{title}}</h1>
+      <p><time datetime="{{date}}">{{date}}</time></p>
+      {{body}}
+    </article>
+  </main>
+</body>
+</html>

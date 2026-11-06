@@ -531,6 +531,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-manyfold-importer.git'
       ref: 3739eeb5f6b340fdb00ffa16881962a5d17ae34a
+  - name: '@mgreten/markdown-blog'
+    path: packages/markdown-blog
+    manifest: packages/markdown-blog/extensions/models/markdown-blog/manifest.yaml
+    version: 2026.10.15.2
+    contentHash: 'sha256:bdd9151e02212ba354c53c4d319682576bf3151fdfc59e2bfaf45f72d72c974d'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-markdown-blog.git'
+      ref: 7a8647f9ad20fdb327548d0fa27cdd0fdc450609
   - name: '@mgreten/markdown-corpus'
     path: packages/markdown-corpus
     manifest: packages/markdown-corpus/extensions/models/manifest.yaml
