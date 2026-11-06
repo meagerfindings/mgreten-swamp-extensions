@@ -91,3 +91,75 @@ Deno.test("no release commits from the run means no push even when others are un
   assertEquals((await pushReleaseCommits(work, [])).status, "none");
   assertEquals(await git(origin, "rev-parse", "main"), before);
 });
+
+async function commitFiles(dir: string, files: Record<string, string>, msg: string): Promise<string> {
+  for (const [f, text] of Object.entries(files)) {
+    await Deno.mkdir(`${dir}/${f}`.replace(/\/[^/]+$/, ""), { recursive: true });
+    await Deno.writeTextFile(`${dir}/${f}`, text);
+    await git(dir, "add", f);
+  }
+  await git(dir, "commit", "-q", "-m", msg);
+  return git(dir, "rev-parse", "HEAD");
+}
+
+const block = (v: string) => `# Notes\n<!-- BEGIN swamp managed section - DO NOT EDIT -->\nswamp ${v}\n<!-- END swamp managed section -->\n`;
+
+Deno.test("a trailer-marked maintenance commit on Swamp-managed paths is pushed with the release commits", async () => {
+  const { origin, work } = await setup();
+  await commitFiles(work, { "AGENTS.md": block("1") }, "docs: agents");
+  await git(work, "push", "-q", "origin", "main");
+  const maint = await commitFiles(
+    work,
+    { ".swamp.yaml": "v: 2\n", "AGENTS.md": block("2"), ".claude/skills/swamp/SKILL.md": "x\n" },
+    "chore(swamp): repo upgrade\n\nSwamp-Maintenance: repo-upgrade on host",
+  );
+  const r = await commit(work, "x.txt", "1\n", "release(x): 1");
+  const res = await pushReleaseCommits(work, [r]);
+  assertEquals([res.status, res.commits], ["pushed", 2]);
+  assertEquals(await git(origin, "rev-parse", "main~1"), maint);
+  assertEquals(await git(origin, "rev-parse", "main"), r);
+});
+
+Deno.test("a trailer-marked commit that touches other paths is foreign and blocks the push", async () => {
+  const { origin, work } = await setup();
+  const before = await git(origin, "rev-parse", "main");
+  await commitFiles(work, { ".swamp.yaml": "v: 2\n", "tools/x.ts": "evil\n" }, "chore(swamp): repo upgrade\n\nSwamp-Maintenance: repo-upgrade");
+  const r = await commit(work, "x.txt", "1\n", "release(x): 1");
+  const res = await pushReleaseCommits(work, [r]);
+  assertEquals(res.status, "skipped");
+  assertEquals(await git(origin, "rev-parse", "main"), before);
+});
+
+Deno.test("a trailer-marked commit that edits AGENTS.md outside the managed section is foreign", async () => {
+  const { origin, work } = await setup();
+  await commitFiles(work, { "AGENTS.md": block("1") }, "docs: agents");
+  await git(work, "push", "-q", "origin", "main");
+  const before = await git(origin, "rev-parse", "main");
+  await commitFiles(work, { "AGENTS.md": block("1") + "new rule\n" }, "chore: sync\n\nExt-Host-Sync: host");
+  const r = await commit(work, "x.txt", "1\n", "release(x): 1");
+  const res = await pushReleaseCommits(work, [r]);
+  assertEquals(res.status, "skipped");
+  assertEquals(await git(origin, "rev-parse", "main"), before);
+});
+
+Deno.test("a managed-path commit without the maintenance trailer is foreign", async () => {
+  const { origin, work } = await setup();
+  const before = await git(origin, "rev-parse", "main");
+  await commitFiles(work, { ".swamp.yaml": "v: 2\n" }, "chore(swamp): repo upgrade");
+  const r = await commit(work, "x.txt", "1\n", "release(x): 1");
+  assertEquals((await pushReleaseCommits(work, [r])).status, "skipped");
+  assertEquals(await git(origin, "rev-parse", "main"), before);
+});
+
+Deno.test("a trailer-marked merge commit is foreign", async () => {
+  const { origin, work } = await setup();
+  const before = await git(origin, "rev-parse", "main");
+  await git(work, "checkout", "-q", "-b", "side");
+  await commitFiles(work, { ".swamp.yaml": "v: 2\n" }, "chore(swamp): side\n\nSwamp-Maintenance: x");
+  await git(work, "checkout", "-q", "main");
+  await commitFiles(work, { ".claude/skills/swamp/SKILL.md": "x\n" }, "chore(swamp): main\n\nSwamp-Maintenance: x");
+  await git(work, "merge", "-q", "--no-ff", "-m", "merge\n\nSwamp-Maintenance: x", "side");
+  const r = await commit(work, "x.txt", "1\n", "release(x): 1");
+  assertEquals((await pushReleaseCommits(work, [r])).status, "skipped");
+  assertEquals(await git(origin, "rev-parse", "main"), before);
+});

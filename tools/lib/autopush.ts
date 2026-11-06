@@ -3,7 +3,8 @@
  *
  * Rules (any rule not met means "skipped", origin untouched):
  *  - HEAD is the branch being pushed and the working tree is clean.
- *  - Every commit in origin/<branch>..HEAD is one of `runShas`.
+ *  - Every commit in origin/<branch>..HEAD is one of `runShas`, or a Swamp
+ *    maintenance commit (see isMaintenanceCommit).
  *  - If origin moved ahead, those release commits are rebased onto it; a
  *    rebase that does not apply cleanly is aborted.
  *  - The push is a plain fast-forward refspec (no `+`, no --force*); git
@@ -32,6 +33,41 @@ async function git(root: string, ...args: string[]) {
   };
 }
 
+// Paths Swamp itself owns in this repo. AGENTS.md, CLAUDE.md and .gitignore
+// count only when every change is inside their swamp managed section.
+const MANAGED_FILES = new Set([".swamp.yaml", "extensions/models/upstream_extensions.json"]);
+const MANAGED_BLOCK_FILES = new Set(["AGENTS.md", "CLAUDE.md", ".gitignore"]);
+const MANAGED_DIRS = /^\.(agents|claude|codex|opencode|cursor)\/skills\/swamp[^/]*\//;
+const TRAILER = /^(Swamp-Maintenance|Ext-Host-Sync):/m;
+const BLOCK = /[^\n]*BEGIN swamp managed section[\s\S]*?END swamp managed section[^\n]*/g;
+
+async function showOrEmpty(root: string, rev: string, path: string): Promise<string> {
+  const r = await git(root, "show", `${rev}:${path}`);
+  return r.ok ? r.stdout : "";
+}
+
+/**
+ * A maintenance housekeeping commit is pushable alongside release commits
+ * when it carries a Swamp-Maintenance: or Ext-Host-Sync: trailer, has one
+ * parent, and touches only Swamp-managed paths.
+ */
+export async function isMaintenanceCommit(root: string, sha: string): Promise<boolean> {
+  const parents = (await git(root, "rev-list", "--parents", "-n", "1", sha)).stdout.split(" ").length - 1;
+  if (parents !== 1) return false;
+  const trailers = (await git(root, "log", "-1", "--format=%(trailers:only,unfold)", sha)).stdout;
+  if (!TRAILER.test(trailers)) return false;
+  const paths = (await git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--no-renames", sha)).stdout.split("\n").filter(Boolean);
+  if (paths.length === 0) return false;
+  for (const p of paths) {
+    if (MANAGED_FILES.has(p) || MANAGED_DIRS.test(p)) continue;
+    if (!MANAGED_BLOCK_FILES.has(p)) return false;
+    const before = (await showOrEmpty(root, `${sha}^`, p)).replace(BLOCK, "");
+    const after = (await showOrEmpty(root, sha, p)).replace(BLOCK, "");
+    if (before !== after) return false;
+  }
+  return true;
+}
+
 export async function pushReleaseCommits(
   root: string,
   runShas: string[],
@@ -54,7 +90,8 @@ export async function pushReleaseCommits(
   const unpushed = (await git(root, "rev-list", `${upstream}..HEAD`)).stdout.split("\n").filter(Boolean);
   if (unpushed.length === 0) return res("none", "nothing unpushed", originBefore);
   const mine = new Set(runShas);
-  const foreign = unpushed.filter((c) => !mine.has(c));
+  const foreign: string[] = [];
+  for (const c of unpushed) if (!mine.has(c) && !(await isMaintenanceCommit(root, c))) foreign.push(c);
   if (foreign.length) {
     return res("skipped", `${foreign.length} unpushed commit(s) not made by this run (e.g. ${foreign.at(-1)!.slice(0, 12)})`, originBefore, null, unpushed.length);
   }
@@ -74,5 +111,6 @@ export async function pushReleaseCommits(
   const push = await git(root, "push", "--no-follow-tags", remote, `HEAD:refs/heads/${branch}`);
   const head = (await git(root, "rev-parse", "HEAD")).stdout;
   if (!push.ok) return res("failed", `push: ${push.stderr.split("\n").pop()?.slice(0, 200) ?? "failed"}`, originBefore, head, unpushed.length);
-  return res("pushed", `pushed ${unpushed.length} release commit(s)${behind !== "0" ? ` after rebasing onto ${originBefore.slice(0, 12)}` : ""}`, originBefore, head, unpushed.length);
+  const housekeeping = unpushed.length - unpushed.filter((c) => mine.has(c)).length;
+  return res("pushed", `pushed ${unpushed.length - housekeeping} release and ${housekeeping} maintenance commit(s)${behind !== "0" ? ` after rebasing onto ${originBefore.slice(0, 12)}` : ""}`, originBefore, head, unpushed.length);
 }
