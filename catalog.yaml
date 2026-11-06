@@ -789,8 +789,8 @@ packages:
   - name: '@mgreten/openai-decision-tools'
     path: packages/openai-decision-tools
     manifest: packages/openai-decision-tools/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:b1f416feaba2f1c8f057cd80dca27b1f5cd988d423bc7fc8f96de8089e0b47f3'
+    version: 2026.11.06.1
+    contentHash: 'sha256:1c8566572288fbac6684275fb091f06d242b2c4f149c86f695cd2e40a4fcb284'
     tests: deterministic
     dependsOn: []
     source:
