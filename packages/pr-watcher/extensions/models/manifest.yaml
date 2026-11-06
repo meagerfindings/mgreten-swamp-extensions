@@ -8,7 +8,7 @@ description: >
   an approved fix inside an isolated worktree (build, test, push to the PR
   branch).
 
-repository: https://github.com/meagerfindings/swamp-pr-watcher
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 dependencies:
