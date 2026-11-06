@@ -5,7 +5,7 @@ version: 2026.10.14.1
 description: >
   Provider-neutral validation of producer redaction attestations, bounded
   pattern denylist checks, and persistence of read-only triage snapshots.
-repository: "https://github.com/meagerfindings/swamp-operational-triage"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 models:
   - operational_triage.ts
 workflows: []
