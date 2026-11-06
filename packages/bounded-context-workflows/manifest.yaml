@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/bounded-context-workflows"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >-
   Reusable, reference-only Swamp workflows for compiling bounded context and
   operating packets from caller-configured model instances.

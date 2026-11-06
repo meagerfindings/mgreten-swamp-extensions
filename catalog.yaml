@@ -69,8 +69,8 @@ packages:
   - name: '@mgreten/bounded-context-workflows'
     path: packages/bounded-context-workflows
     manifest: packages/bounded-context-workflows/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:268e2a9155b02cc7d92f31e849da0a138897bfdd6a73e29f1bb92a50a8bf4b40'
+    version: 2026.11.06.1
+    contentHash: 'sha256:3130d969af5e32148bb5adb52a8e099f44c834040fe6d59d947ca86393f115f3'
     tests: deterministic
     dependsOn:
       - '@mgreten/context-compiler'
