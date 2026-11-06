@@ -757,6 +757,18 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-pr-browser-test-planner.git'
       ref: 6d12e48fce6f7cd1043344d1b149a7cdc92ee8a2
+  - name: '@mgreten/pr-watcher'
+    path: packages/pr-watcher
+    manifest: packages/pr-watcher/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:12b91aef6c7a2da0443cb5efe135b816dbe8be9222f27cad011cb6d26c4bfe7c'
+    tests: deterministic
+    dependsOn:
+      - '@mgreten/cli-agent'
+      - '@mgreten/agent-provider-catalog'
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-pr-watcher.git'
+      ref: 4274c137cc3f5d3c78468a1c084248b6c18536ea
   - name: '@mgreten/pricing-unit-economics'
     path: packages/pricing-unit-economics
     manifest: packages/pricing-unit-economics/manifest.yaml
