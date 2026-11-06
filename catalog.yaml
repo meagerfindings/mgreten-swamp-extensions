@@ -219,6 +219,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-decision-context.git'
       ref: 7d7571295ba4c47e09f6e9828a45627ed81db626
+  - name: '@mgreten/decision-dossier'
+    path: packages/decision-dossier
+    manifest: packages/decision-dossier/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:52864f5daa0d778da0ddfb891cf5b98f05a43c6906088d4f252e209cca93a48e'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-decision-dossier.git'
+      ref: 4bfb503da839e739b80a791013448d2e0be7417f
   - name: '@mgreten/docker-orphan-sweep'
     path: packages/docker-orphan-sweep
     manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml

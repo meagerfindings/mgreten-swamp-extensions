@@ -1,0 +1,160 @@
+import { DECISION_DOSSIER_SCHEMA_VERSION } from "./decision_dossier_contracts.ts";
+
+const source = {
+  schemaVersion: "1.0",
+  sourceId: "example:source:1",
+  source: { system: "example", resourceType: "report", resourceId: "1" },
+  provenance: {
+    collector: "example-fixture",
+    collectorVersion: "1",
+    method: "snapshot",
+    collectedAt: "2026-01-02T12:00:00Z",
+  },
+  observedAt: "2026-01-02T11:00:00Z",
+  freshness: {
+    asOf: "2026-01-02T12:00:00Z",
+    expiresAt: "2026-02-02T12:00:00Z",
+  },
+  sensitivity: "internal" as const,
+};
+
+export const syntheticDossier = {
+  schemaVersion: DECISION_DOSSIER_SCHEMA_VERSION,
+  dossierId: "example:dossier:1",
+  subject: {
+    kind: "proposal",
+    id: "example:proposal:1",
+    version: 2,
+    sha256: "a".repeat(64),
+  },
+  version: 1,
+  createdAt: "2026-01-03T12:00:00Z",
+  problem: {
+    statement: "The process exceeds its target",
+    scope: "One process",
+    evidenceIds: ["e1"],
+  },
+  affectedSegment: {
+    segmentId: "segment:users",
+    label: "Users",
+    definition: "Affected users",
+    evidenceIds: ["e1"],
+  },
+  confidence: {
+    level: "medium" as const,
+    rationale: "One fresh observation",
+    evidenceIds: ["e1"],
+  },
+  strategicFit: {
+    alignment: "aligned" as const,
+    rationale: "Supports the stated principle",
+    principleIds: ["principle:speed"],
+    evidenceIds: ["e1"],
+  },
+  evidence: [{
+    evidenceId: "e1",
+    claim: "Duration is ten hours",
+    sourceReference: source,
+  }],
+  options: [
+    {
+      optionId: "o0",
+      kind: "do_nothing" as const,
+      title: "Continue",
+      description: "Leave unchanged",
+      evidenceIds: ["e1"],
+    },
+    {
+      optionId: "o1",
+      kind: "action" as const,
+      title: "Change sequence",
+      description: "Change the sequence",
+      evidenceIds: ["e1"],
+    },
+  ],
+  recommendation: {
+    optionId: "o1",
+    rationale: "Best expected balance",
+    evidenceIds: ["e1"],
+  },
+  effort: {
+    size: "small" as const,
+    status: "hypothetical" as const,
+    estimate: 2,
+    unit: "engineer_days",
+    rationale: "A bounded change",
+    evidenceIds: ["e1"],
+    assumptions: ["Interface remains stable"],
+  },
+  economics: {
+    summary: "Expected benefit exceeds cost",
+    estimates: [
+      {
+        estimateId: "x1",
+        optionId: "o0",
+        label: "Observed effort",
+        direction: "cost" as const,
+        status: "observed" as const,
+        asOf: "2026-01-02T12:00:00Z",
+        evidenceIds: ["e1"],
+        assumptions: [],
+        sourceReference: source,
+        valueType: "quantity" as const,
+        value: 10,
+        unit: "hours",
+      },
+      {
+        estimateId: "x2",
+        optionId: "o1",
+        label: "Expected cost",
+        direction: "cost" as const,
+        status: "hypothetical" as const,
+        asOf: "2026-01-03T12:00:00Z",
+        evidenceIds: ["e1"],
+        assumptions: ["Rate remains fixed"],
+        valueType: "monetary" as const,
+        value: 500,
+        currency: "USD",
+        unit: "currency" as const,
+      },
+    ],
+  },
+  risks: [{
+    riskId: "r1",
+    description: "May take longer",
+    likelihood: "low" as const,
+    impact: "medium" as const,
+    mitigation: "Stop after one window",
+    ownerId: "actor:2",
+    evidenceIds: ["e1"],
+  }],
+  authority: {
+    decisionMaker: { id: "actor:1", role: "decision owner" },
+    authorityBasis: "Owns the scope",
+    decisionDueAt: "2026-01-04T12:00:00Z",
+  },
+  expectedOutcomes: [{
+    outcomeId: "out1",
+    statement: "Duration decreases",
+    metricIds: ["m1"],
+  }],
+  measurementPlan: {
+    metrics: [{
+      metricId: "m1",
+      name: "Duration",
+      unit: "hours",
+      desiredDirection: "decrease" as const,
+      target: 8,
+    }],
+    windows: [{
+      windowId: "w1",
+      purpose: "Initial evaluation",
+      window: {
+        startsAt: "2026-01-05T12:00:00Z",
+        endsAt: "2026-01-12T12:00:00Z",
+      },
+    }],
+    ownerId: "actor:2",
+    reviewAt: "2026-01-12T12:00:00Z",
+  },
+};
