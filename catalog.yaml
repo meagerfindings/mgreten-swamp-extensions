@@ -883,8 +883,8 @@ packages:
   - name: '@mgreten/storage-health'
     path: packages/storage-health
     manifest: packages/storage-health/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:89036aba5a42494eaac99f58be5d2349b7b433b1a2519d634f3f015fe90b0f37'
+    version: 2026.11.06.1
+    contentHash: 'sha256:b737d09a35c906109821731f33e918a39c22c95d174a334c15d4024e8ebac193'
     tests: deterministic
     dependsOn: []
     source:
