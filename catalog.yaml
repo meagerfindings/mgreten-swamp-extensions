@@ -596,8 +596,8 @@ packages:
   - name: '@mgreten/linear'
     path: packages/linear
     manifest: packages/linear/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:859fbd2122ac6ab9fa087ae1dfe0eb4d7977e893afc40e7b24e18db2e9cb6a89'
+    version: 2026.11.06.1
+    contentHash: 'sha256:1d07ea023420b3653162fa51bdc0d38ac3675c4f5899307cb3e393c22ebc4fb1'
     tests: deterministic
     dependsOn: []
     source:
