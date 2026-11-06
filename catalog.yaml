@@ -693,6 +693,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-moment-savor.git'
       ref: 75ac1cf88dd33a9a31bc5d49728b3c788ed6c816
+  - name: '@mgreten/notification-outbox'
+    path: packages/notification-outbox
+    manifest: packages/notification-outbox/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:d36483bb5aff30f4afe92740c8001c89249bdda459e554345db99d1d98327c88'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-notification-outbox.git'
+      ref: 5b2d881a16ca8b232a9af7accd7d57209e88d6fc
   - name: '@mgreten/notification-outbox-workflows'
     path: packages/notification-outbox-workflows
     manifest: packages/notification-outbox-workflows/manifest.yaml
