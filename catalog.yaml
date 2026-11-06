@@ -309,6 +309,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-feedback-lineage.git'
       ref: 17f114f88d62bb10c5da8b17b7a6a7266fe698f6
+  - name: '@mgreten/feedback-response-core'
+    path: packages/feedback-response-core
+    manifest: packages/feedback-response-core/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:3254419d2a113263248251fbe41c3af96c19cbf84e0e0154b27fcd1176caf7bd'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-feedback-response-core.git'
+      ref: 60e0a0848d78536bef1cd44613dc793492dbcd72
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
