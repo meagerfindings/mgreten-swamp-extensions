@@ -1084,6 +1084,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-trip-packing.git'
       ref: fae1f9043275756deff7c60bd26bef6041369bee
+  - name: '@mgreten/unifi'
+    path: packages/unifi
+    manifest: packages/unifi/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:bc43834d4e9bc2f0b066a2e7ff02bcf961b74f7e20a235c9a4f909a7e6565603'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-unifi.git'
+      ref: 09661c8a30cd123e7bfdde50333502a5a54835a4
   - name: '@mgreten/unifi-cve-watcher'
     path: packages/unifi-cve-watcher
     manifest: packages/unifi-cve-watcher/extensions/models/unifi-cve-watcher/manifest.yaml
