@@ -107,6 +107,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-campaign-outcome.git'
       ref: 6d6320f579a8c54fb2bf0cf401dd6d871456e1f4
+  - name: '@mgreten/canarytokens'
+    path: packages/canarytokens
+    manifest: packages/canarytokens/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:6f7645271e56e64580b5194f593fbea06ebda7b0857b9a285a1b36b74b7dab95'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-canarytokens.git'
+      ref: e580a4f437d9dd17924a657b928728f8815f81b8
   - name: '@mgreten/canva'
     path: packages/canva
     manifest: packages/canva/extensions/models/canva/manifest.yaml
