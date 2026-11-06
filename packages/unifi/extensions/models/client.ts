@@ -359,12 +359,18 @@ function numberOrStringValue(value: unknown): number | string | undefined {
  */
 export const model = {
   type: "@mgreten/unifi/client",
-  version: "2026.07.27.1",
+  version: "2026.11.06.1",
   globalArguments: UnifiGlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.27.1",
       description: "Add guarded PoE power cycling; no global argument changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.06.1",
+      description:
+        "Add the read-only inspect method; no global argument changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

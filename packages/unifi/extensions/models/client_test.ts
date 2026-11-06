@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
-import { normalizeMac, resolvePowerCycleTarget } from "./client.ts";
+import { model, normalizeMac, resolvePowerCycleTarget } from "./client.ts";
 
 const switches = [
   {
@@ -237,4 +237,15 @@ Deno.test("rejects unsafe PoE state, uplinks, and conflicting clients", () => {
     Error,
     "learned MAC does not match client",
   );
+});
+
+Deno.test("client type version has a matching no-op upgrade for existing instances", () => {
+  const last = model.upgrades.at(-1)!;
+  assertEquals(last.toVersion, model.version);
+  const args = { host: "192.0.2.1", username: "u", password: "p" };
+  assertEquals(last.upgradeAttributes(args), args);
+  // Ordered, strictly increasing toVersions.
+  const versions = model.upgrades.map((u) => u.toVersion);
+  assertEquals([...versions].sort(), versions);
+  assertEquals(new Set(versions).size, versions.length);
 });
