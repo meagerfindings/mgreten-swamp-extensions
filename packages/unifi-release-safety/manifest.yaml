@@ -6,7 +6,7 @@ description: >
   Assistant collector or caller-supplied model/version observations.
   Deduplicates transitions and schedules initial plus 7/14/21-day evidence
   reviews without installing updates.
-repository: https://github.com/meagerfindings/swamp-unifi-release-safety
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 
 paths:
