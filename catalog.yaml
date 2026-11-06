@@ -504,8 +504,8 @@ packages:
   - name: '@mgreten/local-safety-watch'
     path: packages/local-safety-watch
     manifest: packages/local-safety-watch/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:75687407d3f6d5b7fe524fcaa47136bf5b099b1ce30c4b5e7f398552711c980c'
+    version: 2026.11.06.1
+    contentHash: 'sha256:3ea83a637c35f318afde2600ea1b62da16d192b35163cd6ee73fe5a9ca6a5523'
     tests: deterministic
     dependsOn: []
     source:

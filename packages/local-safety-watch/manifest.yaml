@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: '@mgreten/local-safety-watch'
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: >
   Privacy-preserving local safety watcher that polls official weather, roadway,
   and wildfire sources, reconciles material event changes, and emits redacted
