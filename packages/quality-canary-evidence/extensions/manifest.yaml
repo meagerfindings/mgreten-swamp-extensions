@@ -2,7 +2,7 @@ manifestVersion: 1
 name: "@mgreten/quality-canary-evidence"
 version: "2026.10.14.1"
 description: "Strictly normalizes and durably records bounded live-AI-provider and physical-device quality canary evidence with policy consistency and SHA-256 provenance."
-repository: https://github.com/meagerfindings/swamp-quality-canary-evidence
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT
 additionalFiles:
   - README.md
