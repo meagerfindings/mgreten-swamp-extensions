@@ -239,6 +239,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-decision-record.git'
       ref: fe9e6117980f45728d93bf8fbc95df701738e4cb
+  - name: '@mgreten/decision-review'
+    path: packages/decision-review
+    manifest: packages/decision-review/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:6c89f4356127cbeacb0089948c0e1cb2f937c68ac0bcff5129811c2744769a7a'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-decision-review.git'
+      ref: a30c61745b110ea3a5e6d650e0ddad72afd7695d
   - name: '@mgreten/docker-orphan-sweep'
     path: packages/docker-orphan-sweep
     manifest: packages/docker-orphan-sweep/extensions/models/manifest.yaml
