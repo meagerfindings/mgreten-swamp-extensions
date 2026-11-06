@@ -674,6 +674,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-post-release-measurement.git'
       ref: fe9d565f81ceedfe6d735dd40fdf0e26a2f81387
+  - name: '@mgreten/post-release-outcome-review'
+    path: packages/post-release-outcome-review
+    manifest: packages/post-release-outcome-review/extensions/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:bcc2d72c2d00badcfd9c869fcb972c2ead069f79bcb21cf72334bb8f5e4ec69f'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-post-release-outcome-review.git'
+      ref: 831271131512b0baf6f457a90fb9d0d1601f0458
   - name: '@mgreten/pyannote-diarizer'
     path: packages/pyannote-diarizer
     manifest: packages/pyannote-diarizer/extensions/models/pyannote-diarizer/manifest.yaml
