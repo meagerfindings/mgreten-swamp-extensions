@@ -118,6 +118,16 @@ packages:
     source:
       repo: 'https://github.com/meagerfindings/mgreten-swamp-extensions'
       ref: d60af38272683550944c2d00127c47c367498a91
+  - name: '@mgreten/git-worktree-doctor'
+    path: packages/git-worktree-doctor
+    manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:183579fa90b194205f3ff8d4aa76e03eb8ae3a9139265b8e8b3b7ec0ce7b9731'
+    tests: none
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-git-worktree-doctor.git'
+      ref: f27d5a917f00dfbf9a33affeb288d8466641c544
   - name: '@mgreten/github-file-track'
     path: packages/github-file-track
     manifest: packages/github-file-track/extensions/models/manifest.yaml
