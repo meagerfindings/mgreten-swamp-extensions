@@ -56,6 +56,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-s3-site-deploy.git'
       ref: c08aade3b873de052fc858c502c7544428161cd1
+  - name: '@mgreten/bottleneck-ranking'
+    path: packages/bottleneck-ranking
+    manifest: packages/bottleneck-ranking/manifest.yaml
+    version: 2026.10.14.1
+    contentHash: 'sha256:c10c981910a892e53fa3f8a6d8eb0e1b768be8c7f9f78da172380aba7f83bace'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'git@github.com:meagerfindings/swamp-bottleneck-ranking.git'
+      ref: 99ac06424a1a00a7c2bbaba30e3b5a778191e896
   - name: '@mgreten/brief-sanitize'
     path: packages/brief-sanitize
     manifest: packages/brief-sanitize/extensions/models/manifest.yaml

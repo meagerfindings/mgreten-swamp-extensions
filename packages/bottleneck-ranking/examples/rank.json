@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "1.0",
+  "rankingId": "example-bottlenecks",
+  "evaluatedAt": "2026-08-23T12:00:00Z",
+  "policy": {
+    "scales": [
+      {
+        "criterion": "customerValue",
+        "minimum": 0,
+        "maximum": 10,
+        "preferredDirection": "higher",
+        "normalization": "linear_min_max",
+        "weight": 4
+      },
+      {
+        "criterion": "confidence",
+        "minimum": 0,
+        "maximum": 10,
+        "preferredDirection": "higher",
+        "normalization": "linear_min_max",
+        "weight": 2
+      },
+      {
+        "criterion": "strategicFit",
+        "minimum": 0,
+        "maximum": 10,
+        "preferredDirection": "higher",
+        "normalization": "linear_min_max",
+        "weight": 2
+      },
+      {
+        "criterion": "economicValue",
+        "minimum": 0,
+        "maximum": 10,
+        "preferredDirection": "higher",
+        "normalization": "linear_min_max",
+        "weight": 3
+      },
+      {
+        "criterion": "risk",
+        "minimum": 0,
+        "maximum": 10,
+        "preferredDirection": "lower",
+        "normalization": "linear_min_max",
+        "weight": 2
+      },
+      {
+        "criterion": "effort",
+        "minimum": 0,
+        "maximum": 10,
+        "preferredDirection": "lower",
+        "normalization": "linear_min_max",
+        "weight": 1
+      }
+    ],
+    "missingData": "exclude_and_reweight",
+    "tieBreak": "candidate_id_ascending"
+  },
+  "evidence": [
+    {
+      "evidenceId": "interview-42",
+      "evidenceLink": "https://example.test/research/interview-42",
+      "observation": "Synthetic example evidence.",
+      "sourceReference": {
+        "schemaVersion": "1.0",
+        "sourceId": "research-42",
+        "source": {
+          "system": "research",
+          "resourceType": "interview",
+          "resourceId": "42"
+        },
+        "provenance": {
+          "collector": "analyst",
+          "collectorVersion": "1",
+          "method": "synthetic",
+          "collectedAt": "2026-08-23T10:00:00Z"
+        },
+        "observedAt": "2026-08-23T09:00:00Z",
+        "freshness": {
+          "asOf": "2026-08-23T10:00:00Z",
+          "expiresAt": "2026-09-23T10:00:00Z"
+        },
+        "sensitivity": "internal"
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "candidateId": "activation",
+      "title": "Activation friction",
+      "ratings": [
+        {
+          "criterion": "customerValue",
+          "value": 9,
+          "evidenceIds": ["interview-42"],
+          "missingReason": null
+        },
+        {
+          "criterion": "confidence",
+          "value": 8,
+          "evidenceIds": ["interview-42"],
+          "missingReason": null
+        },
+        {
+          "criterion": "strategicFit",
+          "value": 7,
+          "evidenceIds": ["interview-42"],
+          "missingReason": null
+        },
+        {
+          "criterion": "economicValue",
+          "value": 8,
+          "evidenceIds": ["interview-42"],
+          "missingReason": null
+        },
+        {
+          "criterion": "risk",
+          "value": 3,
+          "evidenceIds": ["interview-42"],
+          "missingReason": null
+        },
+        {
+          "criterion": "effort",
+          "value": 4,
+          "evidenceIds": ["interview-42"],
+          "missingReason": null
+        }
+      ]
+    }
+  ]
+}
