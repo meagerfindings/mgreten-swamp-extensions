@@ -524,8 +524,8 @@ packages:
   - name: '@mgreten/hermes-config'
     path: packages/hermes-config
     manifest: packages/hermes-config/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:4221e9181a5a455af9a87372b8eec479dbf6d9db16de06d78ac71a579d88f7c6'
+    version: 2026.11.06.1
+    contentHash: 'sha256:d1f9a4110181f83cd6cb7d633d477d8726a05f627747a6dc10bcea168b0ed920'
     tests: deterministic
     dependsOn: []
     source:
