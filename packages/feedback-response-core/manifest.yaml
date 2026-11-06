@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/feedback-response-core"
-version: 2026.10.14.1
+version: "2026.11.06.1"
 description: "Privacy-bounded feedback classification and draft generation with no external integrations."
 repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 license: MIT

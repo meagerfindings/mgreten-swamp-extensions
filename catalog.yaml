@@ -312,8 +312,8 @@ packages:
   - name: '@mgreten/feedback-response-core'
     path: packages/feedback-response-core
     manifest: packages/feedback-response-core/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:3254419d2a113263248251fbe41c3af96c19cbf84e0e0154b27fcd1176caf7bd'
+    version: 2026.11.06.1
+    contentHash: 'sha256:6d93eef21d7a62c4e7d70429ae0d0b8f2462ddb225c860972d2d67d08fff9f40'
     tests: deterministic
     dependsOn: []
     source:
