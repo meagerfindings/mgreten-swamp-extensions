@@ -923,8 +923,8 @@ packages:
   - name: '@mgreten/tailscale-oauth-client'
     path: packages/tailscale-oauth-client
     manifest: packages/tailscale-oauth-client/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:4d60261a2533138a37a0981226e568e7afdf8f9e0c33e1c742012bdcb250f1a9'
+    version: 2026.11.06.1
+    contentHash: 'sha256:1bb6539410fd53bc3cf4512371d26bf08cd0c07061a1321d0b2a4d6a85d40a2b'
     tests: deterministic
     dependsOn: []
     source:
