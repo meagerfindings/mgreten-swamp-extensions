@@ -332,8 +332,8 @@ packages:
   - name: '@mgreten/git-worktree-doctor'
     path: packages/git-worktree-doctor
     manifest: packages/git-worktree-doctor/extensions/models/manifest.yaml
-    version: 2026.10.14.1
-    contentHash: 'sha256:183579fa90b194205f3ff8d4aa76e03eb8ae3a9139265b8e8b3b7ec0ce7b9731'
+    version: 2026.11.06.1
+    contentHash: 'sha256:c8a18d62fde33c00ee9efe289dc85fef455640ae75b1c3ad205f7fc3c3844989'
     tests: deterministic
     dependsOn: []
     source:
