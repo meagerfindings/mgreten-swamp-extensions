@@ -1,4 +1,4 @@
-swampVersion: 20261106.012700.0
+swampVersion: 20261106.094050.0
 initializedAt: "2026-10-30T21:09:25.140Z"
 repoId: 084e0809-bec4-4cb9-84cb-f2f45c79089c
 tools: []
@@ -25,4 +25,4 @@ datastore:
 trustedCollectives:
   - swamp
   - mgreten
-upgradedAt: "2026-11-07T02:43:01.319Z"
+upgradedAt: "2026-11-07T10:38:27.843Z"
