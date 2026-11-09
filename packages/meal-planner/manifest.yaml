@@ -1,0 +1,24 @@
+manifestVersion: 1
+name: "@mgreten/meal-planner"
+version: "2026.11.09.1"
+description: >
+  App-specific Swamp Serve executor for queued meal-planning operations. Requires
+  the separately deployed private meal-planner storage/auth API; it is not a
+  standalone planner.
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
+license: MIT
+paths:
+  base: manifest
+models:
+  - extensions/models/meal_planner_runtime.ts
+include:
+  - extensions/domain.ts
+additionalFiles:
+  - README.md
+  - LICENSE
+dependencies:
+  - "@mgreten/mealie"
+labels:
+  - meal-planning
+  - swamp-serve
+  - private-storage-api
