@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@mgreten/mealie"
+version: "2026.11.09.2"
+license: MIT
+description: "Bounded Mealie recipe API access for Swamp behaviors and reusable clients."
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
+models:
+  - mealie.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - mod.ts
+  - extensions/models/mealie.ts
+  - README.md
+  - LICENSE
