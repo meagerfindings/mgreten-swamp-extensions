@@ -421,6 +421,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-git-worktree-doctor.git'
       ref: f27d5a917f00dfbf9a33affeb288d8466641c544
+  - name: '@mgreten/github-draft-submit'
+    path: packages/github-draft-submit
+    manifest: packages/github-draft-submit/extensions/models/manifest.yaml
+    version: 2026.11.10.1
+    contentHash: 'sha256:5e0b8e80fe3412dc8c656c882485522a536b4d803432cf2d77112fa00db40f66'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'https://github.com/meagerfindings/mgreten-swamp-extensions'
+      ref: 576db1480e47b9e8e8c50a7ab7847bbbe0b82f7e
   - name: '@mgreten/github-file-track'
     path: packages/github-file-track
     manifest: packages/github-file-track/extensions/models/manifest.yaml
@@ -431,6 +441,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-github-file-track.git'
       ref: 6f99a9fb50e1a2356bd65b68c3cb50c19a346942
+  - name: '@mgreten/github-linear-sync'
+    path: packages/github-linear-sync
+    manifest: packages/github-linear-sync/extensions/models/manifest.yaml
+    version: 2026.11.10.1
+    contentHash: 'sha256:9307ff23b2a820579cf6cab668909b9455ccc8f44c6f3147ed8a2cb23d4486f7'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'https://github.com/meagerfindings/mgreten-swamp-extensions'
+      ref: 576db1480e47b9e8e8c50a7ab7847bbbe0b82f7e
   - name: '@mgreten/github-pr-feed'
     path: packages/github-pr-feed
     manifest: packages/github-pr-feed/extensions/models/manifest.yaml
@@ -451,6 +471,16 @@ packages:
     source:
       repo: 'git@github.com:meagerfindings/swamp-github-pr-feedback.git'
       ref: 50c538ac84ee1e12c9cd069b0c47896c2d822fb2
+  - name: '@mgreten/github-stack'
+    path: packages/github-stack
+    manifest: packages/github-stack/extensions/models/manifest.yaml
+    version: 2026.11.10.1
+    contentHash: 'sha256:b01984b81f342c5e3f4d30922bdd04e475bb4f77f44bdc96bc37b20a8b0c2eff'
+    tests: deterministic
+    dependsOn: []
+    source:
+      repo: 'https://github.com/meagerfindings/mgreten-swamp-extensions'
+      ref: 576db1480e47b9e8e8c50a7ab7847bbbe0b82f7e
   - name: '@mgreten/gmail-read'
     path: packages/gmail-read
     manifest: packages/gmail-read/extensions/models/manifest.yaml
