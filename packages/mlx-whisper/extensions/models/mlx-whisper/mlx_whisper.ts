@@ -37,6 +37,18 @@ const TranscriptResourceSchema = z.object({
   language: z.string().optional().describe("Detected language code"),
 });
 
+/**
+ * Python's json.dump writes non-finite floats as bare `NaN`, `Infinity` and
+ * `-Infinity`, which mlx_whisper emits for some segments and JSON.parse
+ * rejects. Replace those tokens with `null`, leaving string contents alone.
+ */
+export function toStrictJson(text: string): string {
+  return text.replace(
+    /"(?:[^"\\]|\\.)*"|-?\b(?:NaN|Infinity)\b/g,
+    (match) => (match.startsWith('"') ? match : "null"),
+  );
+}
+
 /** MLX Whisper transcription model — see module doc for full details. */
 export const model = {
   type: "@mgreten/mlx-whisper",
@@ -105,7 +117,9 @@ export const model = {
           }
 
           const transcriptPath = `${tmpDir}/${stem}.json`;
-          const transcriptJson = await Deno.readTextFile(transcriptPath);
+          const transcriptJson = toStrictJson(
+            await Deno.readTextFile(transcriptPath),
+          );
           const data: { segments?: unknown[]; language?: string } = JSON.parse(
             transcriptJson,
           );
