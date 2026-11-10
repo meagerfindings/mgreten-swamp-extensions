@@ -1238,8 +1238,8 @@ packages:
   - name: '@mgreten/unifi-cve-watcher'
     path: packages/unifi-cve-watcher
     manifest: packages/unifi-cve-watcher/extensions/models/unifi-cve-watcher/manifest.yaml
-    version: 2026.11.06.1
-    contentHash: 'sha256:67f2422db3c11ce940d55c0cf024dcdefcbf18d1652fbd8a16c39f0f5bd18aa4'
+    version: 2026.11.10.1
+    contentHash: 'sha256:b583b432c159e8f875cde798d709c8998612b6e330021b0f3554521df2b205c7'
     tests: deterministic
     dependsOn: []
     source:
