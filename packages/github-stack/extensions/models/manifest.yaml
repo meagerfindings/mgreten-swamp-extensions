@@ -1,0 +1,28 @@
+manifestVersion: 1
+name: "@mgreten/github-stack"
+version: "2026.11.10.1"
+license: MIT
+description: >
+  Composition lifecycle for a GitHub native multi-PR stack (gh stack) —
+  validate a declared linear plan, finalize one-commit units, cascade restacks,
+  pin a composed head, and submit gated, idempotent, ordered draft PRs linked
+  as one GitHub stack. Non-interactive only.
+
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
+
+models:
+  - github_stack.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+labels:
+  - git
+  - github
+  - stacked-prs
+  - pull-request
+
+platforms: []
+
+dependencies: []
