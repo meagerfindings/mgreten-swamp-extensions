@@ -1,0 +1,37 @@
+manifestVersion: 1
+name: "@mgreten/pr-tour"
+version: "2026.11.10.1"
+license: MIT
+description: >-
+  Turn a GitHub pull request into a guided code tour: an agent orders the
+  real diff hunks into narrated stops that follow the change's logic, a
+  validator checks every line is placed exactly once, and a report writes a
+  self-contained, themeable side-by-side HTML page you serve and open in a
+  browser. For reviewers who want to read someone else's PR in a sensible
+  order.
+repository: "https://github.com/meagerfindings/swamp-pr-tour"
+
+models:
+  - pr_tour.ts
+
+reports:
+  - pr_tour_report.ts
+
+workflows:
+  - workflow-pr-tour.yaml
+
+additionalFiles:
+  - README.md
+  - SETUP.md
+  - LICENSE.txt
+
+platforms: []
+
+labels:
+  - github
+  - pull-request
+  - code-review
+  - tour
+
+dependencies:
+  - "@mgreten/cli-agent"
