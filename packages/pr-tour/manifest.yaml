@@ -9,7 +9,7 @@ description: >-
   self-contained, themeable side-by-side HTML page you serve and open in a
   browser. For reviewers who want to read someone else's PR in a sensible
   order.
-repository: "https://github.com/meagerfindings/swamp-pr-tour"
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
 
 models:
   - pr_tour.ts
