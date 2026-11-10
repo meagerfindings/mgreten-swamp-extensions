@@ -860,8 +860,8 @@ packages:
   - name: '@mgreten/pr-tour'
     path: packages/pr-tour
     manifest: packages/pr-tour/manifest.yaml
-    version: 2026.11.10.1
-    contentHash: 'sha256:0f0ab6f30e45a6f4c5600c1473c984e988d6c728e55047a5179009f39bf96877'
+    version: 2026.11.10.2
+    contentHash: 'sha256:c21abf35a6f105fd800fa21ffba4b37fca831f246be6a63ef850161ce79fec49'
     tests: deterministic
     dependsOn:
       - '@mgreten/cli-agent'

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@mgreten/pr-tour"
-version: "2026.11.10.1"
+version: "2026.11.10.2"
 license: MIT
 description: >-
   Turn a GitHub pull request into a guided code tour: an agent orders the
