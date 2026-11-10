@@ -1,0 +1,42 @@
+id: da69739b-e9fe-49eb-afea-606d0e57cccf
+name: "@mgreten/pr-tour"
+description: >-
+  Build a guided code tour of a PR on demand and write its HTML page. Run it
+  with `swamp workflow run @mgreten/pr-tour --input prNumber=N`, or POST
+  `{"prNumber": N}` to a `swamp serve --webhook` route that names this
+  workflow. The step runs `build` on the `pr-tour` model instance, which
+  reuses the stored tour when one exists for the PR's current head SHA, and
+  @mgreten/pr-tour-report writes <pagesDir>/<prNumber>.html. Read-only toward
+  GitHub. To rebuild a tour for the same SHA, run
+  `swamp model method run pr-tour build --input prNumber=N --input force=true`.
+tags:
+  domain: pr-review
+  category: tour
+inputs:
+  type: object
+  properties:
+    prNumber:
+      type: number
+      description: PR number to tour.
+  required:
+    - prNumber
+trigger:
+  inputs:
+    prNumber: "${{ webhook.body.prNumber }}"
+jobs:
+  - name: main
+    description: Build the tour and render its page.
+    steps:
+      - name: build
+        task:
+          type: model_method
+          modelIdOrName: pr-tour
+          methodName: build
+          inputs:
+            prNumber: ${{ inputs.prNumber }}
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1
