@@ -282,6 +282,33 @@ Deno.test("compileDay builds the docker exec ffmpeg command with container paths
   });
 });
 
+Deno.test("compilation rejects invalid frame counts without publishing a video", async () => {
+  for (const count of ["", "not a count", "12 frames", "-1", "1.5"]) {
+    for (const method of ["compileDay", "compileDays"] as const) {
+      const { context, writes } = makeContext();
+      await withFakeSsh(
+        (remote) => remote.includes("sort -u") ? ok("20260601") : ok(count),
+        async (calls) => {
+          await assertRejects(
+            () =>
+              model.methods[method].execute(
+                { date: "2026-06-01", phase: "p", fps: 30, crf: 23 },
+                context,
+              ),
+            Error,
+            "Invalid frame count",
+          );
+          assertEquals(
+            remotes(calls).some((r) => r.startsWith("docker exec")),
+            false,
+          );
+        },
+      );
+      assertEquals(writes, []);
+    }
+  }
+});
+
 Deno.test("compileDay with zero frames throws before ffmpeg runs", async () => {
   const { context, writes } = makeContext();
   await withFakeSsh(() => ok("0"), async (calls) => {
@@ -405,6 +432,30 @@ Deno.test("compileDays errors on an empty range and when every day is empty", as
   assertEquals(first.writes.length + second.writes.length, 0);
 });
 
+Deno.test("startPhase preserves phase state on read or parse errors", async () => {
+  for (
+    const response of [
+      fail("Permission denied"),
+      { code: 255, stderr: "Connection closed" },
+      ok('{"phases": ['),
+      ok("{}"),
+      ok('{"phases": null}'),
+    ]
+  ) {
+    const { context, writes } = makeContext();
+    await withFakeSsh(
+      (remote) => remote.startsWith("mkdir") ? ok() : response,
+      async (calls) => {
+        await assertRejects(() =>
+          model.methods.startPhase.execute({ phase: "new" }, context)
+        );
+        assertEquals(remotes(calls).some((r) => r.includes("open(")), false);
+      },
+    );
+    assertEquals(writes, []);
+  }
+});
+
 Deno.test("startPhase appends to existing phases.json and writes it back", async () => {
   const { context, writes } = makeContext();
   const phasesFile = `${ROOT}/${CAM}/phases.json`;
@@ -418,7 +469,7 @@ Deno.test("startPhase appends to existing phases.json and writes it back", async
   };
   let writeCmd = "";
   await withFakeSsh((remote) => {
-    if (remote.startsWith("cat ")) return ok(JSON.stringify(existing));
+    if (remote.includes("read_text()")) return ok(JSON.stringify(existing));
     if (remote.startsWith("python3")) writeCmd = remote;
     return ok();
   }, async (calls) => {
@@ -428,7 +479,7 @@ Deno.test("startPhase appends to existing phases.json and writes it back", async
     );
     assertEquals(remotes(calls).slice(0, 2), [
       `mkdir -p "${ROOT}/${CAM}/snapshots/framing" "${ROOT}/${CAM}/videos/framing"`,
-      `cat "${phasesFile}"`,
+      `python3 -c "from pathlib import Path; import json\ntry:\n print(Path('${phasesFile}').read_text())\nexcept FileNotFoundError:\n print(json.dumps(dict(phases=[])))"`,
     ]);
     assertEquals(calls.length, 3);
   });
@@ -459,7 +510,7 @@ Deno.test("startPhase creates phases.json when missing and rejects duplicates", 
   const fresh = makeContext();
   let writeCmd = "";
   await withFakeSsh((remote) => {
-    if (remote.startsWith("cat ")) return fail();
+    if (remote.includes("read_text()")) return ok('{"phases": []}');
     if (remote.startsWith("python3")) writeCmd = remote;
     return ok();
   }, async () => {
@@ -477,7 +528,7 @@ Deno.test("startPhase creates phases.json when missing and rejects duplicates", 
   const dup = makeContext();
   await withFakeSsh(
     (remote) =>
-      remote.startsWith("cat ")
+      remote.includes("read_text()")
         ? ok(JSON.stringify({
           phases: [{ name: "site", startDate: "2026-01-01", status: "active" }],
         }))
@@ -488,7 +539,7 @@ Deno.test("startPhase creates phases.json when missing and rejects duplicates", 
         Error,
         `Phase 'site' already exists in ${ROOT}/${CAM}/phases.json.`,
       );
-      assertEquals(remotes(calls).some((r) => r.startsWith("python3")), false);
+      assertEquals(remotes(calls).some((r) => r.includes("open(")), false);
     },
   );
   assertEquals(dup.writes.length, 0);

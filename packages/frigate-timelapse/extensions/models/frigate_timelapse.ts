@@ -457,7 +457,12 @@ export const model = {
           sshHost,
           `find "${snapshotDir}" -maxdepth 1 -name '${dateCompact}_*.jpg' | wc -l`,
         );
-        const frameCount = parseInt(countStr.trim(), 10);
+        const frameCount = Number(countStr);
+        if (
+          !/^\d+$/.test(countStr.trim()) || !Number.isSafeInteger(frameCount)
+        ) {
+          throw new Error(`Invalid frame count for date ${date}`);
+        }
 
         if (frameCount === 0) {
           throw new Error(
@@ -637,7 +642,12 @@ export const model = {
             sshHost,
             `find "${snapshotDir}" -maxdepth 1 -name '${dateCompact}_*.jpg' | wc -l`,
           );
-          const frameCount = parseInt(countStr.trim(), 10);
+          const frameCount = Number(countStr);
+          if (
+            !/^\d+$/.test(countStr.trim()) || !Number.isSafeInteger(frameCount)
+          ) {
+            throw new Error(`Invalid frame count for date ${dateCompact}`);
+          }
 
           if (frameCount === 0) {
             context.logger.warning(
@@ -771,17 +781,14 @@ export const model = {
 
         // Load or initialise phases.json.
         // Format on disk: {"phases": [...]} — an object wrapper to allow future metadata.
-        let phases: z.infer<typeof PhaseEntrySchema>[] = [];
-        try {
-          const raw = await sshExec(sshHost, `cat "${phasesFile}"`);
-          const parsed = JSON.parse(raw) as {
-            phases?: z.infer<typeof PhaseEntrySchema>[];
-          };
-          phases = parsed.phases ?? [];
-        } catch {
-          // File does not exist yet — start with empty list
-          phases = [];
-        }
+        // Only a missing file is empty; read and parse errors must not overwrite state.
+        const raw = await sshExec(
+          sshHost,
+          `python3 -c "from pathlib import Path; import json\ntry:\n print(Path('${phasesFile}').read_text())\nexcept FileNotFoundError:\n print(json.dumps(dict(phases=[])))"`,
+        );
+        const { phases } = z.object({
+          phases: z.array(PhaseEntrySchema.passthrough()),
+        }).parse(JSON.parse(raw));
 
         // Check for duplicate
         if (phases.some((p) => p.name === phase)) {
