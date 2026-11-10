@@ -1,0 +1,649 @@
+// MIT License
+//
+// Copyright (c) 2026 Mat Greten
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+/**
+ * @module github_draft_submit
+ *
+ * A standalone swamp model that submits an already-validated Git commit as a
+ * **draft** GitHub pull request (`git push` + `gh pr create --draft`) and
+ * independently verifies the result with the GitHub CLI (`gh`). It no longer
+ * uses Graphite, and a single draft PR needs no stack tooling.
+ * `@mgreten/graphite-draft-submit` is the Graphite (`gt`) counterpart.
+ *
+ * The model is deliberately conservative. It never mutates the working tree,
+ * never amends or rewrites the commit, and refuses to submit unless the checkout
+ * matches exactly what the caller says it validated:
+ *
+ * - the current branch must equal `expectedBranch` (no detached HEAD);
+ * - the worktree must be clean (`git status --porcelain` empty);
+ * - `HEAD` must equal `expectedHeadSha`.
+ *
+ * After pushing the branch and creating the draft PR, it queries `gh pr view` and requires
+ * the returned pull request to point at the validated SHA, branch and base, and
+ * to be a draft. Any mismatch is recorded on the persisted `pullRequest`
+ * resource (`success: false`) and the method throws, so a bad submission never
+ * looks like a good one.
+ *
+ * The base branch is configurable per invocation and defaults to `main`.
+ *
+ * Prerequisites on the host running the method: `git` and `gh` (GitHub CLI,
+ * authenticated) on `PATH`. Declared as model checks.
+ */
+
+import { z } from "npm:zod@4";
+import type {
+  DataHandle,
+  MethodContext,
+  MethodResult,
+} from "jsr:@systeminit/swamp-testing@0.20260604.20";
+
+/**
+ * Global arguments for the model. This model needs no persistent global
+ * configuration — every input is supplied per method call — so the schema is
+ * an empty object.
+ */
+export const GlobalArgsSchema: z.ZodObject<Record<string, never>> = z.object(
+  {},
+);
+
+/**
+ * A path-safe work-item identifier. Used to name the persisted pull-request
+ * record (`pull-request-<workItem>`), so it must not contain path separators.
+ */
+export const WorkItemSchema: z.ZodString = z.string().min(1).regex(
+  /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/,
+  "workItem must be path-safe",
+);
+
+/** An absolute filesystem path to the repository checkout to submit from. */
+export const AbsolutePathSchema: z.ZodString = z.string().min(1).regex(
+  /^\//,
+  "repoPath must be absolute",
+);
+
+/** A full 40-character lowercase-hex Git SHA-1. */
+export const CommitShaSchema: z.ZodString = z.string().regex(
+  /^[0-9a-f]{40}$/,
+  "commit SHA must be a full 40-character Git SHA-1",
+);
+
+/**
+ * The persisted draft pull-request record. `draft` is a literal `true`: this
+ * model only ever produces draft pull requests. `success` reflects whether the
+ * independent GitHub verification passed; `prUrl`/`prNumber` are present when
+ * GitHub returned a pull request.
+ */
+export const PullRequestSchema: z.ZodObject<{
+  workItem: z.ZodString;
+  success: z.ZodBoolean;
+  draft: z.ZodLiteral<true>;
+  prUrl: z.ZodOptional<z.ZodString>;
+  prNumber: z.ZodOptional<z.ZodNumber>;
+  url: z.ZodOptional<z.ZodString>;
+  number: z.ZodOptional<z.ZodNumber>;
+  branch: z.ZodString;
+  baseBranch: z.ZodString;
+  commitSha: z.ZodString;
+  summary: z.ZodString;
+  submittedAt: z.ZodString;
+}> = z.object({
+  workItem: z.string(),
+  success: z.boolean(),
+  draft: z.literal(true),
+  prUrl: z.string().optional(),
+  prNumber: z.number().int().optional(),
+  url: z.string().optional(),
+  number: z.number().int().optional(),
+  branch: z.string(),
+  baseBranch: z.string(),
+  commitSha: z.string(),
+  summary: z.string(),
+  submittedAt: z.string(),
+});
+
+/**
+ * The subset of `gh pr view --json` fields this model reads to independently
+ * verify the pull request that was created.
+ */
+export const GitHubPullRequestSchema: z.ZodObject<{
+  url: z.ZodString;
+  number: z.ZodNumber;
+  state: z.ZodLiteral<"OPEN">;
+  isDraft: z.ZodBoolean;
+  headRefName: z.ZodString;
+  headRefOid: z.ZodString;
+  baseRefName: z.ZodString;
+}> = z.object({
+  url: z.string().url(),
+  number: z.number().int().positive(),
+  state: z.literal("OPEN"),
+  isDraft: z.boolean(),
+  headRefName: z.string().min(1),
+  headRefOid: CommitShaSchema,
+  baseRefName: z.string().min(1),
+});
+
+/** The result of running a single external command via {@link runCommand}. */
+export interface CommandResult {
+  success: boolean;
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * The method-execution context this model relies on: the swamp-provided
+ * {@link MethodContext} with a concretely-typed `writeResource` for persisting
+ * the {@link PullRequestSchema} record.
+ */
+export type RuntimeContext =
+  & Omit<MethodContext<Record<string, unknown>>, "writeResource">
+  & {
+    writeResource: (
+      specName: string,
+      name: string,
+      data: Record<string, unknown>,
+      overrides?: { tags?: Record<string, string> },
+    ) => Promise<DataHandle>;
+  };
+
+/**
+ * Run an external command in `cwd`, capturing stdout/stderr as trimmed strings.
+ * A thin wrapper over `Deno.Command` used for all `git` and `gh` calls.
+ */
+export async function runCommand(
+  command: string[],
+  cwd: string,
+): Promise<CommandResult> {
+  const output = await new Deno.Command(command[0], {
+    args: command.slice(1),
+    cwd,
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+
+  return {
+    success: output.success,
+    code: output.code,
+    stdout: new TextDecoder().decode(output.stdout).trim(),
+    stderr: new TextDecoder().decode(output.stderr).trim(),
+  };
+}
+
+/**
+ * Return `true` if an executable named `name` exists as a file on any `PATH`
+ * entry. Used by the model checks to verify `git` and `gh` are installed.
+ */
+export async function commandAvailable(name: string): Promise<boolean> {
+  for (const directory of (Deno.env.get("PATH") ?? "").split(":")) {
+    if (!directory) continue;
+    try {
+      const stat = await Deno.stat(`${directory}/${name}`);
+      if (stat.isFile) return true;
+    } catch { /* continue searching PATH */ }
+  }
+  return false;
+}
+
+/**
+ * Create and populate the temporary PR body file, removing it if population
+ * fails after creation. The writer parameter is a narrow test seam for the
+ * otherwise hard-to-inject OS write failure between those two operations.
+ */
+export async function writeTemporaryBodyFile(
+  workItem: string,
+  body: string,
+  write: (path: string, body: string) => Promise<void> = Deno.writeTextFile,
+): Promise<string> {
+  const path = await Deno.makeTempFile({
+    prefix: `pr-body-${workItem}-`,
+    suffix: ".md",
+  });
+  try {
+    await write(path, body);
+    return path;
+  } catch (error) {
+    await Deno.remove(path).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Arguments accepted by the {@link model}'s `shipDraft` method. */
+export const ShipDraftArgsSchema: z.ZodObject<{
+  workItem: z.ZodString;
+  repoPath: z.ZodString;
+  baseBranch: z.ZodDefault<z.ZodString>;
+  expectedHeadSha: z.ZodString;
+  expectedBranch: z.ZodString;
+  submissionMode: z.ZodDefault<
+    z.ZodEnum<{ create: "create"; update: "update" }>
+  >;
+  draft: z.ZodDefault<z.ZodLiteral<true>>;
+  title: z.ZodOptional<z.ZodString>;
+  body: z.ZodOptional<z.ZodString>;
+}> = z.object({
+  workItem: WorkItemSchema,
+  repoPath: AbsolutePathSchema,
+  baseBranch: z.string().min(1).default("main"),
+  expectedHeadSha: CommitShaSchema,
+  expectedBranch: z.string().min(1),
+  submissionMode: z.enum(["create", "update"]).default("create"),
+  draft: z.literal(true).default(true),
+  // Optional pull-request title and body. When `body` is provided, the caller
+  // owns the description (e.g. a house-style PR narrative generated upstream):
+  // the PR is opened with `--title`/`--body` instead of gh `--fill`,
+  // and an already-open PR has its body refreshed via `gh pr edit`. When
+  // omitted, submission falls back to `--fill` (the commit message) exactly as
+  // before, so existing callers are unaffected. `title` defaults to the commit
+  // subject when only `body` is given.
+  title: z.string().min(1).optional(),
+  body: z.string().optional(),
+});
+
+/**
+ * The swamp model. Exposes a single method, `shipDraft`, which submits a
+ * validated commit as a draft GitHub pull request with git and gh and verifies it
+ * independently through the GitHub CLI. Declares checks for the required CLIs.
+ */
+export const model = {
+  type: "@mgreten/github-draft-submit",
+  version: "2026.08.11.1",
+  globalArguments: GlobalArgsSchema,
+  resources: {
+    pullRequest: {
+      description: "The draft pull request produced for a work item",
+      schema: PullRequestSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+  },
+  checks: {
+    "git-available": {
+      description: "Verify git is available for checkout validation",
+      labels: ["dependency"],
+      appliesTo: ["shipDraft"],
+      execute: async (): Promise<{ pass: boolean; errors?: string[] }> =>
+        await commandAvailable("git")
+          ? { pass: true }
+          : { pass: false, errors: ["Missing required tool: git"] },
+    },
+    "submission-tools-available": {
+      description: "Verify the GitHub CLI dependency before submission",
+      labels: ["dependency"],
+      appliesTo: ["shipDraft"],
+      execute: async (): Promise<{ pass: boolean; errors?: string[] }> => {
+        const missing: string[] = [];
+        for (const command of ["gh"]) {
+          if (!await commandAvailable(command)) missing.push(command);
+        }
+        return missing.length === 0 ? { pass: true } : {
+          pass: false,
+          errors: [`Missing required tools: ${missing.join(", ")}`],
+        };
+      },
+    },
+  },
+  methods: {
+    shipDraft: {
+      description:
+        "Push an unchanged validated commit and open (or reuse) a draft GitHub pull request, then require it to point at the validated SHA, branch and base",
+      arguments: ShipDraftArgsSchema,
+      execute: async (
+        args: {
+          workItem: string;
+          repoPath: string;
+          baseBranch: string;
+          expectedHeadSha: string;
+          expectedBranch: string;
+          submissionMode?: "create" | "update";
+          draft: true;
+          title?: string;
+          body?: string;
+        },
+        context: RuntimeContext,
+      ): Promise<MethodResult> => {
+        context.logger.info("Preparing draft submission for {workItem}", {
+          workItem: args.workItem,
+        });
+        const submissionMode = args.submissionMode ?? "create";
+        const branchResult = await runCommand(
+          ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+          args.repoPath,
+        );
+        const branch = branchResult.stdout;
+        if (!branchResult.success || branch === "HEAD") {
+          throw new Error("cannot ship a detached checkout");
+        }
+        if (branch !== args.expectedBranch) {
+          throw new Error(
+            `refusing to submit ${branch}; expected ${args.expectedBranch}`,
+          );
+        }
+        const validBranch = await runCommand(
+          ["git", "check-ref-format", "--branch", branch],
+          args.repoPath,
+        );
+        if (!validBranch.success) {
+          throw new Error(`refusing to submit invalid branch ${branch}`);
+        }
+
+        const status = await runCommand(
+          ["git", "status", "--porcelain", "--untracked-files=all"],
+          args.repoPath,
+        );
+        const head = await runCommand(
+          ["git", "rev-parse", "HEAD"],
+          args.repoPath,
+        );
+        if (!status.success || status.stdout !== "") {
+          throw new Error("refusing to submit a dirty worktree");
+        }
+        if (!head.success || head.stdout !== args.expectedHeadSha) {
+          throw new Error("refusing to submit a commit that was not validated");
+        }
+
+        const expectedBase = args.baseBranch.replace(/^origin\//, "");
+        const validBase = await runCommand(
+          ["git", "check-ref-format", "--branch", expectedBase],
+          args.repoPath,
+        );
+        if (!validBase.success) {
+          throw new Error(
+            `refusing to submit invalid base branch ${expectedBase}`,
+          );
+        }
+
+        // When the caller supplies a body, persist it to a temp file so it
+        // survives multi-line/markdown content without shell-quoting hazards,
+        // and resolve the title (explicit arg, else the commit subject). The
+        // file is best-effort cleaned up at the end of the method.
+        let bodyFile: string | null = null;
+        let prTitle: string | null = args.title ?? null;
+        if (args.body !== undefined) {
+          if (!prTitle) {
+            const subject = await runCommand(
+              ["git", "log", "-1", "--format=%s", args.expectedHeadSha],
+              args.repoPath,
+            );
+            prTitle = subject.success && subject.stdout
+              ? subject.stdout
+              : args.expectedBranch;
+          }
+          bodyFile = await writeTemporaryBodyFile(args.workItem, args.body);
+        }
+
+        try {
+          let updatePr: z.infer<typeof GitHubPullRequestSchema> | null = null;
+          if (submissionMode === "update") {
+            const view = await runCommand(
+              [
+                "gh",
+                "pr",
+                "view",
+                branch,
+                "--json",
+                "url,number,state,isDraft,headRefName,headRefOid,baseRefName",
+              ],
+              args.repoPath,
+            );
+            if (!view.success) {
+              throw new Error(
+                "GitHub did not return the existing pull request for the branch",
+              );
+            }
+            let raw: unknown;
+            try {
+              raw = JSON.parse(view.stdout);
+            } catch {
+              throw new Error(
+                "GitHub returned malformed existing pull request data",
+              );
+            }
+            const parsed = GitHubPullRequestSchema.safeParse(raw);
+            if (!parsed.success) {
+              throw new Error(
+                "existing pull request is not open or has malformed data",
+              );
+            }
+            updatePr = parsed.data;
+            if (!updatePr.isDraft) {
+              throw new Error("existing pull request is not a draft");
+            }
+            if (updatePr.headRefName !== branch) {
+              throw new Error(
+                `existing pull request head is ${updatePr.headRefName}, expected ${branch}`,
+              );
+            }
+            if (updatePr.baseRefName !== expectedBase) {
+              throw new Error(
+                `existing pull request base is ${updatePr.baseRefName}, expected ${expectedBase}`,
+              );
+            }
+          }
+
+          // Create pushes ONLY this branch (never its parent) and opens a draft
+          // PR against the exact remote base; update force-pushes with a lease
+          // pinned to the existing PR head. The gh pr view verification below
+          // applies to both.
+          let submission = { success: false, stderr: "", stdout: "" };
+          if (submissionMode === "update") {
+            if (updatePr!.headRefOid !== args.expectedHeadSha) {
+              const push = await runCommand([
+                "git",
+                "push",
+                `--force-with-lease=refs/heads/${branch}:${
+                  updatePr!.headRefOid
+                }`,
+                "origin",
+                `refs/heads/${branch}:refs/heads/${branch}`,
+              ], args.repoPath);
+              if (!push.success) {
+                throw new Error(
+                  `git push failed: ${push.stderr || push.stdout}`,
+                );
+              }
+            }
+            submission = { success: true, stderr: "", stdout: "" };
+          } else {
+            const pushArgs = ["git", "push", "origin", `${branch}:${branch}`];
+            const push = await runCommand(
+              pushArgs,
+              args.repoPath,
+            );
+            if (push.success) {
+              const createArgs = [
+                "gh",
+                "pr",
+                "create",
+                "--draft",
+                "--base",
+                expectedBase,
+                "--head",
+                branch,
+              ];
+              // Caller-supplied body wins; otherwise fall back to --fill (commit).
+              if (bodyFile && prTitle) {
+                createArgs.push("--title", prTitle, "--body-file", bodyFile);
+              } else {
+                createArgs.push("--fill");
+              }
+              submission = await runCommand(createArgs, args.repoPath);
+              // Idempotent: if a PR for this branch already exists (e.g. a prior
+              // interrupted submit), that is not a failure — the `gh pr view`
+              // verification below confirms the existing PR points at the exact
+              // validated SHA/base and is a draft. Treat "already exists" as
+              // submitted.
+              if (
+                !submission.success &&
+                /already exists/i.test(submission.stderr + submission.stdout)
+              ) {
+                submission = { success: true, stderr: "", stdout: "" };
+              }
+            } else {
+              submission = {
+                success: false,
+                stderr: `git push failed: ${push.stderr}`,
+                stdout: "",
+              };
+            }
+          }
+          const submitted = submission.success;
+          const prSelector = updatePr ? String(updatePr.number) : branch;
+
+          // Apply the caller-supplied body to the resulting PR whenever one was
+          // provided. This covers update mode and the idempotent "already
+          // exists" case (whose PR may hold a stale/--fill body). The create
+          // path already set the body, so this is an idempotent refresh there. Best-effort: a failed edit does not fail submission, but is
+          // surfaced in the persisted summary below.
+          let bodyApplyError: string | null = null;
+          if (submitted && bodyFile) {
+            const edit = await runCommand(
+              ["gh", "pr", "edit", prSelector, "--body-file", bodyFile],
+              args.repoPath,
+            );
+            if (!edit.success) {
+              bodyApplyError = edit.stderr || edit.stdout;
+              context.logger.info(
+                "could not apply PR body for {workItem}: {error}",
+                { workItem: args.workItem, error: bodyApplyError },
+              );
+            }
+          }
+          let prInfo: z.infer<typeof GitHubPullRequestSchema> | null = null;
+          if (submitted) {
+            for (let attempt = 0; attempt < 3 && !prInfo; attempt++) {
+              if (attempt > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 1_000));
+              }
+              const view = await runCommand(
+                [
+                  "gh",
+                  "pr",
+                  "view",
+                  prSelector,
+                  "--json",
+                  "url,number,state,isDraft,headRefName,headRefOid,baseRefName",
+                ],
+                args.repoPath,
+              );
+              if (view.success) {
+                try {
+                  const parsed = GitHubPullRequestSchema.safeParse(
+                    JSON.parse(view.stdout),
+                  );
+                  if (parsed.success) prInfo = parsed.data;
+                } catch {
+                  prInfo = null;
+                }
+              }
+            }
+          }
+
+          const errors: string[] = [];
+          if (bodyApplyError && submissionMode === "update") {
+            errors.push(`could not apply PR body: ${bodyApplyError}`);
+          }
+          if (!submitted) {
+            errors.push(
+              `draft submission failed: ${
+                submission.stderr || submission.stdout
+              }`,
+            );
+          }
+          if (!prInfo) {
+            errors.push("GitHub did not return a pull request for the branch");
+          }
+          if (updatePr && prInfo && prInfo.number !== updatePr.number) {
+            errors.push(
+              `pull request number changed from ${updatePr.number} to ${prInfo.number}`,
+            );
+          }
+          if (
+            prInfo?.headRefName !== undefined && prInfo.headRefName !== branch
+          ) {
+            errors.push(
+              `pull request head is ${prInfo.headRefName}, expected ${branch}`,
+            );
+          }
+          if (
+            prInfo?.headRefOid !== undefined &&
+            prInfo.headRefOid !== args.expectedHeadSha
+          ) {
+            errors.push("pull request does not point at the validated commit");
+          }
+          if (
+            prInfo?.baseRefName !== undefined &&
+            prInfo.baseRefName !== expectedBase
+          ) {
+            errors.push(
+              `pull request base is ${prInfo.baseRefName}, expected ${expectedBase}`,
+            );
+          }
+          if (prInfo?.isDraft !== true) {
+            errors.push("pull request is not a draft");
+          }
+
+          const pullRequest = {
+            workItem: args.workItem,
+            success: errors.length === 0,
+            draft: true as const,
+            prUrl: prInfo?.url,
+            prNumber: prInfo?.number,
+            url: prInfo?.url,
+            number: prInfo?.number,
+            branch,
+            baseBranch: expectedBase,
+            commitSha: head.stdout,
+            summary: errors.length === 0
+              ? `Draft PR #${prInfo?.number} submitted for ${branch}` +
+                (bodyApplyError
+                  ? ` (warning: PR body not applied: ${bodyApplyError})`
+                  : "")
+              : errors.join("; "),
+            submittedAt: new Date().toISOString(),
+          };
+          const handle = await context.writeResource(
+            "pullRequest",
+            `pull-request-${args.workItem}`,
+            pullRequest,
+            {
+              tags: {
+                workItem: args.workItem,
+                success: String(pullRequest.success),
+              },
+            },
+          );
+          if (errors.length > 0) throw new Error(pullRequest.summary);
+
+          context.logger.info("Submitted {url}", { url: prInfo?.url });
+          return { dataHandles: [handle] };
+        } finally {
+          if (bodyFile) {
+            try {
+              await Deno.remove(bodyFile);
+            } catch { /* best-effort cleanup */ }
+          }
+        }
+      },
+    },
+  },
+};

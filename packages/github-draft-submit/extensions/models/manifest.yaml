@@ -1,0 +1,27 @@
+manifestVersion: 1
+name: "@mgreten/github-draft-submit"
+version: "2026.11.10.1"
+license: MIT
+description: >
+  Submit an already-validated Git commit as a draft GitHub pull request with
+  git and the GitHub CLI (no Graphite), then independently verify that the pull
+  request points at the validated SHA, branch and base and is a draft.
+
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
+
+models:
+  - github_draft_submit.ts
+
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+
+labels:
+  - git
+  - github
+  - pull-request
+  - ci
+
+platforms: []
+
+dependencies: []
