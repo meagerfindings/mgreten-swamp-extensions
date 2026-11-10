@@ -1,0 +1,26 @@
+manifestVersion: 1
+name: '@mgreten/github-linear-sync'
+version: "2026.11.10.1"
+license: MIT
+description: >-
+  Reconcile GitHub PR stacks (native stacked PRs) with Linear issue states —
+  scan PRs for ticket references, compare states, and transition Linear issues
+  to match.
+repository: "https://github.com/meagerfindings/mgreten-swamp-extensions"
+models:
+  - github_linear_sync.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports: []
+additionalFiles:
+  - README.md
+  - LICENSE.txt
+labels:
+  - linear
+  - github
+  - stacked-prs
+  - sync
+  - pr
+dependencies: []
