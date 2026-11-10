@@ -1227,3 +1227,20 @@ packages:
     manifest: extensions/models/frigate-footage-export/manifest.yaml
     paths:
       - { from: extensions/models/frigate-footage-export/, to: extensions/models/frigate-footage-export/ }
+  # Born as a standalone local repo and never pushed: the source is a local
+  # checkout, which git resolves with its own ~/ expansion. It is retired as a
+  # source; packages/pr-tour is where the package lives from here on.
+  - name: "@mgreten/pr-tour"
+    short: pr-tour
+    source: ~/git/swamp/swamp-pr-tour
+    ref: b94cc1fc8cfe408cc8aa4ae35e451ae3929cd97f
+    manifest: manifest.yaml
+    paths:
+      - { from: manifest.yaml, to: manifest.yaml }
+      - { from: README.md, to: README.md }
+      - { from: SETUP.md, to: SETUP.md }
+      - { from: LICENSE.txt, to: LICENSE.txt }
+      - { from: extensions/models/pr_tour.ts, to: extensions/models/pr_tour.ts }
+      - { from: extensions/models/pr_tour_test.ts, to: extensions/models/pr_tour_test.ts }
+      - { from: extensions/reports/, to: extensions/reports/ }
+      - { from: workflows/, to: workflows/ }
