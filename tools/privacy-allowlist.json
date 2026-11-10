@@ -107,6 +107,12 @@
       "path": "packages/valetudo/extensions/models/valetudo/valetudo_test.ts",
       "fingerprint": "sha256:8f86cb6d303f",
       "reason": "fixture/placeholder: user:secret@example.test test fixture (review 2026-11-06)"
+    },
+    {
+      "rule": "homelab-hostname",
+      "path": "(commit header/message)",
+      "fingerprint": "sha256:620247d7ae34",
+      "reason": "historical repo-upgrade trailer 'Swamp-Maintenance: repo-upgrade on <host>' in 15 already-public maintenance commits; the trailer no longer names the host (agentic-tooling 8ddce5e) (review 2026-11-10)"
     }
   ]
 }
