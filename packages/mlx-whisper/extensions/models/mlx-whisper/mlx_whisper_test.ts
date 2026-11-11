@@ -231,3 +231,40 @@ Deno.test("transcribe rejects malformed transcript JSON from the CLI", async () 
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test("transcribe accepts Python's NaN and Infinity tokens and stores valid JSON", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "mlx-whisper-test-" });
+  try {
+    // Python's json.dump writes non-finite floats as bare NaN / Infinity tokens,
+    // which mlx_whisper emits for some segments (e.g. avg_logprob).
+    const transcript = '{"language": "en", "segments": [' +
+      '{"id": 0, "start": 0.0, "end": 2.0, "text": " NaN and Infinity stay text", ' +
+      '"avg_logprob": NaN, "compression_ratio": Infinity, "no_speech_prob": -Infinity}]}';
+    const { bin } = await makeStub(dir, { transcript });
+    const { context, written } = fakeContext({
+      whisperModel: "synthetic/model-x",
+      noSpeechThreshold: 0.6,
+      mlxWhisperBin: bin,
+    });
+
+    await model.methods.transcribe.execute(
+      { audioPath: "/synthetic/nan.wav" },
+      context,
+    );
+
+    assertEquals(written.length, 1);
+    assertEquals(written[0].data.segmentCount, 1);
+    const stored = JSON.parse(written[0].data.transcriptJson as string);
+    assertEquals(stored.segments[0], {
+      id: 0,
+      start: 0.0,
+      end: 2.0,
+      text: " NaN and Infinity stay text",
+      avg_logprob: null,
+      compression_ratio: null,
+      no_speech_prob: null,
+    });
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+});
