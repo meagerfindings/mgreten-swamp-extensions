@@ -1,4 +1,5 @@
 export {
+  CreateBackupArgsSchema,
   createMealieClient,
   createModel,
   CreateRecipeArgsSchema,
@@ -13,6 +14,8 @@ export {
   MAX_RESPONSE_BYTES,
   MealieAccessResultSchema,
   MealieApiError,
+  MealieBackupPruneSchema,
+  MealieBackupSchema,
   MealieFeatureUnavailableError,
   MealieIngredientCatalogItemSchema,
   MealieIngredientReferenceSchema,
@@ -37,6 +40,7 @@ export {
   MealieStructuredRecipeFieldsSchema,
   MealieWriteOutcomeUnknownError,
   model,
+  PruneBackupsArgsSchema,
   UpdateRecipeArgsSchema,
   UpdateStructuredRecipeArgsSchema,
   VerifyAccessArgsSchema,
@@ -46,6 +50,8 @@ export type {
   ImportRecipeFromUrlArgs,
   ListRecipesArgs,
   MealieAccessResult,
+  MealieBackup,
+  MealieBackupPrune,
   MealieClient,
   MealieClientConfig,
   MealieIngredientCatalogItem,
@@ -61,4 +67,5 @@ export type {
   MealieStructuredIngredient,
   MealieStructuredRecipeCreateFields,
   MealieStructuredRecipeFields,
+  PruneBackupsArgs,
 } from "./extensions/models/mealie.ts";

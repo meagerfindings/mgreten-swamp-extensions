@@ -5,6 +5,7 @@ import {
   assertThrows,
 } from "jsr:@std/assert@1.0.19";
 import {
+  CreateBackupArgsSchema,
   createMealieClient,
   createModel,
   CreateRecipeArgsSchema,
@@ -31,6 +32,7 @@ import {
   MealieResponseTooLargeError,
   MealieStructuredIngredientSchema,
   MealieWriteOutcomeUnknownError,
+  PruneBackupsArgsSchema,
   UpdateRecipeArgsSchema,
   UpdateStructuredRecipeArgsSchema,
   VerifyAccessArgsSchema,
@@ -241,6 +243,8 @@ Deno.test("standalone model exposes the complete typed Swamp contract", () => {
     "updateStructuredRecipe",
     "importRecipeFromUrl",
     "importRecipeFromPhoto",
+    "createBackup",
+    "pruneBackups",
   ]);
   assertEquals(VerifyAccessArgsSchema.safeParse({}).success, true);
   assertEquals(
@@ -439,6 +443,8 @@ Deno.test("write methods use a bounded authenticated access preflight", async ()
     "updateStructuredRecipe",
     "importRecipeFromUrl",
     "importRecipeFromPhoto",
+    "createBackup",
+    "pruneBackups",
   ]);
   const globalArgs = GlobalArgumentsSchema.parse(clientConfig());
   assertEquals(
@@ -1448,4 +1454,144 @@ Deno.test("invalid slug and non-URL API base cannot issue a request", async () =
   );
   await assertRejects(() => client.getRecipe("../fixture"), Error);
   assertEquals(calls, 0);
+});
+
+const backupList = (names: string[]) => ({
+  imports: names.map((name) => ({
+    name,
+    date: "2026-11-25",
+    size: "12.3 MB",
+  })),
+  templates: [],
+});
+
+Deno.test("createBackup posts once, then reports the newest archive by timestamp", async () => {
+  const calls: RequestRecord[] = [];
+  const definitions = createModel(fakeFetch((url, init) => {
+    assertEquals(url.pathname, "/api/admin/backups");
+    if (init.method === "POST") return jsonResponse({ message: "ok" }, 201);
+    // v3.10.0 sorts before v3.9.0 by name but is the newer archive.
+    return jsonResponse(backupList([
+      "mealie_v3.9.0_2026.10.01.03.30.00.zip",
+      "mealie_v3.10.0_2026.11.25.03.30.00.zip",
+    ]));
+  }, calls));
+  const { context, writes } = contextFor();
+  await definitions.methods.createBackup.execute({}, context);
+  assertEquals(calls.map((call) => call.init.method), ["POST", "GET"]);
+  assertEquals(writes[0].specName, "backup");
+  assertEquals(writes[0].name, "newest");
+  assertEquals(writes[0].data, {
+    name: "mealie_v3.10.0_2026.11.25.03.30.00.zip",
+    date: "2026-11-25",
+    size: "12.3 MB",
+    totalBackups: 2,
+  });
+  assertEquals(CreateBackupArgsSchema.safeParse({ extra: 1 }).success, false);
+});
+
+Deno.test("createBackup failures are explicit and never retried", async () => {
+  const posts: string[] = [];
+  const unknown = createMealieClient(
+    clientConfig(),
+    fakeFetch((_url, init) => {
+      posts.push(String(init.method));
+      return jsonResponse({}, 500);
+    }),
+  );
+  await assertRejects(
+    () => unknown.createBackup(),
+    MealieWriteOutcomeUnknownError,
+  );
+  assertEquals(posts, ["POST"]);
+
+  const forbidden = createMealieClient(
+    clientConfig(),
+    fakeFetch(() => jsonResponse({}, 403)),
+  );
+  await assertRejects(() => forbidden.createBackup(), MealieApiError);
+
+  const unlisted = createMealieClient(
+    clientConfig(),
+    fakeFetch((_url, init) =>
+      init.method === "POST"
+        ? jsonResponse({}, 201)
+        : jsonResponse({ imports: "CANARY_RESPONSE_BODY_0a1b2c" })
+    ),
+  );
+  const error = await assertRejects(
+    () => unlisted.createBackup(),
+    MealieReadbackError,
+  );
+  assertCanariesAbsentFromMessage(error);
+});
+
+Deno.test("pruneBackups keeps the newest N and only deletes Mealie-named archives", async () => {
+  const calls: RequestRecord[] = [];
+  const names = [
+    "mealie_v3.9.0_2026.10.01.03.30.00.zip",
+    "mealie_v3.10.0_2026.11.25.03.30.00.zip",
+    "mealie_v3.10.0_2026.11.24.03.30.00.zip",
+    "mealie_v3.10.0_2026.11.23.03.30.00.zip",
+    "uploaded-by-operator.zip",
+  ];
+  const definitions = createModel(fakeFetch((url, init) => {
+    if (init.method === "DELETE") return jsonResponse({ message: "ok" });
+    assertEquals(url.pathname, "/api/admin/backups");
+    return jsonResponse(backupList(names));
+  }, calls));
+  const { context, writes } = contextFor();
+  await definitions.methods.pruneBackups.execute({ keep: 3 }, context);
+  const deletes = calls.filter((call) => call.init.method === "DELETE");
+  assertEquals(deletes.map((call) => call.url.pathname), [
+    "/api/admin/backups/mealie_v3.9.0_2026.10.01.03.30.00.zip",
+  ]);
+  assertEquals(writes[0].specName, "backupPrune");
+  assertEquals(writes[0].name, "last-run");
+  assertEquals(writes[0].data, {
+    kept: [
+      "mealie_v3.10.0_2026.11.25.03.30.00.zip",
+      "mealie_v3.10.0_2026.11.24.03.30.00.zip",
+      "mealie_v3.10.0_2026.11.23.03.30.00.zip",
+    ],
+    deleted: ["mealie_v3.9.0_2026.10.01.03.30.00.zip"],
+  });
+});
+
+Deno.test("pruneBackups rejects keeping fewer than three before any request", async () => {
+  const calls: RequestRecord[] = [];
+  const client = createMealieClient(
+    clientConfig(),
+    fakeFetch(() => jsonResponse(backupList([])), calls),
+  );
+  for (const keep of [0, 2, 1.5, 366]) {
+    assertEquals(PruneBackupsArgsSchema.safeParse({ keep }).success, false);
+    await assertRejects(() => client.pruneBackups({ keep }));
+  }
+  assertEquals(calls.length, 0);
+});
+
+Deno.test("a failed delete stops pruning and reports an unknown outcome", async () => {
+  const deletes: string[] = [];
+  const client = createMealieClient(
+    clientConfig(),
+    fakeFetch((url, init) => {
+      if (init.method === "DELETE") {
+        deletes.push(url.pathname);
+        return jsonResponse({}, 500);
+      }
+      return jsonResponse(backupList([
+        "mealie_v3.10.0_2026.11.25.03.30.00.zip",
+        "mealie_v3.10.0_2026.11.24.03.30.00.zip",
+        "mealie_v3.10.0_2026.11.23.03.30.00.zip",
+        "mealie_v3.10.0_2026.11.22.03.30.00.zip",
+        "mealie_v3.10.0_2026.11.21.03.30.00.zip",
+      ]));
+    }),
+  );
+  await assertRejects(
+    () => client.pruneBackups({ keep: 3 }),
+    MealieWriteOutcomeUnknownError,
+  );
+  assertEquals(deletes.length, 1);
 });

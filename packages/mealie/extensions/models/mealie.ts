@@ -256,6 +256,50 @@ export const MealieAccessResultSchema = z.object({
 /** Parsed result written by the `verifyAccess` method. */
 export type MealieAccessResult = z.infer<typeof MealieAccessResultSchema>;
 
+const MealieBackupFileSchema = z.object({
+  name: z.string().min(1).max(500),
+  date: z.string(),
+  size: z.string(),
+}).passthrough();
+
+const MealieBackupListSchema = z.object({
+  imports: z.array(MealieBackupFileSchema).max(10_000),
+}).passthrough();
+
+/** Newest Mealie backup archive, written by `createBackup`. */
+export const MealieBackupSchema = z.object({
+  name: z.string().min(1),
+  date: z.string(),
+  size: z.string(),
+  totalBackups: z.number().int().min(1),
+}).strict();
+export type MealieBackup = z.infer<typeof MealieBackupSchema>;
+
+/** Which Mealie-created backups `pruneBackups` kept and deleted. */
+export const MealieBackupPruneSchema = z.object({
+  kept: z.array(z.string()),
+  deleted: z.array(z.string()),
+}).strict();
+export type MealieBackupPrune = z.infer<typeof MealieBackupPruneSchema>;
+
+/** Arguments for `pruneBackups`; at least three archives are always kept. */
+export const PruneBackupsArgsSchema = z.object({
+  keep: z.number().int().min(3).max(365),
+}).strict();
+export type PruneBackupsArgs = z.input<typeof PruneBackupsArgsSchema>;
+
+/** Empty argument object for `createBackup`. */
+export const CreateBackupArgsSchema = z.object({}).strict();
+
+// Mealie names archives `mealie_v<version>_YYYY.MM.DD.HH.MM.SS.zip`. The version
+// comes first, so a name sort misorders them across an upgrade (v3.9.0 sorts
+// after v3.10.0); order on the trailing timestamp instead. Only files that match
+// Mealie's own naming are ever considered for pruning, so archives an operator
+// uploaded under another name are never deleted.
+const BACKUP_NAME = /^mealie_.+?(\d{4}(?:\.\d{2}){5})\.zip$/;
+const backupStamp = (name: string): string =>
+  name.match(BACKUP_NAME)?.[1] ?? "";
+
 const SlugSchema = z.string().min(1).max(500).refine(
   (value) =>
     value !== "." && value !== ".." &&
@@ -437,6 +481,10 @@ export interface MealieClient {
   ): Promise<MealieRecipe>;
   importRecipeFromUrl(args: ImportRecipeFromUrlArgs): Promise<MealieRecipe>;
   importRecipeFromPhoto(photo: MealiePhotoInput): Promise<MealieRecipe>;
+  /** Create a backup (database plus images) and report the newest archive. */
+  createBackup(): Promise<MealieBackup>;
+  /** Delete Mealie-named backups beyond the newest `keep`. Admin only. */
+  pruneBackups(args: PruneBackupsArgs): Promise<MealieBackupPrune>;
 }
 
 type ApiRequestBody = string | FormData | undefined;
@@ -937,6 +985,18 @@ export function createMealieClient(
     return await readCanonical(slug, operation);
   }
 
+  async function listBackups(operation: string) {
+    const listed = await sendJson(
+      "GET",
+      "api/admin/backups",
+      operation,
+      MealieBackupListSchema,
+    );
+    return listed.imports
+      .filter((backup) => backupStamp(backup.name) !== "")
+      .sort((a, b) => backupStamp(b.name).localeCompare(backupStamp(a.name)));
+  }
+
   const client: MealieClient = {
     async verifyAccess() {
       const about = await sendJson(
@@ -1106,6 +1166,51 @@ export function createMealieClient(
         }
         throw error;
       }
+    },
+
+    async createBackup() {
+      const response = await send(
+        "POST",
+        "api/admin/backups",
+        "createBackup",
+        undefined,
+        201,
+        true,
+      );
+      await cancelBody(response);
+      try {
+        const all = await listBackups("createBackup readback");
+        if (all.length === 0) throw new MealieResponseError("no backup listed");
+        const { name, date, size } = all[0];
+        return MealieBackupSchema.parse({
+          name,
+          date,
+          size,
+          totalBackups: all.length,
+        });
+      } catch {
+        throw new MealieReadbackError("createBackup", "backups");
+      }
+    },
+
+    async pruneBackups(args) {
+      const { keep } = PruneBackupsArgsSchema.parse(args);
+      const all = await listBackups("pruneBackups list");
+      const kept = all.slice(0, keep).map((backup) => backup.name);
+      const deleted: string[] = [];
+      for (const { name } of all.slice(keep)) {
+        const response = await send(
+          "DELETE",
+          `api/admin/backups/${encodeURIComponent(name)}`,
+          "pruneBackups delete",
+          undefined,
+          200,
+          true,
+        );
+        await cancelBody(response);
+        deleted.push(name);
+      }
+      return MealieBackupPruneSchema.parse({ kept, deleted });
     },
   };
   return client;
@@ -1291,6 +1396,18 @@ export function createModel(request: typeof fetch = fetch) {
         lifetime: "30d" as const,
         garbageCollection: 20,
       },
+      backup: {
+        description: "Newest Mealie backup archive after a createBackup run",
+        schema: MealieBackupSchema,
+        lifetime: "30d" as const,
+        garbageCollection: 30,
+      },
+      backupPrune: {
+        description: "Backups kept and deleted by the last pruneBackups run",
+        schema: MealieBackupPruneSchema,
+        lifetime: "30d" as const,
+        garbageCollection: 30,
+      },
     },
     checks: {
       "mealie-access": {
@@ -1304,6 +1421,8 @@ export function createModel(request: typeof fetch = fetch) {
           "updateStructuredRecipe",
           "importRecipeFromUrl",
           "importRecipeFromPhoto",
+          "createBackup",
+          "pruneBackups",
         ],
         execute: async (context: {
           globalArgs: z.output<typeof GlobalArgumentsSchema>;
@@ -1579,6 +1698,60 @@ export function createModel(request: typeof fetch = fetch) {
           );
           context.logger.info("Mealie operation completed", {
             operation: "importRecipeFromPhoto",
+          });
+          return { dataHandles: [handle] };
+        },
+      },
+      createBackup: {
+        description:
+          "Create a Mealie backup (database and images) and report the newest archive; the token's user must be a Mealie administrator",
+        arguments: swampMethodArguments(CreateBackupArgsSchema),
+        execute: async (
+          _args: Record<string, never>,
+          context: MethodContext,
+        ) => {
+          context.logger.info("Mealie operation started", {
+            operation: "createBackup",
+          });
+          const client = createMealieClient(
+            context.globalArgs,
+            request,
+            context.signal,
+          );
+          const backup = await client.createBackup();
+          const handle = await context.writeResource(
+            "backup",
+            "newest",
+            backup,
+          );
+          context.logger.info("Mealie operation completed", {
+            operation: "createBackup",
+          });
+          return { dataHandles: [handle] };
+        },
+      },
+      pruneBackups: {
+        description:
+          "Delete Mealie-created backups beyond the newest N (never fewer than 3 kept); the token's user must be a Mealie administrator",
+        arguments: swampMethodArguments(PruneBackupsArgsSchema),
+        execute: async (rawArgs: PruneBackupsArgs, context: MethodContext) => {
+          context.logger.info("Mealie operation started", {
+            operation: "pruneBackups",
+          });
+          const args = PruneBackupsArgsSchema.parse(rawArgs);
+          const client = createMealieClient(
+            context.globalArgs,
+            request,
+            context.signal,
+          );
+          const result = await client.pruneBackups(args);
+          const handle = await context.writeResource(
+            "backupPrune",
+            "last-run",
+            result,
+          );
+          context.logger.info("Mealie operation completed", {
+            operation: "pruneBackups",
           });
           return { dataHandles: [handle] };
         },

@@ -34,6 +34,8 @@ recipe/page returned by Mealie is available as the resource record's
 | `updateStructuredRecipe` | `{ slug, recipe?, ingredients }`            | `recipe/current`     | Resolves/creates Food and Unit records from names, replaces structured ingredients with `PATCH`, then reads back canonical `Recipe-Output`.  |
 | `importRecipeFromUrl`    | `{ url, includeTags?, includeCategories? }` | `recipe/current`     | Imports and persists immediately, then reads back the canonical recipe.                                                                      |
 | `importRecipeFromPhoto`  | `{ source, fileName, mediaType }`           | `recipe/current`     | Reads one bounded Swamp-managed image file, submits it to Mealie's AI import, then reads back the canonical recipe.                          |
+| `createBackup`           | `{}`                                        | `backup/newest`      | Admin only. Asks Mealie to write a backup (database and images), then reports the newest archive and the number on disk.                    |
+| `pruneBackups`          | `{ keep }`                                  | `backupPrune/last-run` | Admin only. Deletes Mealie-named archives (`mealie_*_YYYY.MM.DD.HH.MM.SS.zip`) beyond the newest `keep` (3 to 365). Archives with other names are never touched. |
 
 Swamp runs the `live`-labelled authenticated access check before create, update,
 and import methods. The standalone `verifyAccess` method exposes the same
@@ -51,6 +53,17 @@ rather than reserializing the full output object. Writable top-level fields are
 `name`, `description`, `recipeServings`, `recipeYield`, `recipeYieldQuantity`,
 `recipeIngredient`, and `recipeInstructions`; legacy snake-case aliases and
 identity fields are not accepted as v3.30 write inputs.
+
+### Backups
+
+`createBackup` and `pruneBackups` use Mealie's admin backup endpoints, so the
+token's user must be a Mealie administrator. Mealie keeps archives in its own
+data directory and has no scheduler, so a nightly Swamp workflow can run
+`createBackup`, copy the archive elsewhere, then `pruneBackups`. Archives are
+ordered by the timestamp at the end of the name, not the whole name, because
+the Mealie version comes first and would misorder files across an upgrade
+(`v3.9.0` sorts after `v3.10.0`). The prune delete loop stops at the first
+failure and raises `MealieWriteOutcomeUnknownError`; nothing is retried.
 
 ### Structured Food and Unit references
 
