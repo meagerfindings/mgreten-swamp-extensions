@@ -1061,8 +1061,8 @@ packages:
   - name: '@mgreten/road-trip-risk-watch'
     path: packages/road-trip-risk-watch
     manifest: packages/road-trip-risk-watch/extensions/models/@mgreten/road-trip-risk-watch/manifest.yaml
-    version: 2026.11.03.1
-    contentHash: 'sha256:e8593b6b970287507c951aa2a5cf33f26fc12c34fe47c148dcac39b73c03ffbe'
+    version: 2026.11.26.1
+    contentHash: 'sha256:0e5adb1df63eca40c2792c083c554e98e4a1c0168753eb0abc1f7552135b5b50'
     tests: deterministic
     dependsOn: []
     source:

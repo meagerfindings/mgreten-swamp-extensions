@@ -8,6 +8,13 @@
  * @module
  */
 import { z } from "npm:zod@4";
+import {
+  collect as assessRoutes,
+  type Input as AssessmentInput,
+  inputSchema as assessmentSchema,
+  render as renderAssessment,
+  requireWindow,
+} from "./assessment.ts";
 
 const DEFAULT_CHECKPOINTS = [
   {
@@ -524,9 +531,31 @@ async function analyzeCheckpoint(
 /** Swamp model for road-trip and route-risk watches. */
 export const model = {
   type: "@mgreten/road-trip-risk-watch",
-  version: "2026.07.16.1",
+  version: "2026.11.26.1",
+  upgrades: [{
+    toVersion: "2026.11.26.1",
+    description:
+      "Add route assessment without changing existing global settings",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
   globalArguments: GlobalArgsSchema,
   resources: {
+    assessmentStatus: {
+      description:
+        "Arrival-hour forecast counts and bounded notification text without coordinates or raw location notes",
+      schema: z.object({
+        assessmentId: z.uuid(),
+        tripDate: z.iso.date(),
+        retrievedAt: z.iso.datetime({ offset: true }),
+        ok: z.number().int().nonnegative(),
+        stale: z.number().int().nonnegative(),
+        unknown: z.number().int().nonnegative(),
+        hazardCount: z.number().int().nonnegative(),
+        summary: z.string().max(3500),
+      }),
+      lifetime: "7d",
+      garbageCollection: 10,
+    },
     summary: {
       description: "Structured route-risk summary for changed runs",
       schema: RouteSummarySchema,
@@ -535,6 +564,19 @@ export const model = {
     },
   },
   files: {
+    assessmentData: {
+      description:
+        "Structured arrival forecasts, manual progress and road-source provenance",
+      contentType: "application/json",
+      lifetime: "7d",
+      garbageCollection: 10,
+    },
+    assessment: {
+      description: "ETA-matched route forecast report",
+      contentType: "text/html",
+      lifetime: "7d",
+      garbageCollection: 10,
+    },
     digest: {
       description: "Markdown digest for changed route-risk runs",
       contentType: "text/markdown",
@@ -543,6 +585,114 @@ export const model = {
     },
   },
   methods: {
+    assess: {
+      description:
+        "Assess explicitly supplied route checkpoints without changing watcher state",
+      arguments: assessmentSchema,
+      execute: async (
+        args: AssessmentInput,
+        context: {
+          writeResource: (
+            spec: string,
+            name: string,
+            data: unknown,
+          ) => Promise<unknown>;
+          createFileWriter: (
+            spec: string,
+            name: string,
+          ) => { writeText: (text: string) => Promise<unknown> };
+        },
+      ) => {
+        const report = await assessRoutes(args);
+        requireWindow(args, () => new Date());
+        const data = await context.createFileWriter(
+          "assessmentData",
+          "route-assessment-data",
+        )
+          .writeText(JSON.stringify(report));
+        requireWindow(args, () => new Date());
+        const html = await context.createFileWriter(
+          "assessment",
+          "route-assessment",
+        )
+          .writeText(renderAssessment(report));
+        requireWindow(args, () => new Date());
+        const points = report.routes.flatMap((route) => route.checkpoints);
+        const time = new Intl.DateTimeFormat("en-US", {
+          timeZone: report.displayTimeZone,
+          weekday: "short",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        });
+        const hazard =
+          /snow|ice|icy|freez|sleet|blizzard|fog|thunder|flood|blowing|wind|dust|smoke/i;
+        const lines = report.routes.flatMap((route) => {
+          const original = args.routes.find((candidate) =>
+            candidate.name === route.name
+          )!;
+          const excluded = new Set([
+            original.checkpoints[0].name,
+            original.checkpoints.at(-1)!.name,
+            report.manualCheckIn?.checkpoint,
+          ]);
+          return [
+            route.name.replace(/[\r\n\t]/g, " ").slice(0, 60),
+            ...route.checkpoints.filter((point) =>
+              !excluded.has(point.name) &&
+              hazard.test(point.forecast?.shortForecast ?? "")
+            ).map((point) =>
+              `${point.name.replace(/[\r\n\t]/g, " ").slice(0, 60)}: ${
+                point.eta ? time.format(new Date(point.eta)) : "ETA unknown"
+              } · ${
+                point.forecast
+                  ? `${
+                    point.forecast.shortForecast.slice(0, 100)
+                  } ${point.forecast.temperature}°${point.forecast.temperatureUnit}, wind ${
+                    point.forecast.windSpeed.slice(0, 40)
+                  }`
+                  : "forecast unknown"
+              } [${point.status}]`
+            ),
+          ];
+        });
+        const summary = [
+          "Estimated arrivals, not live routing. Stale forecasts need rechecking. Pavement/restrictions remain incomplete; not a safety clearance.",
+          "Hazard-worded interior checkpoints only; omitted points are NOT cleared. Origin, destination and current check-in omitted.",
+          ...lines,
+        ].join("\n");
+        requireWindow(args, () => new Date());
+        const status = await context.writeResource(
+          "assessmentStatus",
+          "route-assessment-status",
+          {
+            assessmentId: report.assessmentId,
+            tripDate: report.tripDate,
+            retrievedAt: report.retrievedAt,
+            ok: points.filter((point) => point.status === "ok").length,
+            stale: points.filter((point) => point.status === "stale").length,
+            unknown:
+              points.filter((point) => point.status === "unknown").length,
+            hazardCount:
+              points.filter((point) =>
+                hazard.test(point.forecast?.shortForecast ?? "")
+              ).length,
+            summary: summary.length <= 3500
+              ? summary
+              : `${
+                summary.slice(0, 3450)
+              }\n[Truncated; more checkpoints in stored report.]`,
+          },
+        );
+        return {
+          dataHandles: [
+            data,
+            html,
+            status,
+          ],
+        };
+      },
+    },
     collect: {
       description:
         "Poll NWS route checkpoints, update the fingerprint state file, and emit output only on significant changes",
@@ -573,83 +723,102 @@ export const model = {
         },
       ): Promise<{ dataHandles: unknown[] }> => {
         const cfg = context.globalArgs;
-        const checkpoints = await resolveCheckpoints(cfg);
-
-        const previousState = await readJsonFile(cfg.statePath);
-        const previousFingerprint = asString(previousState.fingerprint);
-        const checkedAt = nowIso();
-
-        const checkpointResults = await Promise.all(
-          checkpoints.map(async (checkpoint) =>
-            await analyzeCheckpoint(checkpoint, cfg.userAgent)
-          ),
-        );
-        const overallRisk = routeOverallRisk(checkpointResults);
-        const fingerprintPayload = {
-          trip_label: cfg.tripLabel,
-          overall_risk: overallRisk,
-          checkpoints: checkpointResults.map((result) =>
-            buildCheckpointFingerprint(result)
-          ),
-        };
-        const fingerprint = await crypto.subtle.digest(
-          "SHA-256",
-          new TextEncoder().encode(JSON.stringify(fingerprintPayload)),
-        ).then((digest) => {
-          return Array.from(
-            new Uint8Array(digest),
-            (byte) => byte.toString(16).padStart(2, "0"),
-          ).join("");
+        const slash = cfg.statePath.lastIndexOf("/");
+        if (slash > 0) {
+          await Deno.mkdir(cfg.statePath.slice(0, slash), { recursive: true });
+        }
+        // Keep this inode: unlinking a lock file can let two owners lock
+        // different files at the same path. Closing releases the OS lock.
+        const lock = await Deno.open(`${cfg.statePath}.lock`, {
+          create: true,
+          write: true,
+          mode: 0o600,
         });
-        const changed = args.force ?? false
-          ? true
-          : fingerprint !== previousFingerprint;
+        try {
+          if (!await lock.tryLock(true)) {
+            throw new Error(
+              "Route collection already running for this state file",
+            );
+          }
+          const checkpoints = await resolveCheckpoints(cfg);
 
-        const statePayload = {
-          fingerprint,
-          checked_at: checkedAt,
-          trip_label: cfg.tripLabel,
-          overall_risk: overallRisk,
-          checkpoints: checkpointResults.map((result) =>
-            buildCheckpointFingerprint(result)
-          ),
-        };
-        await writeJsonFile(cfg.statePath, statePayload);
+          const previousState = await readJsonFile(cfg.statePath);
+          const previousFingerprint = asString(previousState.fingerprint);
+          const checkedAt = nowIso();
 
-        if (!changed) {
-          context.logger.info("Route risk unchanged", {
-            tripLabel: cfg.tripLabel,
+          const checkpointResults = await Promise.all(
+            checkpoints.map(async (checkpoint) =>
+              await analyzeCheckpoint(checkpoint, cfg.userAgent)
+            ),
+          );
+          const overallRisk = routeOverallRisk(checkpointResults);
+          const fingerprintPayload = {
+            trip_label: cfg.tripLabel,
+            overall_risk: overallRisk,
+            checkpoints: checkpointResults.map((result) =>
+              buildCheckpointFingerprint(result)
+            ),
+          };
+          const fingerprint = await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(JSON.stringify(fingerprintPayload)),
+          ).then((digest) => {
+            return Array.from(
+              new Uint8Array(digest),
+              (byte) => byte.toString(16).padStart(2, "0"),
+            ).join("");
+          });
+          const changed = args.force ?? false
+            ? true
+            : fingerprint !== previousFingerprint;
+
+          const statePayload = {
             fingerprint,
+            checked_at: checkedAt,
+            trip_label: cfg.tripLabel,
+            overall_risk: overallRisk,
+            checkpoints: checkpointResults.map((result) =>
+              buildCheckpointFingerprint(result)
+            ),
+          };
+
+          if (!changed) {
+            await writeJsonFile(cfg.statePath, statePayload);
+            context.logger.info("Route risk unchanged", {
+              fingerprint,
+              overallRisk,
+              checkpointCount: checkpointResults.length,
+            });
+            return { dataHandles: [] };
+          }
+
+          const summary = RouteSummarySchema.parse({
+            tripLabel: cfg.tripLabel,
+            checkedAt,
+            fingerprint,
+            overallRisk,
+            checkpoints: checkpointResults,
+            changed,
+          });
+          const digest = buildDigest(summary);
+          context.logger.info("Route risk changed", {
             overallRisk,
             checkpointCount: checkpointResults.length,
           });
-          return { dataHandles: [] };
+          const summaryHandle = await context.writeResource(
+            "summary",
+            "latestSummary",
+            summary,
+          );
+          const digestHandle = await context.createFileWriter(
+            "digest",
+            "latestDigest",
+          ).writeText(digest);
+          await writeJsonFile(cfg.statePath, statePayload);
+          return { dataHandles: [summaryHandle, digestHandle] };
+        } finally {
+          lock.close();
         }
-
-        const summary = RouteSummarySchema.parse({
-          tripLabel: cfg.tripLabel,
-          checkedAt,
-          fingerprint,
-          overallRisk,
-          checkpoints: checkpointResults,
-          changed,
-        });
-        const digest = buildDigest(summary);
-        context.logger.info("Route risk changed", {
-          tripLabel: cfg.tripLabel,
-          overallRisk,
-          checkpointCount: checkpointResults.length,
-        });
-        const summaryHandle = await context.writeResource(
-          "summary",
-          "latestSummary",
-          summary,
-        );
-        const digestHandle = await context.createFileWriter(
-          "digest",
-          "latestDigest",
-        ).writeText(digest);
-        return { dataHandles: [summaryHandle, digestHandle] };
       },
     },
   },
